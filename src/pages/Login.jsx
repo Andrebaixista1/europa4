@@ -7,11 +7,11 @@ import { defaultRouteFor } from '../utils/roles.js'
 import { notify } from '../utils/notify.js'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login: doLogin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname || '/dashboard'
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -28,7 +28,7 @@ export default function Login() {
     setLoading(true)
     try {
       loader.begin()
-      const u = await login(email, password)
+      const u = await doLogin(login, password)
       const target = location.state?.from ? from : defaultRouteFor(u.role)
       notify.success(`Bem-vindo(a), ${u.name}!`)
       navigate(target, { replace: true })
@@ -78,12 +78,10 @@ export default function Login() {
           <div className="col-lg-6">
             <h2 className="fw-bold gradient-text mb-3">Bem-vindo(a) ao Nova Europa 4</h2>
             <p className="opacity-75">
-              Acesse com um dos usuários mocados para testar a visão por hierarquia:
+              Acesse com o usuário master para testar o sistema:
             </p>
             <ul className="small opacity-75 mb-0">
-              <li>master@neo.com / 123456</li>
-              <li>supervisor@neo.com / 123456</li>
-              <li>operador@neo.com / 123456</li>
+              <li>andre.felipe / 8996 (Master)</li>
             </ul>
           </div>
           <div className="col-lg-5 ms-lg-auto">
@@ -95,13 +93,13 @@ export default function Login() {
                 </div>
               )}
               <div className="mb-3">
-                <label className="form-label">E-mail</label>
+                <label className="form-label">Login</label>
                 <input
-                  type="email"
+                  type="text"
                   className="form-control"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="voce@empresa.com"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
+                  placeholder="andre.felipe"
                   required
                 />
               </div>
@@ -144,8 +142,8 @@ export default function Login() {
                     <div className="alert alert-info py-2" role="alert">{changeMsg}</div>
                   )}
                   <div className="mb-3">
-                    <label className="form-label">E-mail</label>
-                    <input type="email" className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                    <label className="form-label">Login</label>
+                    <input type="text" className="form-control" value={login} onChange={(e) => setLogin(e.target.value)} required />
                   </div>
                   <div className="mb-3">
                     <label className="form-label">Senha atual</label>

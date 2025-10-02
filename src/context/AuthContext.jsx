@@ -17,15 +17,51 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const login = async (email, password) => {
-    const found = users.find(
-      (u) => u.email.toLowerCase() === String(email).toLowerCase() && u.password === password
-    )
-    if (!found) throw new Error('Credenciais inválidas')
-    const payload = { id: found.id, name: found.name, role: found.role, email: found.email }
-    setUser(payload)
-    localStorage.setItem('ne_auth_user', JSON.stringify(payload))
-    return payload
+  const login = async (loginUser, password) => {
+    try {
+      console.log('🔐 Iniciando autenticação...');
+      
+      // PASSO 1: Autenticar no webhook n8n
+      const webhookResponse = await fetch('https://n8n.sistemavieira.com.br/webhook-test/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: loginUser,
+          senha: password
+        })
+      });
+
+      const webhookResult = await webhookResponse.json();
+      
+      if (!webhookResult || !webhookResult.Id) {
+        throw new Error('Credenciais inválidas');
+      }
+
+      // PASSO 2: Criar objeto do usuário com dados da resposta
+      const payload = {
+        id: webhookResult.Id,
+        name: webhookResult.Nome,
+        login: webhookResult.Login,
+        email: webhookResult.Email,
+        role: webhookResult.Role,
+        level: webhookResult.NivelHierarquia,
+        permissions: webhookResult.Permissoes ? 
+          webhookResult.Permissoes.split(',').filter(p => p.trim()) : [],
+        statusConta: webhookResult.StatusConta
+      };
+
+      setUser(payload);
+      localStorage.setItem('ne_auth_user', JSON.stringify(payload));
+      
+      console.log('✅ Login realizado com sucesso:', payload);
+      return payload;
+      
+    } catch (error) {
+      console.error('❌ Erro no login:', error);
+      throw new Error(error.message || 'Erro na autenticação');
+    }
   }
 
   const logout = () => {

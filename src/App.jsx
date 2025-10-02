@@ -4,6 +4,7 @@ import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import SupervisionPanel from './pages/SupervisionPanel.jsx'
 import OperationPanel from './pages/OperationPanel.jsx'
+import ConsultaIN100 from './pages/ConsultaIN100.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -32,6 +33,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master", "Supervisor", "Operador"]}>
             <OperationPanel />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/consultas/in100"
+        element={
+          <ProtectedRoute roles={["Master", "Supervisor", "Operador"]}>
+            <ConsultaIN100 />
           </ProtectedRoute>
         }
       />

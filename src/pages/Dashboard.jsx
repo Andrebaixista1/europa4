@@ -4,15 +4,16 @@ import cardsData from '../data/cards.json'
 import * as Fi from 'react-icons/fi'
 import Can from '../components/Can.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { Link } from 'react-router-dom'
 
 function Icon({ name, size = 24 }) {
   const Comp = Fi[name] || Fi.FiSquare
   return <Comp size={size} />
 }
 
-function Card({ title, icon, children, accent = 'primary', muted = false }) {
-  return (
-    <div className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}>
+function Card({ title, icon, children, accent = 'primary', muted = false, to }) {
+  const body = (
+    <>
       {muted && (
         <span className="badge text-bg-secondary position-absolute" style={{ top: 12, right: 12 }}>
           Em Desenvolvimento
@@ -29,6 +30,11 @@ function Card({ title, icon, children, accent = 'primary', muted = false }) {
       {children && (
         <div className="opacity-85" style={{ fontSize: '0.975rem' }}>{children}</div>
       )}
+    </>
+  )
+  return (
+    <div className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}>
+      {to ? <Link to={to} className="stretched-link text-reset text-decoration-none">{body}</Link> : body}
     </div>
   )
 }
@@ -105,14 +111,15 @@ export default function Dashboard() {
                   ) : (
                     itens.map((c) => (
                     <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
-                      <Card
-                        title={c.title}
-                        icon={c.icon}
-                        accent={categoria === 'Em Desenvolvimento' ? 'info' : 'primary'}
-                        muted={(categoria === 'Em Desenvolvimento' || c.status === 'development') && role !== 'Master'}
-                      >
-                        {c.description || null}
-                      </Card>
+                        <Card
+                          title={c.title}
+                          icon={c.icon}
+                          accent={categoria === 'Em Desenvolvimento' ? 'info' : 'primary'}
+                          muted={(categoria === 'Em Desenvolvimento' || c.status === 'development') && role !== 'Master'}
+                          to={c.route}
+                        >
+                          {c.description || null}
+                        </Card>
                     </div>
                     ))
                   )}

@@ -138,6 +138,21 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .theme-thumb.left { left: 3px; height: 19px; }
 .theme-thumb.right { left: 27px; }
 
+/* Improve readability inside IN100 result section */
+.result-section { color: var(--text); }
+[data-theme="dark"] .result-section { color: #f8f9fa; }
+.result-section .opacity-75 { opacity: 0.95 !important; }
+.result-section .small { opacity: 0.9; }
+
+/* Fixed tooltip for Maciça search: black bg, white text regardless of theme */
+.macica-tooltip {
+  background: #000 !important;
+  color: #fff !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.macica-tooltip .small { color: #fff !important; opacity: 0.9; }
+
 /* Icons outside the switch */
 .theme-toggle-inline .theme-inline-icon { font-size: 16px; line-height: 1; color: var(--text-muted); }
 .theme-toggle-inline .theme-inline-icon.active { color: var(--primary); }
