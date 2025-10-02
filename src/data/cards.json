@@ -1,0 +1,23 @@
+{
+  "Consultas": [
+    { "title": "Consulta Veicular", "icon": "FiTruck", "status": "active" },
+    { "title": "Consulta Pessoa Física", "icon": "FiUser", "status": "active" },
+    { "title": "Consulta Pessoa Jurídica", "icon": "FiBriefcase", "status": "active" }
+  ],
+  "Gestão": [
+    { "title": "Relatórios", "icon": "FiBarChart2", "status": "active" },
+    { "title": "Financeiro", "icon": "FiCreditCard", "status": "active" },
+    { "title": "Configurações", "icon": "FiSettings", "status": "active" }
+  ],
+  "Operação": [
+    { "title": "Fila de Atendimentos", "icon": "FiList", "status": "active" },
+    { "title": "Clientes", "icon": "FiUsers", "status": "active" },
+    { "title": "Agenda", "icon": "FiCalendar", "status": "active" }
+  ],
+  "Em Desenvolvimento": [
+    { "title": "App Mobile", "icon": "FiSmartphone", "status": "development" },
+    { "title": "Integrações Avançadas", "icon": "FiCpu", "status": "development" },
+    { "title": "BI Avançado", "icon": "FiPieChart", "status": "development" }
+  ]
+}
+
