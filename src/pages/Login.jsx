@@ -82,7 +82,6 @@ export default function Login() {
             </p>
             <ul className="small opacity-75 mb-0">
               <li>master@neo.com / 123456</li>
-              <li>admin@neo.com / 123456</li>
               <li>supervisor@neo.com / 123456</li>
               <li>operador@neo.com / 123456</li>
             </ul>
@@ -179,3 +178,4 @@ export default function Login() {
     </div>
   )
 }
+

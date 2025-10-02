@@ -64,7 +64,7 @@ export default function Dashboard() {
               </div>
               <div className="col-md-3">
                 <Card title="Relatórios executivos" icon="FiTrendingUp" accent="success">
-                  KPIs de alto nível e trends.
+                  KPIs de alto nível e tendências.
                 </Card>
               </div>
               <div className="col-md-3">
@@ -76,66 +76,53 @@ export default function Dashboard() {
           </section>
         </Can>
 
-        <Can permission="view:admin">
-          <section className="mb-4">
-            <h5 className="section-title">Administração</h5>
-            <div className="row g-3">
-              <div className="col-md-4">
-                <Card title="Usuários" icon="FiUserCheck" accent="primary">Criar, editar e desativar usuários.</Card>
-              </div>
-              <div className="col-md-4">
-                <Card title="Equipes" icon="FiGrid" accent="info">Organize equipes e atribuições.</Card>
-              </div>
-              <div className="col-md-4">
-                <Card title="Integrações" icon="FiLink" accent="success">Ative integrações externas.</Card>
-              </div>
-            </div>
-          </section>
-        </Can>
-
         <Can permission="view:supervision">
           <section className="mb-4">
             <h5 className="section-title">Supervisão</h5>
             <div className="row g-3">
-              <div className="col-md-3">
-                <Card title="Fila de atendimentos" icon="FiInbox" accent="warning">Monitore SLAs e prioridades.</Card>
+              <div className="col-md-6">
+                <Card title="Usuários" icon="FiUserCheck" accent="primary">Supervisor vê apenas sua própria equipe.</Card>
               </div>
-              <div className="col-md-3">
-                <Card title="Produtividade" icon="FiActivity" accent="primary">Volume, TMA e taxa de conclusão.</Card>
-              </div>
-              <div className="col-md-3">
-                <Card title="Qualidade" icon="FiStar" accent="info">Avaliações e auditorias.</Card>
-              </div>
-              <div className="col-md-3">
-                <Card title="Alertas" icon="FiAlertTriangle" accent="danger">Sinais de risco em tempo real.</Card>
+              <div className="col-md-6">
+                <Card title="Equipes" icon="FiGrid" accent="info">Estruture e visualize sua equipe.</Card>
               </div>
             </div>
           </section>
+          
         </Can>
 
-        {/* Seções de cards copiadas/configuradas via JSON */}
         <Can permission="view:operation">
-        {Object.entries(cardsData).map(([categoria, itens]) => (
-          <section className="mb-4" key={categoria}>
-            <h5 className="section-title">{categoria}</h5>
-            <div className="row g-3">
-              {itens.map((c) => (
-                <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
-                  <Card
-                    title={c.title}
-                    icon={c.icon}
-                    accent={categoria === 'Em Desenvolvimento' ? 'info' : 'primary'}
-                    muted={c.status === 'development' || categoria === 'Em Desenvolvimento'}
-                  >
-                  </Card>
+          {Object.entries(cardsData)
+            .filter(([categoria]) => categoria === 'Consultas' || categoria === 'Em Desenvolvimento')
+            .map(([categoria, itens]) => (
+              <section className="mb-4" key={categoria}>
+                <h5 className="section-title">{categoria}</h5>
+                <div className="row g-3">
+                  {itens.length === 0 ? (
+                    <div className="col-12">
+                      <div className="neo-card neo-lg p-4 text-center opacity-75">Sem Cards Cadastrados</div>
+                    </div>
+                  ) : (
+                    itens.map((c) => (
+                    <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
+                      <Card
+                        title={c.title}
+                        icon={c.icon}
+                        accent={categoria === 'Em Desenvolvimento' ? 'info' : 'primary'}
+                        muted={(categoria === 'Em Desenvolvimento' || c.status === 'development') && role !== 'Master'}
+                      >
+                        {c.description || null}
+                      </Card>
+                    </div>
+                    ))
+                  )}
                 </div>
-              ))}
-            </div>
-          </section>
-        ))}
+              </section>
+            ))}
         </Can>
       </main>
       <Footer />
     </div>
   )
 }
+

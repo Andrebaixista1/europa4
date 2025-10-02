@@ -2,7 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Landing from './pages/Landing.jsx'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import AdminPanel from './pages/AdminPanel.jsx'
 import SupervisionPanel from './pages/SupervisionPanel.jsx'
 import OperationPanel from './pages/OperationPanel.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
@@ -21,17 +20,9 @@ function App() {
         }
       />
       <Route
-        path="/admin"
-        element={
-          <ProtectedRoute roles={["Master", "Admin"]}>
-            <AdminPanel />
-          </ProtectedRoute>
-        }
-      />
-      <Route
         path="/supervisao"
         element={
-          <ProtectedRoute roles={["Master", "Admin", "Supervisor"]}>
+          <ProtectedRoute roles={["Master", "Supervisor"]}>
             <SupervisionPanel />
           </ProtectedRoute>
         }
@@ -39,7 +30,7 @@ function App() {
       <Route
         path="/operacao"
         element={
-          <ProtectedRoute roles={["Master", "Admin", "Supervisor", "Operador"]}>
+          <ProtectedRoute roles={["Master", "Supervisor", "Operador"]}>
             <OperationPanel />
           </ProtectedRoute>
         }

@@ -8,24 +8,16 @@
   },
   {
     "id": 2,
-    "name": "João Santos",
-    "email": "admin@neo.com",
-    "password": "123456",
-    "role": "Admin"
-  },
-  {
-    "id": 3,
     "name": "Carla Souza",
     "email": "supervisor@neo.com",
     "password": "123456",
     "role": "Supervisor"
   },
   {
-    "id": 4,
+    "id": 3,
     "name": "Diego Lima",
     "email": "operador@neo.com",
     "password": "123456",
     "role": "Operador"
   }
 ]
-

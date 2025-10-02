@@ -1,23 +1,49 @@
 {
-  "Consultas": [
-    { "title": "Consulta Veicular", "icon": "FiTruck", "status": "active" },
-    { "title": "Consulta Pessoa Física", "icon": "FiUser", "status": "active" },
-    { "title": "Consulta Pessoa Jurídica", "icon": "FiBriefcase", "status": "active" }
-  ],
-  "Gestão": [
-    { "title": "Relatórios", "icon": "FiBarChart2", "status": "active" },
-    { "title": "Financeiro", "icon": "FiCreditCard", "status": "active" },
-    { "title": "Configurações", "icon": "FiSettings", "status": "active" }
-  ],
-  "Operação": [
-    { "title": "Fila de Atendimentos", "icon": "FiList", "status": "active" },
-    { "title": "Clientes", "icon": "FiUsers", "status": "active" },
-    { "title": "Agenda", "icon": "FiCalendar", "status": "active" }
-  ],
-  "Em Desenvolvimento": [
-    { "title": "App Mobile", "icon": "FiSmartphone", "status": "development" },
-    { "title": "Integrações Avançadas", "icon": "FiCpu", "status": "development" },
-    { "title": "BI Avançado", "icon": "FiPieChart", "status": "development" }
-  ]
-}
+    "Consultas":  [
 
+                  ],
+    "Em Desenvolvimento":  [
+                               {
+                                   "title":  "Consulta Individual (IN100)",
+                                   "status":  "development",
+                                   "description":  "Pesquise informações específicas com precisão e resultados detalhados.",
+                                   "icon":  "FiSearch"
+                               },
+                               {
+                                   "title":  "Consulta Individual (Maciça)",
+                                   "status":  "development",
+                                   "description":  "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+                                   "icon":  "FiDatabase"
+                               },
+                               {
+                                   "title":  "Controle Planejamento",
+                                   "status":  "development",
+                                   "description":  "Controle de usuários, aqui você tem toda a visão de usuários do Vanguard e New Corban",
+                                   "icon":  "FiClipboard"
+                               },
+                               {
+                                   "title":  "Extração (Maciça)",
+                                   "status":  "development",
+                                   "description":  "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+                                   "icon":  "FiDownload"
+                               },
+                               {
+                                   "title":  "Gestão de Usuários",
+                                   "status":  "development",
+                                   "description":  "Gerencie e crie novos logins de acesso.",
+                                   "icon":  "FiUsers"
+                               },
+                               {
+                                   "title":  "Gestão de Recargas",
+                                   "status":  "development",
+                                   "description":  "Administração eficiente de recargas de saldo.",
+                                   "icon":  "FiCreditCard"
+                               },
+                               {
+                                   "title":  "Consulta em Lote (IN100)",
+                                   "status":  "development",
+                                   "description":  "Faça consultas em lote para múltiplos cadastros de uma só vez.",
+                                   "icon":  "FiLayers"
+                               }
+                           ]
+}

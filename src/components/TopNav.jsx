@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+﻿import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
@@ -32,18 +32,13 @@ export default function TopNav() {
         <div className="collapse navbar-collapse" id="navbarsExample">
           <ul className="navbar-nav me-auto mb-2 mb-lg-0">
             <li className="nav-item">
-              <Link to="/" className="nav-link">
-                Início
-              </Link>
+              <Link to="/" className="nav-link">Início</Link>
             </li>
             {isAuthenticated && (
               <>
                 <li className="nav-item">
-                  <Link to="/dashboard" className="nav-link">
-                    Dashboard
-                  </Link>
+                  <Link to="/dashboard" className="nav-link">Dashboard</Link>
                 </li>
-                {/** dropdown de Áreas removido conforme solicitado **/}
               </>
             )}
           </ul>
@@ -51,9 +46,7 @@ export default function TopNav() {
             <ThemeToggle />
             {isAuthenticated ? (
               <>
-                <span className="text-light small text-uppercase opacity-75">
-                  {user?.role}
-                </span>
+                <span className="text-light small opacity-75">{user?.name}</span>
                 <button
                   className="btn btn-outline-light btn-sm"
                   onClick={() => {
@@ -67,9 +60,7 @@ export default function TopNav() {
               </>
             ) : (
               !isDashboard && (
-                <Link to="/login" className="btn btn-primary btn-sm">
-                  Entrar
-                </Link>
+                <Link to="/login" className="btn btn-primary btn-sm">Entrar</Link>
               )
             )}
           </div>
