@@ -167,7 +167,7 @@ O sistema retorna exatamente os campos que seu frontend espera e pode ser integr
 
 ```javascript
 // Endpoint atualizado para n8n
-const webhookResponse = await fetch('https://n8n.sistemavieira.com.br/webhook-test/login', {
+const webhookResponse = await fetch('https://webhook.sistemavieira.com.br/webhook/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ email, senha })

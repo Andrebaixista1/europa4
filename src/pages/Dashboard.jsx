@@ -5,13 +5,14 @@ import * as Fi from 'react-icons/fi'
 import Can from '../components/Can.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Link } from 'react-router-dom'
+import { notify } from '../utils/notify.js'
 
 function Icon({ name, size = 24 }) {
   const Comp = Fi[name] || Fi.FiSquare
   return <Comp size={size} />
 }
 
-function Card({ title, icon, children, accent = 'primary', muted = false, to }) {
+function Card({ title, icon, children, accent = 'primary', muted = false, to, onClick }) {
   const body = (
     <>
       {muted && (
@@ -32,9 +33,22 @@ function Card({ title, icon, children, accent = 'primary', muted = false, to }) 
       )}
     </>
   )
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 text-reset text-decoration-none d-block ${muted ? 'neo-muted position-relative' : ''}`}
+      >
+        {body}
+      </Link>
+    )
+  }
   return (
-    <div className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}>
-      {to ? <Link to={to} className="stretched-link text-reset text-decoration-none">{body}</Link> : body}
+    <div className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}
+         onClick={onClick}
+         role={onClick ? 'button' : undefined}
+         style={onClick ? { cursor: 'pointer' } : undefined}>
+      {body}
     </div>
   )
 }
@@ -111,15 +125,24 @@ export default function Dashboard() {
                   ) : (
                     itens.map((c) => (
                     <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
-                        <Card
-                          title={c.title}
-                          icon={c.icon}
-                          accent={categoria === 'Em Desenvolvimento' ? 'info' : 'primary'}
-                          muted={(categoria === 'Em Desenvolvimento' || c.status === 'development') && role !== 'Master'}
-                          to={c.route}
-                        >
-                          {c.description || null}
-                        </Card>
+                        {(() => {
+                          const isDev = (categoria === 'Em Desenvolvimento')
+                          const isMaster = role === 'Master'
+                          const computedTo = isDev ? (isMaster ? c.route : undefined) : c.route
+                          const onClick = (!isMaster && isDev) ? () => notify.info('Em desenvolvimento') : undefined
+                          return (
+                            <Card
+                              title={c.title}
+                              icon={c.icon}
+                              accent={isDev ? 'info' : 'primary'}
+                              muted={isDev && !isMaster}
+                              to={computedTo}
+                              onClick={onClick}
+                            >
+                              {c.description || null}
+                            </Card>
+                          )
+                        })()}
                     </div>
                     ))
                   )}

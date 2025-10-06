@@ -1,6 +1,6 @@
 // ============================================================
 // TESTE DA NOVA API N8N WEBHOOK
-// URL: https://n8n.sistemavieira.com.br/webhook-test/login
+// URL: https://webhook.sistemavieira.com.br/webhook/login
 // ============================================================
 
 // 📋 1. FUNÇÃO DE TESTE PARA A NOVA API
@@ -18,7 +18,7 @@ async function testarWebhookN8N() {
     try {
       console.log(`\n🧪 Testando: ${cred.email}`);
       
-      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/login', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ function gerarComandosCurl() {
 
   testCases.forEach(test => {
     console.log(`\n# Teste ${test.desc}:`);
-    console.log(`curl -X POST "https://n8n.sistemavieira.com.br/webhook-test/login" \\`);
+    console.log(`curl -X POST "https://webhook.sistemavieira.com.br/webhook/login" \\`);
     console.log(`  -H "Content-Type: application/json" \\`);
     console.log(`  -d '{`);
     console.log(`    "email": "${test.email}",`);
@@ -109,7 +109,7 @@ export async function loginComHierarquiaN8N(email, senha) {
     console.log('🔐 Iniciando login com webhook n8n...');
     
     // PASSO 1: Autenticar no webhook n8n
-    const webhookResponse = await fetch('https://n8n.sistemavieira.com.br/webhook-test/login', {
+    const webhookResponse = await fetch('https://webhook.sistemavieira.com.br/webhook/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

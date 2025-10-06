@@ -29,7 +29,7 @@ export const AuthProvider = ({ children }) => {
       console.log('🔐 Iniciando login com webhook...');
       
       // PASSO 1: Autenticar no webhook Sistema Vieira (n8n)
-      const webhookResponse = await fetch('https://n8n.sistemavieira.com.br/webhook-test/login', {
+      const webhookResponse = await fetch('https://webhook.sistemavieira.com.br/webhook/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

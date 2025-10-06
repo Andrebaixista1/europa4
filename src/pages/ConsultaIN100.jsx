@@ -1,11 +1,14 @@
-﻿import { useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { FiSearch } from 'react-icons/fi'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { notify } from '../utils/notify.js'
+import { useEffect } from 'react'
+import { useAuth } from '../context/AuthContext.jsx'
 
 export default function ConsultaIN100() {
+  const { user } = useAuth()
   const [cpf, setCpf] = useState('')
   const [beneficio, setBeneficio] = useState('')
   const [online, setOnline] = useState(true)
@@ -15,7 +18,33 @@ export default function ConsultaIN100() {
   const [bancoInfo, setBancoInfo] = useState(null)
   const resultRef = useRef(null)
 
-  const metrics = { totalCarregado: 0, disponivel: 0, realizadas: 0 }
+  const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
+  // Carrega saldos do usuário para preencher os cards
+  useEffect(() => {
+    const fetchSaldoUsuario = async () => {
+      if (!user || !user.id) return
+      try {
+        const url = 'https://webhook.sistemavieira.com.br/webhook/saldo'
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_user: user.id, id: user.id, login: user.login }),
+        })
+        if (!res.ok) return
+        const data = await res.json().catch(() => null)
+        if (!data) return
+        const item = Array.isArray(data) ? (data[0] || {}) : data
+        setMetrics({
+          totalCarregado: Number(item.total_carregado ?? 0),
+          disponivel: Number(item.limite_disponivel ?? 0),
+          realizadas: Number(item.consultas_realizada ?? 0),
+        })
+      } catch (_) {
+        // silencia erros para não travar a UI
+      }
+    }
+    fetchSaldoUsuario()
+  }, [user])
 
   const formatCpf = (value) => {
     const v = value.replace(/\D/g, '').slice(0, 11)
@@ -87,11 +116,198 @@ export default function ConsultaIN100() {
 
   const onSubmit = async (e) => {
     e.preventDefault()
+    loader.begin()
+    try {
+    if (Number(metrics.disponivel) <= 0) {
+      notify.warn('Sem saldo dispon\u00edvel para realizar consultas.')
+      return
+    }
     const digits = cpf.replace(/\D/g, '')
     const benDigits = beneficio.replace(/\D/g, '')
     if (digits.length !== 11) return notify.warn('Informe um CPF válido (11 dígitos).')
     if (benDigits.length !== 10) return notify.warn('Informe um Benefício válido (10 dígitos).')
     loader.begin()
+    try {
+      if (online) {
+        // 1) Dispara consulta online
+        const urlConsulta = 'https://webhook.sistemavieira.com.br/webhook/consulta-online'
+        const resConsulta = await fetch(urlConsulta, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: (typeof user?.id !== 'undefined' ? user.id : user), cpf: digits, nb: benDigits })
+        })
+        if (!resConsulta.ok) throw new Error('Falha na consulta online')
+
+        // 2) Buscar resposta final no n8n com os dados completos para o front
+        const urlResposta = 'https://n8n.sistemavieira.com.br/webhook/resposta-api'
+        // Aguarda 5s antes da primeira consulta de resposta
+        await new Promise(r => setTimeout(r, 5000))
+        const isValidResposta = (d) => {
+          if (!Array.isArray(d) || d.length === 0) return false
+          const o = d[0] || {}
+          return (
+            typeof o.id !== 'undefined' &&
+            !!o.numero_beneficio &&
+            !!o.numero_documento &&
+            !!o.nome &&
+            o.status_api === 'Sucesso' &&
+            o.resposta_api === 'Concluido'
+          )
+        }
+        let arr = null
+        while (true) {
+          const resResposta = await fetch(urlResposta, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
+          })
+          if (resResposta.ok) {
+            const dataTry = await resResposta.json().catch(() => null)
+            if (Array.isArray(dataTry) && dataTry.length > 0) {
+              const o = dataTry[0] || {}
+              // Caso especial: resposta_api = 'Concluida' e nome = null => erro com status_api
+              if (o.resposta_api === 'Concluida' && (o.nome === null || o.nome === undefined || o.nome === '')) {
+                loader.end()
+                notify.error(o.status_api || 'Erro na consulta online')
+                return
+              }
+              if (isValidResposta(dataTry)) { arr = dataTry; break }
+            }
+          }
+          await new Promise(r => setTimeout(r, 30000))
+        }
+        const d = Array.isArray(arr) ? (arr[0] || {}) : (arr || {})
+
+        const mapped = {
+          id: d.id || null,
+          id_usuario: d.id_usuario || d.usuarioId || user?.id || null,
+          numero_beneficio: d.numero_beneficio || benDigits,
+          numero_documento: d.numero_documento || digits,
+          nome: d.nome || '',
+          estado: d.estado || '',
+          pensao: d.pensao || 'not_payer',
+          data_nascimento: d.data_nascimento || null,
+          tipo_bloqueio: d.tipo_bloqueio || 'not_blocked',
+          data_concessao: d.data_concessao || null,
+          data_final_beneficio: d.data_final_beneficio || null,
+          tipo_credito: d.tipo_credito || 'magnetic_card',
+          situacao_beneficio: d.situacao_beneficio || 'elegible',
+          limite_cartao_beneficio: d.limite_cartao_beneficio ?? null,
+          saldo_cartao_beneficio: d.saldo_cartao_beneficio ?? 0,
+          limite_cartao_consignado: d.limite_cartao_consignado ?? null,
+          saldo_cartao_consignado: d.saldo_cartao_consignado ?? 0,
+          saldo_credito_consignado: d.saldo_credito_consignado ?? 0,
+          saldo_total_maximo: d.saldo_total_maximo ?? 0,
+          saldo_total_utilizado: d.saldo_total_utilizado ?? 0,
+          saldo_total_disponivel: d.saldo_total_disponivel ?? 0,
+          data_consulta: d.data_consulta || new Date().toISOString(),
+          data_retorno_consulta: d.data_retorno_consulta || new Date().toISOString(),
+          nome_representante_legal: d.nome_representante_legal || null,
+          banco_desembolso: d.banco_desembolso || null,
+          agencia_desembolso: d.agencia_desembolso || null,
+          conta_desembolso: d.conta_desembolso || null,
+          digito_desembolso: d.digito_desembolso || null,
+          numero_portabilidades: d.numero_portabilidades ?? 0,
+          resposta_api: d.resposta_api || 'Concluido',
+          status_api: d.status_api || 'Sucesso',
+          tipo: 'online',
+        }
+
+        setResultado(mapped)
+        if (mapped.banco_desembolso) {
+          try { setBancoInfo(await fetchBanco(mapped.banco_desembolso)) } catch { setBancoInfo(null) }
+        }
+
+        // 3) Após a resposta final, atualiza os saldos agregados (cards)
+        try {
+          const urlSaldo = 'https://webhook.sistemavieira.com.br/webhook/saldo'
+          const resSaldo = await fetch(urlSaldo, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_user: user?.id, id: user?.id, login: user?.login })
+          })
+          if (resSaldo.ok) {
+            const dataSaldo = await resSaldo.json().catch(() => null)
+            const item = Array.isArray(dataSaldo) ? (dataSaldo?.[0] || {}) : (dataSaldo || {})
+            setMetrics({
+              totalCarregado: Number(item.total_carregado ?? 0),
+              disponivel: Number(item.limite_disponivel ?? 0),
+              realizadas: Number(item.consultas_realizada ?? 0),
+            })
+          }
+        } catch { /* silencioso */ }
+        loader.end()
+        notify.success('Consulta online concluída')
+        return
+      }
+      // Fluxo OFFLINE: chamada direta para webhook resposta-api
+      const urlRespostaOffline = 'https://webhook.sistemavieira.com.br/webhook/resposta-api'
+      // Aguarda 5s antes de buscar a resposta offline
+      await new Promise(r => setTimeout(r, 5000))
+      const resOff = await fetch(urlRespostaOffline, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
+      })
+      if (!resOff.ok) throw new Error('Falha na consulta (offline)')
+      const dataOff = await resOff.json().catch(() => null)
+      if (!Array.isArray(dataOff) || dataOff.length === 0) throw new Error('Resposta inválida (offline)')
+      const o = dataOff[0] || {}
+      if (o.resposta_api === 'Concluida' && (o.nome === null || o.nome === undefined || o.nome === '')) {
+        loader.end()
+        notify.error(o.status_api || 'Erro na consulta (offline)')
+        return
+      }
+      // validar formato mínimo esperado
+      if (!(typeof o.id !== 'undefined' && o.numero_beneficio && o.numero_documento && o.nome)) {
+        throw new Error('Resposta incompleta (offline)')
+      }
+      const mappedOff = {
+        id: o.id || null,
+        id_usuario: o.id_usuario || o.usuarioId || user?.id || null,
+        numero_beneficio: o.numero_beneficio || benDigits,
+        numero_documento: o.numero_documento || digits,
+        nome: o.nome || '',
+        estado: o.estado || '',
+        pensao: o.pensao || 'not_payer',
+        data_nascimento: o.data_nascimento || null,
+        tipo_bloqueio: o.tipo_bloqueio || 'not_blocked',
+        data_concessao: o.data_concessao || null,
+        data_final_beneficio: o.data_final_beneficio || null,
+        tipo_credito: o.tipo_credito || 'magnetic_card',
+        situacao_beneficio: o.situacao_beneficio || 'elegible',
+        limite_cartao_beneficio: o.limite_cartao_beneficio ?? null,
+        saldo_cartao_beneficio: o.saldo_cartao_beneficio ?? 0,
+        limite_cartao_consignado: o.limite_cartao_consignado ?? null,
+        saldo_cartao_consignado: o.saldo_cartao_consignado ?? 0,
+        saldo_credito_consignado: o.saldo_credito_consignado ?? 0,
+        saldo_total_maximo: o.saldo_total_maximo ?? 0,
+        saldo_total_utilizado: o.saldo_total_utilizado ?? 0,
+        saldo_total_disponivel: o.saldo_total_disponivel ?? 0,
+        data_consulta: o.data_consulta || new Date().toISOString(),
+        data_retorno_consulta: o.data_retorno_consulta || new Date().toISOString(),
+        nome_representante_legal: o.nome_representante_legal || null,
+        banco_desembolso: o.banco_desembolso || null,
+        agencia_desembolso: o.agencia_desembolso || null,
+        conta_desembolso: o.conta_desembolso || null,
+        digito_desembolso: o.digito_desembolso || null,
+        numero_portabilidades: o.numero_portabilidades ?? 0,
+        resposta_api: o.resposta_api || 'Concluido',
+        status_api: o.status_api || 'Sucesso',
+        tipo: 'offline',
+      }
+      setResultado(mappedOff)
+      if (mappedOff.banco_desembolso) {
+        try { setBancoInfo(await fetchBanco(mappedOff.banco_desembolso)) } catch { setBancoInfo(null) }
+      }
+      loader.end()
+      notify.success('Consulta concluída')
+      return
+    } catch (err) {
+      loader.end()
+      notify.error(err?.message || 'Erro na consulta online')
+      return
+    }
     const mock = {
       id: 3054,
       id_usuario: 1,
@@ -128,6 +344,10 @@ export default function ConsultaIN100() {
     try { setBancoInfo(await fetchBanco(mock.banco_desembolso)) } catch { setBancoInfo(null) }
     loader.end()
     notify.success('Consulta concluída')
+  } finally {
+    loader.end()
+  }
+  
   }
 
   return (
@@ -150,7 +370,7 @@ export default function ConsultaIN100() {
                   <div className="display-6 fw-bold">{metrics.totalCarregado}</div>
                 </div>
                 <div>
-                  <div className="small text-uppercase opacity-75">Disponível</div>
+                  <div className="small text-uppercase opacity-75">{'Dispon\u00edvel'}</div>
                   <div className="display-6 fw-bold">{metrics.disponivel}</div>
                 </div>
                 <div>
@@ -175,31 +395,22 @@ export default function ConsultaIN100() {
                     onChange={(e) => setCpf(formatCpf(e.target.value))}
                     required
                   />
-                  <div className="position-relative" onMouseEnter={() => setShowTip(true)} onMouseLeave={() => setShowTip(false)}>
-                    <button type="button" className="btn btn-outline-light h-100" onClick={onSearchMacica} aria-describedby="tip-macica">
-                      <FiSearch size={18} />
-                    </button>
-                    {showTip && (
-                      <div id="tip-macica" className="position-absolute p-2 rounded-2 macica-tooltip" style={{ top: '110%', right: 0, width: 260, zIndex: 10 }}>
-                        <div className="small fw-semibold">Pesquisar na Maciça</div>
-                        <div className="small">Não sabe o benefício? Vamos tentar encontrar pra você.</div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
 
               <div className="mb-3">
-                <label className="form-label">Número do Benefício</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="form-control"
-                  placeholder="xxx.xxx.xxx-x"
-                  value={beneficio}
-                  onChange={(e) => setBeneficio(formatBeneficio(e.target.value))}
-                  required
-                />
+                <label className="form-label">Benefício</label>
+                <div className="input-group align-items-stretch">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="form-control"
+                    placeholder="000.000.000-0"
+                    value={beneficio}
+                    onChange={(e) => setBeneficio(formatBeneficio(e.target.value))}
+                    required
+                  />
+                </div>
               </div>
 
               <div className="form-check mb-3">
@@ -208,11 +419,11 @@ export default function ConsultaIN100() {
               </div>
 
               <div>
-                <button type="submit" className="btn btn-primary">Pesquisar</button>
+                <button type="submit" className="btn btn-primary btn-pesquisar" disabled={Number(metrics.disponivel) <= 0}>Pesquisar</button>
               </div>
             </form>
           </div>
-        </div>
+          </div>
 
         {resultado && (
           <section className="mt-4 result-section" ref={resultRef} id="result-print">
@@ -272,7 +483,7 @@ export default function ConsultaIN100() {
                     <div className="mb-2">{brCurrency(resultado.saldo_cartao_beneficio)}</div>
                     <div className="small opacity-75">Saldo Cartão Consignado:</div>
                     <div className="mb-2">{brCurrency(resultado.saldo_cartao_consignado)}</div>
-                    <div className="small opacity-75">Margem Disponível:</div>
+                    <div className="small opacity-75">{'Margem Dispon\u00edvel'}:</div>
                     <div className="mb-2">{brCurrency(resultado.saldo_total_disponivel)}</div>
                     <div className="small opacity-75">Empréstimos Ativos:</div>
                     <div>{resultado.numero_portabilidades}</div>

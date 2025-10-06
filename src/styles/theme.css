@@ -60,11 +60,14 @@ html, body { color: var(--text); font-family: 'Inter', system-ui, -apple-system,
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
   backdrop-filter: blur(6px);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
 }
 
-.neo-card:hover { border-color: rgba(0, 0, 0, 0.12); }
+.neo-card:hover { border-color: rgb(0, 200, 255); }
 
-[data-theme="dark"] .neo-card:hover { border-color: rgba(255, 255, 255, 0.22); }
+[data-theme="dark"] .neo-card:hover { border-color: rgb(0, 200, 255); }
 
 .gradient-text {
   background: linear-gradient(90deg, var(--primary), var(--success));
@@ -87,11 +90,12 @@ html, body { color: var(--text); font-family: 'Inter', system-ui, -apple-system,
 .neo-lg { min-height: 220px; }
 
 /* Muted/disabled visual for items em desenvolvimento */
-.neo-muted {
-  opacity: 0.6;
-  filter: grayscale(30%);
-}
-.neo-muted .icon-wrap { opacity: 0.8; }
+.neo-muted { opacity: 0.8; filter: grayscale(30%); }
+.neo-muted:hover { opacity: 1; filter: grayscale(15%); border-color: rgb(0, 200, 255); }
+.neo-muted .icon-wrap { opacity: 0.85; }
+
+/* Badge permanece fixa no canto */
+.neo-card .badge.position-absolute { z-index: 2; }
 .icon-wrap {
   width: 44px;
   height: 44px;
@@ -114,6 +118,11 @@ html, body { color: var(--text); font-family: 'Inter', system-ui, -apple-system,
 .btn-primary:hover { background-color: var(--primary); border-color: var(--primary); filter: brightness(0.9); }
 a { color: var(--primary); }
 a:hover { color: var(--primary); filter: brightness(0.9); }
+
+/* Botão Novidades: azul fixo independente do tema */
+.btn-novidades { background: #2563EB; border: 1px solid #1E40AF; color: #fff !important; text-decoration: none; }
+.btn-novidades:hover { filter: brightness(0.96); border-color: #1E3A8A; }
+.btn-novidades:active { filter: brightness(0.9); }
 
 /* Brand logo sizing */
 .brand-logo { height: 24px; width: auto; display: block; }
@@ -189,11 +198,19 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 /* Global loader overlay */
 .global-loader-overlay {
   position: fixed; inset: 0; z-index: 2000;
-  background: rgba(0,0,0,0.02);
-}
-[data-theme="dark"] .global-loader-overlay { background: rgba(0,0,0,0.25); }
+  background: rgba(0,0,0,0.06); /* leve véu */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: grid; place-items: center; }
+[data-theme="dark"] .global-loader-overlay { background: rgba(0,0,0,0.18);   display: grid; place-items: center; }
 /* Minimal single-icon theme toggle */
 .theme-icon-btn { background: transparent; border: 0; padding: 6px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .theme-icon-only { font-size: 18px; color: var(--text); opacity: 0.9; }
 [data-theme="dark"] .theme-icon-only { color: #e9eef7; }
 .theme-icon-btn:hover .theme-icon-only { opacity: 1; filter: brightness(1.05); }
+
+/* Botão Pesquisar: azul fixo independente do tema */
+.btn-pesquisar { background: #2563EB !important; border: 1px solid #1E40AF !important; color: #fff !important; }
+.btn-pesquisar:hover { filter: brightness(0.96); border-color: #1E3A8A !important; }
+.btn-pesquisar:active { filter: brightness(0.9); }
+

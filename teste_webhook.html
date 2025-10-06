@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Webhook N8N</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .input-group { margin-bottom: 10px; }
+        label { display: block; margin-bottom: 5px; }
+        input, button { padding: 8px; margin-bottom: 10px; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .response { background: #f8f9fa; padding: 15px; border: 1px solid #ddd; border-radius: 4px; margin-top: 15px; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Teste Webhook N8N - Nova Europa</h1>
+        
+        <div class="input-group">
+            <label for="login">Login:</label>
+            <input type="text" id="login" value="andrefelipe" placeholder="andrefelipe">
+        </div>
+        
+        <div class="input-group">
+            <label for="senha">Senha:</label>
+            <input type="password" id="senha" value="8996" placeholder="8996">
+        </div>
+        
+        <div class="input-group">
+            <label for="webhook">URL do Webhook:</label>
+            <input type="text" id="webhook" value="https://webhook.sistemavieira.com.br/webhook/login" style="width: 100%;">
+        </div>
+        
+        <button onclick="testarWebhook()">🚀 Testar Webhook</button>
+        <button onclick="limparResultado()">🧹 Limpar</button>
+        
+        <div id="resultado" class="response" style="display: none;">
+            <h3>📡 Resposta do Webhook:</h3>
+            <div id="status"></div>
+            <div id="headers"></div>
+            <div id="dados"></div>
+        </div>
+    </div>
+
+    <script>
+        async function testarWebhook() {
+            const login = document.getElementById('login').value;
+            const senha = document.getElementById('senha').value;
+            const webhookUrl = document.getElementById('webhook').value;
+            const resultado = document.getElementById('resultado');
+            const status = document.getElementById('status');
+            const headers = document.getElementById('headers');
+            const dados = document.getElementById('dados');
+            
+            try {
+                console.log('🔄 Enviando requisição...');
+                console.log('📤 Dados:', { login, senha });
+                
+                resultado.style.display = 'block';
+                resultado.className = 'response';
+                status.innerHTML = '⏳ Enviando requisição...';
+                headers.innerHTML = '';
+                dados.innerHTML = '';
+                
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        login: login,
+                        senha: senha
+                    })
+                });
+                
+                console.log('📥 Status:', response.status);
+                console.log('📥 OK:', response.ok);
+                
+                // Capturar headers
+                const responseHeaders = {};
+                for (let [key, value] of response.headers.entries()) {
+                    responseHeaders[key] = value;
+                }
+                
+                // Tentar ler o corpo da resposta
+                let responseData;
+                try {
+                    responseData = await response.json();
+                } catch (e) {
+                    console.error('❌ Erro ao fazer parse JSON:', e);
+                    responseData = await response.text();
+                }
+                
+                console.log('📥 Dados:', responseData);
+                
+                // Mostrar resultado
+                status.innerHTML = `
+                    <strong>Status:</strong> ${response.status} ${response.statusText}<br>
+                    <strong>OK:</strong> ${response.ok}
+                `;
+                
+                headers.innerHTML = `
+                    <strong>Headers da Resposta:</strong>
+                    <pre>${JSON.stringify(responseHeaders, null, 2)}</pre>
+                `;
+                
+                dados.innerHTML = `
+                    <strong>Dados da Resposta:</strong>
+                    <pre>${typeof responseData === 'object' ? JSON.stringify(responseData, null, 2) : responseData}</pre>
+                `;
+                
+                // Definir classe baseada no resultado
+                if (response.ok && responseData && (responseData.sucesso === 1 || responseData.id)) {
+                    resultado.className = 'response success';
+                } else {
+                    resultado.className = 'response error';
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro na requisição:', error);
+                
+                resultado.style.display = 'block';
+                resultado.className = 'response error';
+                status.innerHTML = `<strong>❌ Erro:</strong> ${error.message}`;
+                headers.innerHTML = '';
+                dados.innerHTML = `
+                    <strong>Detalhes do Erro:</strong>
+                    <pre>${error.stack || error.toString()}</pre>
+                `;
+            }
+        }
+        
+        function limparResultado() {
+            document.getElementById('resultado').style.display = 'none';
+        }
+        
+        // Permitir pressionar Enter para testar
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                testarWebhook();
+            }
+        });
+    </script>
+</body>
+</html>

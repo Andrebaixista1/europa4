@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -15,6 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [remember, setRemember] = useState(false)
   const loader = useLoading()
   const [showChange, setShowChange] = useState(false)
   const [currentPwd, setCurrentPwd] = useState('')
@@ -29,6 +30,12 @@ export default function Login() {
     try {
       loader.begin()
       const u = await doLogin(login, password)
+      // Persistir credenciais se marcado
+      if (remember) {
+        localStorage.setItem('ne_login_saved', JSON.stringify({ login, password, remember: true }))
+      } else {
+        localStorage.removeItem('ne_login_saved')
+      }
       const target = location.state?.from ? from : defaultRouteFor(u.role)
       notify.success(`Bem-vindo(a), ${u.name}!`)
       navigate(target, { replace: true })
@@ -41,6 +48,19 @@ export default function Login() {
       loader.end()
     }
   }
+
+  // Prefill Lembre-me
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('ne_login_saved')
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (saved?.login) setLogin(saved.login)
+        if (saved?.password) setPassword(saved.password)
+        if (saved?.remember) setRemember(!!saved.remember)
+      }
+    } catch {}
+  }, [])
 
   const handleChangePassword = async (e) => {
     e.preventDefault()
@@ -81,7 +101,7 @@ export default function Login() {
               Acesse com o usuário master para testar o sistema:
             </p>
             <ul className="small opacity-75 mb-0">
-              <li>andre.felipe / 8996 (Master)</li>
+              <li>andrefelipe / 8996 (Master)</li>
             </ul>
           </div>
           <div className="col-lg-5 ms-lg-auto">
@@ -99,7 +119,7 @@ export default function Login() {
                   className="form-control"
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
-                  placeholder="andre.felipe"
+                  placeholder="andrefelipe"
                   required
                 />
               </div>
@@ -113,6 +133,13 @@ export default function Login() {
                   placeholder="••••••"
                   required
                 />
+              </div>
+              <div className="form-check mb-3">
+                <input className="form-check-input" type="checkbox" id="rememberCheck"
+                       checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                <label className="form-check-label" htmlFor="rememberCheck">
+                  Lembrar login e senha
+                </label>
               </div>
               <button type="submit" className="btn btn-primary w-100" disabled={loading}>
                 {loading ? 'Entrando...' : 'Entrar'}
@@ -176,4 +203,3 @@ export default function Login() {
     </div>
   )
 }
-

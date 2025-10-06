@@ -39,7 +39,7 @@ function App() {
       <Route
         path="/consultas/in100"
         element={
-          <ProtectedRoute roles={["Master", "Supervisor", "Operador"]}>
+          <ProtectedRoute roles={["Master","Supervisor","Operador"]}>
             <ConsultaIN100 />
           </ProtectedRoute>
         }
