@@ -101,10 +101,10 @@ export default function Dashboard() {
             <h5 className="section-title">Supervisão</h5>
             <div className="row g-3">
               <div className="col-md-6">
-                <Card title="Usuários" icon="FiUserCheck" accent="primary">Supervisor vê apenas sua própria equipe.</Card>
+                <Card title="Usuários" icon="FiUserCheck" accent="primary" to="/usuarios">Supervisor vê apenas sua própria equipe.</Card>
               </div>
               <div className="col-md-6">
-                <Card title="Equipes" icon="FiGrid" accent="info">Estruture e visualize sua equipe.</Card>
+                <Card title="Equipes" icon="FiGrid" accent="info" to="/equipes">Estruture e visualize sua equipe.</Card>
               </div>
             </div>
           </section>

@@ -124,6 +124,9 @@ export function AuthProvider({ children }) {
           .split(',').map(p => p.trim()).filter(p => p),
         status: userData.status_conta || userData.StatusConta || 'VALID',
         loginTime: new Date().toISOString(),
+        equipe_nome: (userData.equipe_nome || userData.EquipeNome || userData.team_name || null),
+        equipe_id: userData.equipe_id || userData.EquipeId || userData.equipeId || null,
+        is_supervisor: (userData.is_supervisor ?? userData.IsSupervisor ?? false) ? true : false,
         success: userData.sucesso || userData.Sucesso || true
       };
 
@@ -159,4 +162,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }
-

@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard.jsx'
 import SupervisionPanel from './pages/SupervisionPanel.jsx'
 import OperationPanel from './pages/OperationPanel.jsx'
 import ConsultaIN100 from './pages/ConsultaIN100.jsx'
+import Equipes from './pages/Equipes.jsx'
+import Usuarios from './pages/Usuarios.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -17,6 +19,22 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/usuarios"
+        element={
+          <ProtectedRoute roles={["Master", "Supervisor"]}>
+            <Usuarios />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/equipes"
+        element={
+          <ProtectedRoute roles={["Master", "Supervisor"]}>
+            <Equipes />
           </ProtectedRoute>
         }
       />

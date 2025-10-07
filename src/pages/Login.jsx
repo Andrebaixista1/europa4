@@ -1,3 +1,10 @@
+﻿          <div className="col-lg-6">
+            <h2 className="fw-bold gradient-text mb-3">Bem-vindo(a) ao Nova Europa 4</h2>
+            <p className="opacity-75">
+              Faça login com suas credenciais.
+            </p>
+          </div>
+          <div className="col-lg-5 ms-lg-auto">
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
@@ -11,12 +18,15 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname || '/dashboard'
+
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [remember, setRemember] = useState(false)
+
   const loader = useLoading()
+
   const [showChange, setShowChange] = useState(false)
   const [currentPwd, setCurrentPwd] = useState('')
   const [newPwd, setNewPwd] = useState('')
@@ -30,7 +40,6 @@ export default function Login() {
     try {
       loader.begin()
       const u = await doLogin(login, password)
-      // Persistir credenciais se marcado
       if (remember) {
         localStorage.setItem('ne_login_saved', JSON.stringify({ login, password, remember: true }))
       } else {
@@ -49,7 +58,6 @@ export default function Login() {
     }
   }
 
-  // Prefill Lembre-me
   useEffect(() => {
     try {
       const raw = localStorage.getItem('ne_login_saved')
@@ -77,7 +85,7 @@ export default function Login() {
       notify.warn(m)
       return
     }
-    // Fluxo simulado (mock). Em produção, enviar para API.
+    // Mock: em produção, enviar para API
     loader.showFor(700)
     const ok = 'Solicitação enviada! Em produção, verificaríamos a senha atual e enviaríamos uma confirmação para seu e-mail.'
     setChangeMsg(ok)
@@ -97,20 +105,13 @@ export default function Login() {
         <div className="row w-100 g-4 align-items-center">
           <div className="col-lg-6">
             <h2 className="fw-bold gradient-text mb-3">Bem-vindo(a) ao Nova Europa 4</h2>
-            <p className="opacity-75">
-              Acesse com o usuário master para testar o sistema:
-            </p>
-            <ul className="small opacity-75 mb-0">
-              <li>andrefelipe / 8996 (Master)</li>
-            </ul>
+            <p className="opacity-75">Faça login com suas credenciais.</p>
           </div>
           <div className="col-lg-5 ms-lg-auto">
             <form onSubmit={handleSubmit} className="neo-card p-4">
               <h5 className="mb-3">Entrar</h5>
               {error && (
-                <div className="alert alert-danger py-2" role="alert">
-                  {error}
-                </div>
+                <div className="alert alert-danger py-2" role="alert">{error}</div>
               )}
               <div className="mb-3">
                 <label className="form-label">Login</label>
@@ -119,7 +120,7 @@ export default function Login() {
                   className="form-control"
                   value={login}
                   onChange={(e) => setLogin(e.target.value)}
-                  placeholder="andrefelipe"
+                  placeholder=""
                   required
                 />
               </div>
@@ -130,16 +131,14 @@ export default function Login() {
                   className="form-control"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••"
+                  placeholder=""
                   required
                 />
               </div>
               <div className="form-check mb-3">
                 <input className="form-check-input" type="checkbox" id="rememberCheck"
                        checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                <label className="form-check-label" htmlFor="rememberCheck">
-                  Lembrar login e senha
-                </label>
+                <label className="form-check-label" htmlFor="rememberCheck">Lembrar login e senha</label>
               </div>
               <button type="submit" className="btn btn-primary w-100" disabled={loading}>
                 {loading ? 'Entrando...' : 'Entrar'}
@@ -154,7 +153,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Modal Alterar Senha */}
       {showChange && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
@@ -165,9 +163,7 @@ export default function Login() {
               </div>
               <form onSubmit={handleChangePassword}>
                 <div className="modal-body">
-                  {changeMsg && (
-                    <div className="alert alert-info py-2" role="alert">{changeMsg}</div>
-                  )}
+                  {changeMsg && (<div className="alert alert-info py-2" role="alert">{changeMsg}</div>)}
                   <div className="mb-3">
                     <label className="form-label">Login</label>
                     <input type="text" className="form-control" value={login} onChange={(e) => setLogin(e.target.value)} required />
