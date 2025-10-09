@@ -21,6 +21,8 @@ export default function Usuarios() {
   const [formTipo, setFormTipo] = useState('Operador')
   const [formSenha, setFormSenha] = useState('')
   const [formEquipeId, setFormEquipeId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
 
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
@@ -262,6 +264,56 @@ export default function Usuarios() {
     }
   }
 
+  async function handleDeleteUser(targetId) {
+    if (targetId === user?.id) return
+
+    setDeletingId(targetId)
+    setPendingDelete(null)
+
+    try {
+      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ id: targetId })
+      })
+
+      const rawBody = await response.text()
+      if (!response.ok) {
+        const message = (rawBody || '').trim() || `Erro ${response.status}`
+        throw new Error(message)
+      }
+
+      if (rawBody) {
+        try {
+          console.log('Usuário removido via API:', JSON.parse(rawBody))
+        } catch (_) {
+          console.log('Usuário removido via API (texto):', rawBody)
+        }
+      }
+
+      const removedUser = usuarios.find(u => u.id === targetId)
+      setUsuarios(prev => {
+        const next = prev.filter(u => u.id !== targetId)
+        setSelectedId(current => (current === targetId ? next[0]?.id ?? null : current))
+        return next
+      })
+
+      if (removedUser?.nome) {
+        notify.success(`Usuário "${removedUser.nome}" excluído.`)
+      } else {
+        notify.success('Usuário excluído.')
+      }
+
+    } catch (error) {
+      console.error('Erro ao excluir usuário:', error)
+      notify.error(`Erro ao excluir usuário: ${error.message}`)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column">
       <TopNav />
@@ -282,7 +334,12 @@ export default function Usuarios() {
         <div className="row g-3">
           <div className="col-12 col-lg-4">
             <div className="neo-card neo-lg p-4 h-100">
-              <div className="d-flex gap-2 mb-3">
+              <div className="d-flex align-items-center gap-2 mb-3">
+                {canManage && (
+                  <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
+                    <Fi.FiPlus />
+                  </button>
+                )}
                 <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar usuário..." />
                 <button className="btn btn-outline-secondary" onClick={() => setSearch('')} aria-label="Limpar busca" title="Limpar">
                   <Fi.FiX />
@@ -319,15 +376,13 @@ export default function Usuarios() {
                     </div>
                     <div className="d-flex gap-2">
                       <button className="btn btn-outline-primary btn-sm" disabled title="Editar" aria-label="Editar"><Fi.FiEdit /></button>
-                      <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={selected.id === user?.id}
-                        onClick={() => {
-                          if (selected.id === user?.id) return
-                          if (!confirm('Confirmar exclusão?')) return
-                          const next = usuarios.filter(u => u.id !== selected.id)
-                          setUsuarios(next)
-                          setSelectedId(next[0]?.id ?? null)
-                        }}>
-                        <Fi.FiTrash2 />
+                      <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={selected.id === user?.id || deletingId === selected.id}
+                        onClick={() => setPendingDelete(selected)}>
+                        {deletingId === selected.id ? (
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        ) : (
+                          <Fi.FiTrash2 />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -369,14 +424,9 @@ export default function Usuarios() {
                     </div>
                   </div>
 
-                  <div className="mt-3 d-flex justify-content-end">
-                    <button className="btn btn-primary btn-sm" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
-                      <Fi.FiPlus />
-                    </button>
-                  </div>
                 </>
               )}
-              <div className="small mt-3 opacity-75">Integração com: https://webhook.sistemavieira.com.br/webhook/add-user</div>
+              {/* <div className="small mt-3 opacity-75">Integração com: https://webhook.sistemavieira.com.br/webhook/add-user</div> */}
             </div>
           </div>
         </div>
@@ -465,6 +515,36 @@ export default function Usuarios() {
           </div>
         </div>
       )}
+      {pendingDelete && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Confirmar exclusão</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={() => setPendingDelete(null)} disabled={deletingId != null}></button>
+              </div>
+              <div className="modal-body">
+                <p>Tem certeza que deseja excluir <strong>{pendingDelete.nome}</strong>?</p>
+                <p className="mb-0 small opacity-75">Esta ação não pode ser desfeita.</p>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deletingId != null}>Cancelar</button>
+                <button type="button" className="btn btn-danger" onClick={() => handleDeleteUser(pendingDelete.id)} disabled={deletingId != null}>
+                  {deletingId != null ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Excluindo...
+                    </>
+                  ) : (
+                    'Excluir'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
