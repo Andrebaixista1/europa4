@@ -2,6 +2,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import users from '../data/users.json'
 import { normalizeRole } from '../utils/roles.js'
 
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
+
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
@@ -12,9 +18,12 @@ export function AuthProvider({ children }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        const fixed = { ...parsed, role: normalizeRole(parsed.role, parsed.level) }
+        const normalizedRole = normalizeRole(parsed.role, parsed.level)
+        const normalizedId = toNumberOrNull(parsed.id) ?? parsed.id
+        const normalizedEquipeId = toNumberOrNull(parsed.equipe_id) ?? parsed.equipe_id
+        const fixed = { ...parsed, role: normalizedRole, id: normalizedId, equipe_id: normalizedEquipeId }
         setUser(fixed)
-        if (fixed.role !== parsed.role) {
+        if (fixed.role !== parsed.role || fixed.id !== parsed.id || fixed.equipe_id !== parsed.equipe_id) {
           localStorage.setItem('ne_auth_user', JSON.stringify(fixed))
         }
       } catch (_) {
@@ -109,8 +118,11 @@ export function AuthProvider({ children }) {
       }
 
       // PASSO 4: Criar objeto do usuário - MAPEAMENTO CORRETO
+      const normalizedUserId = toNumberOrNull(userId) ?? userId
+      const rawEquipeId = userData.equipe_id ?? userData.EquipeId ?? userData.equipeId ?? null
+      const normalizedEquipeId = toNumberOrNull(rawEquipeId)
       const payload = {
-        id: userId,
+        id: normalizedUserId,
         name: userName,
         login: userLogin,
         email: userData.email || userData.Email || `${userLogin}@novaeuropa.com`,
@@ -125,7 +137,7 @@ export function AuthProvider({ children }) {
         status: userData.status_conta || userData.StatusConta || 'VALID',
         loginTime: new Date().toISOString(),
         equipe_nome: (userData.equipe_nome || userData.EquipeNome || userData.team_name || null),
-        equipe_id: userData.equipe_id || userData.EquipeId || userData.equipeId || null,
+        equipe_id: normalizedEquipeId ?? rawEquipeId,
         is_supervisor: (userData.is_supervisor ?? userData.IsSupervisor ?? false) ? true : false,
         success: userData.sucesso || userData.Sucesso || true
       };

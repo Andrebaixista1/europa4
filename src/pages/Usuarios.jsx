@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { notify } from '../utils/notify.js'
+import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 
 export default function Usuarios() {
@@ -13,10 +15,18 @@ export default function Usuarios() {
   const [search, setSearch] = useState('')
   const [equipesLista, setEquipesLista] = useState([])
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [formNome, setFormNome] = useState('')
+  const [formLogin, setFormLogin] = useState('')
   const [formTipo, setFormTipo] = useState('Operador')
   const [formSenha, setFormSenha] = useState('')
   const [formEquipeId, setFormEquipeId] = useState(null)
+
+  const normalizeId = (value) => {
+    if (value === null || value === undefined || value === '') return null
+    const num = Number(value)
+    return Number.isNaN(num) ? null : num
+  }
 
   useEffect(() => {
     let aborted = false
@@ -45,7 +55,7 @@ export default function Usuarios() {
         const payload = unwrap(data)
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? null,
-          nome: u?.nome ?? u?.name ?? 'Usuário',
+          nome: u?.nome ?? u?.name ?? 'usuário',
           email: u?.email ?? '',
           role: u?.role ?? u?.papel ?? 'Operador',
           equipe_id: u?.equipe_id ?? u?.team_id ?? null,
@@ -63,15 +73,22 @@ export default function Usuarios() {
         if (!aborted) {
           setUsuarios(arr)
           setSelectedId(arr[0]?.id ?? null)
+          
+          // Processar equipes corretamente
           if (Array.isArray(payload?.equipes)) {
-            const eq = payload.equipes
-              .map(e => ({ id: e.id ?? e.equipe_id ?? null, nome: e.nome ?? 'Equipe' }))
-              .filter(e => e.id != null)
+            const eq = payload.equipes.map(e => ({
+              id: e.id ?? e.equipe_id ?? null,
+              nome: e.nome ?? `Equipe ${e.id}`,
+              descricao: e.descricao || ''
+            })).filter(e => e.id != null)
+            
             setEquipesLista(eq)
           } else {
+            // Fallback: criar equipes baseado nos usuários
             const uniq = Array.from(new Set(arr.map(u => u.equipe_id).filter(Boolean)))
             setEquipesLista(uniq.map(id => ({ id, nome: `Equipe ${id}` })))
           }
+          
           if (user?.role === 'Supervisor' && user?.equipe_id != null) {
             setFormEquipeId(user.equipe_id)
             setFormTipo('Operador')
@@ -126,22 +143,123 @@ export default function Usuarios() {
     return s.replace(/\s+/g, '')
   }
 
-  function handleAddSubmit(e) {
+  // Atualizar login automaticamente baseado no nome
+  const handleNomeChange = (nome) => {
+    setFormNome(nome)
+    if (!formLogin || formLogin === toLoginFromName(formNome)) {
+      setFormLogin(toLoginFromName(nome))
+    }
+  }
+
+  // Função para abrir modal de adicionar usuário
+  const handleOpenAddModal = () => {
+    // Limpar formulário
+    setFormNome('')
+    setFormLogin('')
+    setFormSenha('')
+    setFormTipo('Operador')
+    
+    // Para supervisores, definir automaticamente a equipe
+    if (isSupervisor && user?.equipe_id) {
+      setFormEquipeId(user.equipe_id)
+    } else {
+      setFormEquipeId(equipesLista[0]?.id || null)
+    }
+    
+    setIsAddOpen(true)
+  }
+
+  async function handleAddSubmit(e) {
     e.preventDefault()
+    console.log('🚀 Iniciando handleAddSubmit...')
+    
     const nome = formNome.trim()
-    if (!nome) return
+    const login = formLogin.trim()
+    const senha = formSenha.trim()
+    
+    console.log('📋 Dados do formulário:', { nome, login, senha, formEquipeId, formTipo })
+    
+    if (!nome || !login || !senha) {
+      notify.warn('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    if (senha.length < 4) {
+      notify.warn('A senha deve ter pelo menos 4 caracteres')
+      return
+    }
+    
     const tipoSel = (formTipo || 'Operador').trim()
     const roleOut = (tipoSel === 'Administrador') ? 'Master' : tipoSel
     const equipeId = isSupervisor ? (user?.equipe_id ?? formEquipeId) : formEquipeId
-    if (!equipeId) return
-    const nextId = Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
-    const novo = { id: nextId, nome, login: toLoginFromName(nome), role: roleOut, equipe_id: equipeId, ativo: true, is_supervisor: roleOut === 'Supervisor' }
-    setUsuarios(prev => [novo, ...prev])
-    setSelectedId(nextId)
-    setIsAddOpen(false)
-    setFormNome('')
-    setFormSenha('')
-    if (!isSupervisor) setFormTipo('Operador')
+    
+    console.log('🔍 Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
+    
+    if (!equipeId) {
+      notify.warn('Selecione uma equipe')
+      return
+    }
+
+    setIsSaving(true)
+    
+    try {
+      console.log('🔄 Criando usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
+      
+      // Chamada para a API de adicionar usuário
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nome: nome,
+          login: login,
+          senha: senha,
+          role: roleOut,
+          equipe_id: equipeId,
+          ativo: true,
+          criado_por: user?.id || 1
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Erro ${response.status}: ${errorText}`)
+      }
+
+      const result = await response.json()
+      console.log('✅ Usuário criado via API:', result)
+
+      // Criar objeto local para atualizar a lista
+      const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
+      const novo = {
+        id: nextId,
+        nome,
+        login,
+        role: roleOut,
+        equipe_id: equipeId,
+        ativo: true,
+        is_supervisor: roleOut === 'Supervisor'
+      }
+      
+      setUsuarios(prev => [novo, ...prev])
+      setSelectedId(nextId)
+      setIsAddOpen(false)
+      
+      // Limpar formulário
+      setFormNome('')
+      setFormLogin('')
+      setFormSenha('')
+      if (!isSupervisor) setFormTipo('Operador')
+      
+      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      
+    } catch (error) {
+      console.error('❌ Erro ao criar usuário:', error)
+      notify.error(`Erro ao criar usuário: ${error.message}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -149,9 +267,15 @@ export default function Usuarios() {
       <TopNav />
       <main className="container-xxl py-4 flex-grow-1">
         <div className="d-flex align-items-baseline justify-content-between mb-3">
-          <div>
-            <h2 className="fw-bold mb-1">Usuários</h2>
-            <div className="opacity-75 small">Gerencie contas, perfis e acessos</div>
+          <div className="d-flex align-items-center gap-3">
+            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+              <Fi.FiArrowLeft size={16} />
+              <span className="d-none d-sm-inline">Voltar</span>
+            </Link>
+            <div>
+              <h2 className="fw-bold mb-1">Usuários</h2>
+              <div className="opacity-75 small">Gerencie contas, perfis e acessos</div>
+            </div>
           </div>
         </div>
 
@@ -213,17 +337,27 @@ export default function Usuarios() {
                       <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
                         <div className="small text-uppercase opacity-75 mb-2">Perfil</div>
                         <div className="mb-1"><span className="opacity-75">Nome: </span>{selected.nome}</div>
+                        <div className="mb-1"><span className="opacity-75">Login: </span>{selected.login}</div>
                         <div className="mb-2"><span className="opacity-75">Tipo: </span>{selected.role}</div>
                         <button className="btn btn-outline-secondary btn-sm" disabled title="Alterar tipo" aria-label="Alterar tipo"><Fi.FiRefreshCcw /></button>
                       </div>
                     </div>
                     <div className="col-md-6">
                       <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                        <div className="small text-uppercase opacity-75 mb-2">Segurança</div>
+                        <div className="small text-uppercase opacity-75 mb-2">SEGURANÇA</div>
                         <div className="mb-2"><span className="opacity-75">Status: </span>{selected.ativo ? 'Ativo' : 'Inativo'}</div>
                         <div className="d-flex gap-2">
                           <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha"
-                            onClick={() => { const nova = prompt('Nova senha para ' + selected.nome + ':'); if (!nova) return; alert('Senha alterada (mock). Integre com a API.') }}>
+                            onClick={() => { 
+                              const nova = prompt('Nova senha para ' + selected.nome + ':')
+                              if (!nova) return
+                              if (nova.length < 4) {
+                                notify.warn('A senha deve ter pelo menos 4 caracteres')
+                                return
+                              }
+                              // TODO: Integrar com API de alteração de senha
+                              notify.info('Funcionalidade em desenvolvimento. Integre com a API.')
+                            }}>
                             <Fi.FiKey />
                           </button>
                           <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={selected.id === user?.id}
@@ -236,13 +370,13 @@ export default function Usuarios() {
                   </div>
 
                   <div className="mt-3 d-flex justify-content-end">
-                    <button className="btn btn-primary btn-sm" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={() => setIsAddOpen(true)} disabled={!canManage}>
+                    <button className="btn btn-primary btn-sm" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
                       <Fi.FiPlus />
                     </button>
                   </div>
                 </>
               )}
-              <div className="small mt-3 opacity-75">Integração prevista: GET/POST/PUT em /usuarios</div>
+              <div className="small mt-3 opacity-75">Integração com: https://webhook.sistemavieira.com.br/webhook/add-user</div>
             </div>
           </div>
         </div>
@@ -255,38 +389,76 @@ export default function Usuarios() {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Adicionar usuário</h5>
-                <button type="button" className="btn-close" aria-label="Close" onClick={() => setIsAddOpen(false)}></button>
+                <button type="button" className="btn-close" aria-label="Close" onClick={() => setIsAddOpen(false)} disabled={isSaving}></button>
               </div>
               <form onSubmit={handleAddSubmit}>
                 <div className="modal-body">
-                  <div className="mb-2">
-                    <label className="form-label">Nome</label>
-                    <input className="form-control" value={formNome} onChange={(e) => setFormNome(e.target.value)} required />
+                  <div className="mb-3">
+                    <label className="form-label">Nome Completo *</label>
+                    <input 
+                      className="form-control" 
+                      value={formNome} 
+                      onChange={(e) => handleNomeChange(e.target.value)} 
+                      disabled={isSaving}
+                      placeholder="Ex: João Silva"
+                      required 
+                    />
                   </div>
-                  <div className="mb-2">
+                  <div className="mb-3">
+                    <label className="form-label">Login *</label>
+                    <input 
+                      className="form-control" 
+                      value={formLogin} 
+                      onChange={(e) => setFormLogin(e.target.value)} 
+                      disabled={isSaving}
+                      placeholder="Ex: joaosilva"
+                      required 
+                    />
+                    <div className="form-text">Login será usado para acessar o sistema</div>
+                  </div>
+                  <div className="mb-3">
                     <label className="form-label">Tipo</label>
-                    <select className="form-select" value={isSupervisor ? 'Operador' : formTipo} onChange={(e) => setFormTipo(e.target.value)} disabled={isSupervisor}>
+                    <select className="form-select" value={formTipo} onChange={(e) => setFormTipo(e.target.value)} disabled={isSupervisor || isSaving}>
                       <option>Master</option>
                       <option>Administrador</option>
                       <option>Supervisor</option>
                       <option>Operador</option>
                     </select>
+                    {isSupervisor && <div className="form-text">Como supervisora, você só pode criar operadores</div>}
                   </div>
-                  <div className="mb-2">
-                    <label className="form-label">Senha</label>
-                    <input type="password" className="form-control" value={formSenha} onChange={(e) => setFormSenha(e.target.value)} required />
+                  <div className="mb-3">
+                    <label className="form-label">Senha *</label>
+                    <input 
+                      type="password" 
+                      className="form-control" 
+                      value={formSenha} 
+                      onChange={(e) => setFormSenha(e.target.value)} 
+                      disabled={isSaving}
+                      placeholder="Mínimo 4 caracteres"
+                      required 
+                    />
                   </div>
-                  <div className="mb-2">
-                    <label className="form-label">Equipe</label>
-                    <select className="form-select" value={isSupervisor ? (user?.equipe_id ?? '') : (formEquipeId ?? '')} onChange={(e) => setFormEquipeId(parseInt(e.target.value, 10))} disabled={isSupervisor} required>
-                      <option value="" disabled>Selecione...</option>
+                  <div className="mb-3">
+                    <label className="form-label">Equipe *</label>
+                    <select className="form-select" value={formEquipeId ?? ''} onChange={(e) => setFormEquipeId(e.target.value ? parseInt(e.target.value, 10) : null)} disabled={isSupervisor || isSaving} required>
+                      <option value="" disabled>Selecione uma equipe...</option>
                       {(equipesLista || []).map(eq => (<option key={eq.id} value={eq.id}>{eq.nome}</option>))}
                     </select>
+                    {isSupervisor && <div className="form-text">Como supervisora, você só pode criar usuários na sua equipe</div>}
                   </div>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary" disabled={!formNome.trim() || (!isSupervisor && !formEquipeId)}>Salvar</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsAddOpen(false)} disabled={isSaving}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSaving || !formNome.trim() || !formLogin.trim() || !formSenha.trim() || !formEquipeId}>
+                    {isSaving ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Salvando...
+                      </>
+                    ) : (
+                      'Salvar'
+                    )}
+                  </button>
                 </div>
               </form>
             </div>
