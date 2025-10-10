@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { FiSearch } from 'react-icons/fi'
+import { FiSearch, FiArrowLeft } from 'react-icons/fi'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { notify } from '../utils/notify.js'
 import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { Link } from 'react-router-dom'
 
 export default function ConsultaIN100() {
   const { user } = useAuth()
@@ -404,9 +405,15 @@ export default function ConsultaIN100() {
       <TopNav />
       <main className="container-xxl py-4 flex-grow-1">
         <div className="d-flex align-items-baseline justify-content-between mb-4">
-          <div>
-            <h2 className="fw-bold mb-1">Consulta Individual (IN100)</h2>
-            <div className="opacity-75 small">Faça buscas individuais por CPF e Benefício</div>
+          <div className="d-flex align-items-center gap-3">
+            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+              <FiArrowLeft size={16} />
+              <span className="d-none d-sm-inline">Voltar</span>
+            </Link>
+            <div>
+              <h2 className="fw-bold mb-1">Consulta Individual (IN100)</h2>
+              <div className="opacity-75 small">Faça buscas individuais por CPF e Benefício</div>
+            </div>
           </div>
         </div>
 

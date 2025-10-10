@@ -148,8 +148,10 @@ export default function Usuarios() {
     if (!filtered.some(u => u.id === selectedId)) setSelectedId(filtered[0]?.id ?? null)
   }, [filtered, selectedId])
 
+  const isMaster = user?.role === 'Master'
   const isSupervisor = user?.role === 'Supervisor'
-  const canManage = user?.role === 'Master' || isSupervisor || (user?.equipe_nome || '').toLowerCase() === 'master'
+  const canManage = isMaster
+  const canChangePassword = isMaster || isSupervisor
 
   function toLoginFromName(nome) {
     const s = (nome || '')
@@ -171,6 +173,7 @@ export default function Usuarios() {
 
   // Função para abrir modal de adicionar usuário
   const handleOpenAddModal = () => {
+    if (!isMaster) return
     // Limpar formulário
     setFormNome('')
     setFormLogin('')
@@ -188,6 +191,7 @@ export default function Usuarios() {
   }
 
   const openPasswordModal = (targetUser) => {
+    if (!canChangePassword) return
     if (!targetUser) return
     setPasswordUser(targetUser)
     setPasswordValue('')
@@ -222,6 +226,7 @@ export default function Usuarios() {
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault()
+    if (!canChangePassword) return
     const senhaAtual = passwordCurrent.trim()
     const senha = passwordValue.trim()
     const confirmacao = passwordConfirm.trim()
@@ -324,6 +329,7 @@ export default function Usuarios() {
   }
 
   const openEditModal = (targetUser) => {
+    if (!isMaster) return
     if (!targetUser) return
     setEditUser(targetUser)
     setEditNome(targetUser.nome || '')
@@ -344,6 +350,7 @@ export default function Usuarios() {
   }
 
   const handleEditSubmit = async (event) => {
+    if (!isMaster) return
     event.preventDefault()
     const nome = editNome.trim()
     const login = editLogin.trim()
@@ -410,6 +417,7 @@ export default function Usuarios() {
   }
 
   async function handleAddSubmit(e) {
+    if (!isMaster) return
     e.preventDefault()
     console.log('🚀 Iniciando handleAddSubmit...')
     
@@ -503,6 +511,7 @@ export default function Usuarios() {
   }
 
   async function handleDeleteUser(targetId) {
+    if (!isMaster) return
     if (targetId === user?.id) return
 
     setDeletingId(targetId)
@@ -553,6 +562,7 @@ export default function Usuarios() {
   }
 
   const handleToggleStatus = async (targetUser) => {
+    if (!isMaster) return
     if (!targetUser) return
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
 
@@ -677,7 +687,7 @@ export default function Usuarios() {
                       <button className="btn btn-outline-primary btn-sm" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)} disabled={!canManage}>
                         <Fi.FiEdit />
                       </button>
-                      <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={selected.id === user?.id || deletingId === selected.id}
+                      <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={!isMaster || selected.id === user?.id || deletingId === selected.id}
                         onClick={() => setPendingDelete(selected)}>
                         {deletingId === selected.id ? (
                           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -702,11 +712,11 @@ export default function Usuarios() {
                         <div className="small text-uppercase opacity-75 mb-2">SEGURANÇA</div>
                         <div className="mb-2"><span className="opacity-75">Status: </span>{selected.ativo ? 'Ativo' : 'Inativo'}</div>
                         <div className="d-flex gap-2">
-                          <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha"
+                          <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha" disabled={!canChangePassword}
                             onClick={() => openPasswordModal(selected)}>
                             <Fi.FiKey />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={selected.id === user?.id || togglingId === selected.id}
+                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={!isMaster || selected.id === user?.id || togglingId === selected.id}
                             onClick={() => handleToggleStatus(selected)}>
                             {togglingId === selected.id ? (
                               <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

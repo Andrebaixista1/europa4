@@ -10,6 +10,34 @@ const toNumberOrNull = (value) => {
 
 const AuthContext = createContext(null)
 
+const pad2 = (value) => String(value).padStart(2, '0')
+const formatDateTime7 = (date, timeZone = 'America/Sao_Paulo') => {
+  const zoned = new Date(date.toLocaleString('en-US', { timeZone }))
+  const year = zoned.getFullYear()
+  const month = pad2(zoned.getMonth() + 1)
+  const day = pad2(zoned.getDate())
+  const hours = pad2(zoned.getHours())
+  const minutes = pad2(zoned.getMinutes())
+  const seconds = pad2(zoned.getSeconds())
+  const milliseconds = String(zoned.getMilliseconds()).padStart(3, '0')
+  const fractional = `${milliseconds}0000`
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${fractional}`
+}
+
+const resolveClientIp = async () => {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json')
+    if (!response.ok) throw new Error('ipify error')
+    const data = await response.json()
+    const ip = data?.ip || ''
+    if (ip) localStorage.setItem('ne_last_ip', ip)
+    return ip || '0.0.0.0'
+  } catch (error) {
+    const cached = localStorage.getItem('ne_last_ip')
+    return cached || '0.0.0.0'
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
 
@@ -38,6 +66,9 @@ export function AuthProvider({ children }) {
       console.log('📊 Dados enviados:', { login: loginUser, senha: password });
       
       // PASSO 1: Autenticar no webhook
+      const dataHoraLogin = formatDateTime7(new Date(), 'America/Sao_Paulo')
+      const ultimoIp = await resolveClientIp()
+
       const webhookResponse = await fetch('https://webhook.sistemavieira.com.br/webhook/login', {
         method: 'POST',
         headers: {
@@ -45,7 +76,9 @@ export function AuthProvider({ children }) {
         },
         body: JSON.stringify({
           login: loginUser,
-          senha: password
+          senha: password,
+          data_hora_login: dataHoraLogin,
+          ultimo_ip: ultimoIp
         })
       });
 

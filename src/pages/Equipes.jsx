@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
+import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
+import { notify } from '../utils/notify.js'
 
 // Página Equipes: estrutura pronta para integrar API em seguida.
 export default function Equipes() {
@@ -12,10 +14,19 @@ export default function Equipes() {
   const [equipes, setEquipes] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [search, setSearch] = useState('')
-  const [novoNome, setNovoNome] = useState('')
-  const [novoSupervisor, setNovoSupervisor] = useState('')
-  const [novoDepartamento, setNovoDepartamento] = useState('')
   const [editNome, setEditNome] = useState('')
+  const [supervisores, setSupervisores] = useState([])
+  const [isAddTeamOpen, setIsAddTeamOpen] = useState(false)
+  const [addTeamNome, setAddTeamNome] = useState('')
+  const [addTeamSupervisorId, setAddTeamSupervisorId] = useState('')
+  const [addTeamDepartamento, setAddTeamDepartamento] = useState('')
+  const [addTeamSaving, setAddTeamSaving] = useState(false)
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false)
+  const [addUserNome, setAddUserNome] = useState('')
+  const [addUserLogin, setAddUserLogin] = useState('')
+  const [addUserTipo, setAddUserTipo] = useState('Operador')
+  const [addUserSenha, setAddUserSenha] = useState('')
+  const [addUserSaving, setAddUserSaving] = useState(false)
 
   // MOCK até a API ficar pronta
   useEffect(() => {
@@ -45,6 +56,13 @@ export default function Equipes() {
 
         const payload = unwrap(data)
 
+        const mapUser = (u) => ({
+          id: u?.id ?? u?.user_id ?? u?.usuario_id ?? null,
+          nome: u?.nome ?? u?.name ?? 'Usuário',
+          role: u?.role ?? u?.papel ?? u?.perfil ?? '',
+          equipe_id: u?.equipe_id ?? u?.team_id ?? u?.equipeId ?? null,
+        })
+
         const toTeam = (t) => ({
           id: t?.id ?? t?.team_id ?? t?.equipe_id ?? null,
           nome: t?.nome ?? t?.name ?? t?.team_name ?? 'Equipe',
@@ -58,6 +76,25 @@ export default function Equipes() {
           departamento: t?.departamento ?? t?.department ?? '-',
           membros: t?.membros ?? t?.users ?? t?.usuarios ?? [],
         })
+
+        const collectUsers = () => {
+          let arr = []
+          if (Array.isArray(payload?.usuarios)) arr = payload.usuarios
+          else if (Array.isArray(payload?.users)) arr = payload.users
+          else if (Array.isArray(payload?.equipes)) arr = payload.equipes.flatMap(eq => eq.membros || [])
+          else if (Array.isArray(payload)) arr = payload
+          return arr.map(mapUser).filter(u => u.id != null)
+        }
+
+        const usuariosLista = (() => {
+          const list = collectUsers()
+          const map = new Map()
+          list.forEach(u => {
+            if (u.id == null) return
+            if (!map.has(u.id)) map.set(u.id, u)
+          })
+          return Array.from(map.values())
+        })()
 
         let eq = []
         if (Array.isArray(payload?.equipes)) {
@@ -76,6 +113,7 @@ export default function Equipes() {
         if (!aborted) {
           setEquipes(eq)
           setSelectedId(eq[0]?.id ?? null)
+          setSupervisores(usuariosLista.filter(u => (u.role || '').toLowerCase().includes('supervisor')))
         }
       } catch (e) {
         console.error('Falha API Equipes:', e)
@@ -94,21 +132,21 @@ export default function Equipes() {
 
   const isMasterRole = user?.role === 'Master'
   const isMasterTeam = (user?.equipe_nome || '').toLowerCase() === 'master'
-  const isMaster = isMasterRole || isMasterTeam
+  const hasMasterAccess = isMasterRole || isMasterTeam
   const isSupervisor = user?.role === 'Supervisor'
-  const canCreateTeam = isMaster
-  const canEditTeamName = isMaster || isSupervisor
-  const canManageMembers = isMaster || isSupervisor
+  const canCreateTeam = isMasterRole
+  const canEditTeamName = hasMasterAccess || isSupervisor
+  const canManageMembers = hasMasterAccess || isSupervisor
 
   const baseEquipes = useMemo(() => {
-    if (isMaster) {
+    if (hasMasterAccess) {
       return equipes
     }
     if (user?.equipe_id != null) {
       return equipes.filter(e => e.id === user.equipe_id)
     }
     return equipes
-  }, [equipes, user, isMaster])
+  }, [equipes, user, hasMasterAccess])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -132,50 +170,288 @@ export default function Equipes() {
     setEditNome(selected?.nome || '')
   }, [selected?.id])
 
-  function handleAddEquipe() {
-    const nome = novoNome.trim()
-    const sup = novoSupervisor.trim()
-    const dep = novoDepartamento.trim()
-    if (!nome || !sup || !dep) return
-    const nextId = Math.max(0, ...equipes.map(e => e.id)) + 1
-    const nova = {
-      id: nextId,
-      nome,
-      descricao: '',
-      ativo: true,
-      supervisor: { id: null, nome: sup },
-      departamento: dep,
-      membros: [],
-    }
-    setEquipes(prev => [nova, ...prev])
-    setSelectedId(nextId)
-    setNovoNome('')
-    setNovoSupervisor('')
-    setNovoDepartamento('')
+  const toLoginFromName = (nome) => {
+    const s = (nome || '')
+      .normalize('NFD')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s-]+/g, ' ')
+      .trim()
+      .toLowerCase()
+    return s.replace(/\s+/g, '')
   }
 
-  function handleSaveNomeEquipe() {
+  async function handleSaveNomeEquipe() {
     if (!selected) return
+    if (!user?.id) {
+      notify.error('Usuário inválido para alteração de equipe.')
+      return
+    }
     const name = (editNome || '').trim()
     if (!name) return
     setEquipes(prev => prev.map(e => e.id === selected.id ? { ...e, nome: name } : e))
+
+    try {
+      const payload = {
+        id_usuario: user.id,
+        equipe_id: selected.id,
+        nome: name,
+      }
+
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+
+      const rawBody = await response.text()
+      if (!response.ok) {
+        const message = (rawBody || '').trim() || `Erro ${response.status}`
+        throw new Error(message)
+      }
+
+      let successMessage = 'Nome da equipe atualizado.'
+      if (rawBody) {
+        try {
+          const parsed = JSON.parse(rawBody)
+          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
+          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
+        } catch (_) {
+          if (rawBody.trim()) successMessage = rawBody.trim()
+        }
+      }
+
+      notify.success(successMessage)
+    } catch (error) {
+      console.error('Erro ao atualizar equipe:', error)
+      notify.error(`Erro ao atualizar equipe: ${error.message}`)
+    }
+  }
+
+  const handleOpenAddTeam = () => {
+    if (!canCreateTeam) return
+    setAddTeamNome('')
+    setAddTeamDepartamento('Equipe de operações Versatil')
+    const firstSupervisorId = supervisores[0]?.id ?? ''
+    setAddTeamSupervisorId(firstSupervisorId !== undefined ? String(firstSupervisorId) : '')
+    setIsAddTeamOpen(true)
+  }
+
+  const handleCloseAddTeam = () => {
+    setIsAddTeamOpen(false)
+    setAddTeamNome('')
+    setAddTeamDepartamento('')
+    setAddTeamSupervisorId('')
+    setAddTeamSaving(false)
+  }
+
+  async function handleAddTeamSubmit(event) {
+    event.preventDefault()
+    if (!canCreateTeam) {
+      notify.warn('Apenas usuários Master podem criar equipes.')
+      return
+    }
+    const nome = addTeamNome.trim()
+    const departamento = addTeamDepartamento.trim()
+    const supervisorId = addTeamSupervisorId ? Number(addTeamSupervisorId) : null
+
+    if (!nome) {
+      notify.warn('Informe o nome da equipe.')
+      return
+    }
+    if (!supervisorId) {
+      notify.warn('Selecione um supervisor.')
+      return
+    }
+    if (!departamento) {
+      notify.warn('Informe o departamento.')
+      return
+    }
+
+    setAddTeamSaving(true)
+
+    try {
+      const supervisor = supervisores.find((s) => Number(s.id) === supervisorId) || null
+      const nextId = Math.max(0, ...equipes.map(e => e.id || 0)) + 1
+      const novaEquipe = {
+        id: nextId,
+        nome,
+        descricao: departamento,
+        ativo: true,
+        supervisor: supervisor ? { id: supervisor.id, nome: supervisor.nome } : null,
+        departamento,
+        membros: [],
+      }
+
+      setEquipes(prev => [novaEquipe, ...prev])
+      setSelectedId(nextId)
+      notify.success(`Equipe "${nome}" criada com sucesso!`)
+      handleCloseAddTeam()
+    } catch (error) {
+      console.error('Erro ao criar equipe:', error)
+      notify.error(`Erro ao criar equipe: ${error.message}`)
+      setAddTeamSaving(false)
+    }
+  }
+
+  const optionToRole = (option) => {
+    const value = (option || '').toLowerCase()
+    switch (value) {
+      case 'master':
+        return 'Master'
+      case 'administrador':
+        return 'Master'
+      case 'supervisor':
+        return 'Supervisor'
+      case 'operador':
+        return 'Operador'
+      default:
+        return option || 'Operador'
+    }
+  }
+
+  const handleOpenAddUser = () => {
+    if (!selected || !isMasterRole) return
+    setAddUserNome('')
+    setAddUserLogin('')
+    setAddUserSenha('')
+    setAddUserTipo('Operador')
+    setIsAddUserOpen(true)
+  }
+
+  const handleCloseAddUser = () => {
+    setIsAddUserOpen(false)
+    setAddUserNome('')
+    setAddUserLogin('')
+    setAddUserSenha('')
+    setAddUserTipo('Operador')
+    setAddUserSaving(false)
+  }
+
+  const handleAddUserNomeChange = (value) => {
+    setAddUserNome(value)
+    if (!addUserLogin) {
+      setAddUserLogin(toLoginFromName(value))
+    }
+  }
+
+  async function handleAddUserSubmit(event) {
+    event.preventDefault()
+    if (!selected) {
+      notify.error('Selecione uma equipe.')
+      return
+    }
+    const nome = addUserNome.trim()
+    const login = addUserLogin.trim()
+    const senha = addUserSenha.trim()
+    const tipoSel = (isMasterRole ? addUserTipo : 'Operador').trim()
+
+    if (!nome || !login || !senha) {
+      notify.warn('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    if (senha.length < 4) {
+      notify.warn('A senha deve ter pelo menos 4 caracteres')
+      return
+    }
+
+    const roleOut = optionToRole(tipoSel)
+    const equipeId = selected.id
+
+    if (!equipeId) {
+      notify.error('Equipe inválida para adicionar usuário')
+      return
+    }
+
+    setAddUserSaving(true)
+
+    try {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          nome,
+          login,
+          senha,
+          role: roleOut,
+          equipe_id: equipeId,
+          ativo: true,
+          criado_por: user?.id || selected?.supervisor?.id || 1
+        })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error((errorText || '').trim() || `Erro ${response.status}`)
+      }
+
+      let result = null
+      try {
+        result = await response.json()
+      } catch (_) {
+        result = null
+      }
+
+      const nextId = result?.id || result?.Id || Math.max(0, ...((selected.membros || []).map(m => m.id || 0))) + 1
+      const novo = {
+        id: nextId,
+        nome,
+        login,
+        role: roleOut,
+        ativo: true,
+      }
+
+      setEquipes(prev => prev.map(e => {
+        if (e.id !== selected.id) return e
+        const membros = e.membros ? [...e.membros, novo] : [novo]
+        return { ...e, membros }
+      }))
+      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      handleCloseAddUser()
+    } catch (error) {
+      console.error('Erro ao criar usuário pela equipe:', error)
+      notify.error(`Erro ao criar usuário: ${error.message}`)
+      setAddUserSaving(false)
+    }
   }
 
   return (
+    <>
     <div className="bg-deep min-vh-100 d-flex flex-column">
       <TopNav />
       <main className="container-xxl py-4 flex-grow-1">
         <div className="d-flex align-items-baseline justify-content-between mb-3">
-          <div>
-            <h2 className="fw-bold mb-1">Equipes</h2>
-            <div className="opacity-75 small">Estruture times, supervisor e operadores</div>
+          <div className="d-flex align-items-center gap-3">
+            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+              <Fi.FiArrowLeft size={16} />
+              <span className="d-none d-sm-inline">Voltar</span>
+            </Link>
+            <div>
+              <h2 className="fw-bold mb-1">Equipes</h2>
+              <div className="opacity-75 small">Estruture times, supervisor e operadores</div>
+            </div>
           </div>
         </div>
 
         <div className="row g-3">
           <div className="col-12 col-lg-4">
             <div className="neo-card neo-lg p-4 h-100">
-              <div className="d-flex gap-2 mb-3">
+              <div className="d-flex align-items-center gap-2 mb-3">
+                {isMasterRole && (
+                  <button
+                    className="btn btn-primary btn-sm d-flex align-items-center justify-content-center"
+                    title="Adicionar equipe"
+                    aria-label="Adicionar equipe"
+                    onClick={handleOpenAddTeam}
+                    disabled={!canCreateTeam || supervisores.length === 0}
+                  >
+                    <Fi.FiPlus />
+                  </button>
+                )}
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -186,43 +462,6 @@ export default function Equipes() {
                   <Fi.FiX />
                 </button>
               </div>
-
-              {canCreateTeam && (
-              <div className="border rounded-3 p-3 mb-3" style={{ borderColor: 'rgba(255,255,255,0.12)' }}>
-                <div className="small text-uppercase opacity-75 mb-2">Nova equipe</div>
-                <div className="d-flex flex-column gap-2">
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="Nome da equipe"
-                    value={novoNome}
-                    onChange={(e) => setNovoNome(e.target.value)}
-                  />
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="Nome do supervisor"
-                    value={novoSupervisor}
-                    onChange={(e) => setNovoSupervisor(e.target.value)}
-                  />
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="Departamento"
-                    value={novoDepartamento}
-                    onChange={(e) => setNovoDepartamento(e.target.value)}
-                  />
-                  <div className="d-flex justify-content-end">
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={handleAddEquipe}
-                      aria-label="Adicionar equipe"
-                      title="Adicionar equipe"
-                      disabled={!novoNome.trim() || !novoSupervisor.trim() || !novoDepartamento.trim()}
-                    >
-                      <Fi.FiPlus />
-                    </button>
-                  </div>
-                </div>
-              </div>
-              )}
 
               {isLoading && (
                 <div className="text-center py-4 opacity-75">Carregando...</div>
@@ -272,14 +511,7 @@ export default function Equipes() {
                       <div className="small opacity-75">{selected.descricao || 'Sem descrição'}</div>
                       
                     </div>
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-outline-primary btn-sm" disabled title="Editar" aria-label="Editar">
-                        <Fi.FiEdit />
-                      </button>
-                      <button className="btn btn-outline-danger btn-sm" disabled title="Excluir" aria-label="Excluir">
-                        <Fi.FiTrash2 />
-                      </button>
-                    </div>
+                    <div className="d-flex gap-2"></div>
                   </div>
 
                   {(user?.role === 'Master' || user?.role === 'Supervisor' || (user?.equipe_nome || '').toLowerCase() === 'master') && (
@@ -293,29 +525,15 @@ export default function Equipes() {
 
                   <div className="mb-3 p-3 rounded-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
                     <div className="small text-uppercase opacity-75 mb-1">Supervisor</div>
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div>{selected.supervisor?.nome || '—'}</div>
-                      <button className="btn btn-outline-secondary btn-sm" disabled title="Trocar supervisor" aria-label="Trocar supervisor">
-                        <Fi.FiRefreshCcw />
-                      </button>
-                    </div>
+                    <div>{selected.supervisor?.nome || '—'}</div>
                   </div>
 
                   <div>
                     <div className="d-flex align-items-center justify-content-between mb-2">
                       <h6 className="mb-0">Membros ({selected.membros?.length ?? 0})</h6>
                       <button className="btn btn-primary btn-sm" title="Adicionar membro" aria-label="Adicionar membro"
-                        onClick={() => {
-                          const can = (user?.role === 'Master') || (user?.role === 'Supervisor') || ((user?.equipe_nome || '').toLowerCase() === 'master')
-                          if (!can) return
-                          const nome = prompt('Nome do operador:')
-                          if (!nome) return
-                          const login = prompt('Login do operador:') || ''
-                          const nextId = Math.max(0, ...((selected.membros || []).map(m => m.id))) + 1
-                          const novo = { id: nextId, nome, login }
-                          setEquipes(prev => prev.map(e => e.id === selected.id ? { ...e, membros: [ ...(e.membros || []), novo ] } : e))
-                        }}
-                        disabled={!((user?.role === 'Master') || (user?.role === 'Supervisor') || ((user?.equipe_nome || '').toLowerCase() === 'master'))}
+                        onClick={handleOpenAddUser}
+                        disabled={!isMasterRole}
                       >
                         <Fi.FiPlus />
                       </button>
@@ -327,7 +545,6 @@ export default function Equipes() {
                             <th style={{ width: 80 }}>ID</th>
                             <th>Nome</th>
                             <th>Login</th>
-                            <th style={{ width: 100 }}></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -336,26 +553,11 @@ export default function Equipes() {
                               <td>{m.id}</td>
                               <td>{m.nome}</td>
                               <td>{m.login}</td>
-                              <td className="text-end">
-                                <button className="btn btn-outline-secondary btn-sm me-2" disabled title="Mover" aria-label="Mover">
-                                  <Fi.FiArrowRight />
-                                </button>
-                                <button className="btn btn-outline-danger btn-sm" title="Remover" aria-label="Remover"
-                                  onClick={() => {
-                                    const can = (user?.role === 'Master') || (user?.role === 'Supervisor') || ((user?.equipe_nome || '').toLowerCase() === 'master')
-                                    if (!can) return
-                                    setEquipes(prev => prev.map(e => e.id === selected.id ? { ...e, membros: (e.membros || []).filter(x => x.id !== m.id) } : e))
-                                  }}
-                                  disabled={!((user?.role === 'Master') || (user?.role === 'Supervisor') || ((user?.equipe_nome || '').toLowerCase() === 'master'))}
-                                >
-                                  <Fi.FiTrash2 />
-                                </button>
-                              </td>
                             </tr>
                           ))}
                           {(!selected.membros || selected.membros.length === 0) && (
                             <tr>
-                              <td colSpan="4" className="opacity-75">Nenhum membro.</td>
+                              <td colSpan="3" className="opacity-75">Nenhum membro.</td>
                             </tr>
                           )}
                         </tbody>
@@ -364,12 +566,152 @@ export default function Equipes() {
                   </div>
                 </>
               )}
-              <div className="small mt-3 opacity-75">Integração prevista: GET/POST/PUT em /equipes e /usuarios</div>
             </div>
           </div>
         </div>
       </main>
       <Footer />
     </div>
+    {isMasterRole && selected && isAddUserOpen && (
+      <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Adicionar usuário</h5>
+              <button type="button" className="btn-close" aria-label="Close" onClick={handleCloseAddUser} disabled={addUserSaving}></button>
+            </div>
+            <form onSubmit={handleAddUserSubmit}>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Nome Completo *</label>
+                  <input
+                    className="form-control"
+                    value={addUserNome}
+                    onChange={(e) => handleAddUserNomeChange(e.target.value)}
+                    disabled={addUserSaving}
+                    placeholder="Ex: João Silva"
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Login *</label>
+                  <input
+                    className="form-control"
+                    value={addUserLogin}
+                    onChange={(e) => setAddUserLogin(e.target.value)}
+                    disabled={addUserSaving}
+                    placeholder="Ex: joaosilva"
+                    required
+                  />
+                </div>
+                {isMasterRole && (
+                  <div className="mb-3">
+                    <label className="form-label">Tipo</label>
+                    <select className="form-select" value={addUserTipo} onChange={(e) => setAddUserTipo(e.target.value)} disabled={addUserSaving}>
+                      <option>Master</option>
+                      <option>Administrador</option>
+                      <option>Supervisor</option>
+                      <option>Operador</option>
+                    </select>
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="form-label">Senha *</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    value={addUserSenha}
+                    onChange={(e) => setAddUserSenha(e.target.value)}
+                    disabled={addUserSaving}
+                    placeholder="Mínimo 4 caracteres"
+                    required
+                  />
+                </div>
+                {isMasterRole && (
+                  <div className="mb-3">
+                    <label className="form-label">Equipe</label>
+                    <input className="form-control" value={selected?.nome || ''} disabled readOnly />
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseAddUser} disabled={addUserSaving}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={addUserSaving || !addUserNome.trim() || !addUserLogin.trim() || !addUserSenha.trim()}>
+                  {addUserSaving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    )}
+    {canCreateTeam && isAddTeamOpen && (
+      <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
+        <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Adicionar equipe</h5>
+              <button type="button" className="btn-close" aria-label="Close" onClick={handleCloseAddTeam} disabled={addTeamSaving}></button>
+            </div>
+            <form onSubmit={handleAddTeamSubmit}>
+              <div className="modal-body">
+                <div className="mb-3">
+                  <label className="form-label">Nome da equipe *</label>
+                  <input
+                    className="form-control"
+                    value={addTeamNome}
+                    onChange={(e) => setAddTeamNome(e.target.value)}
+                    disabled={addTeamSaving}
+                    placeholder="Nome da equipe"
+                    required
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="form-label">Supervisor *</label>
+                  <select className="form-select" value={addTeamSupervisorId} onChange={(e) => setAddTeamSupervisorId(e.target.value)} disabled={addTeamSaving} required>
+                    <option value="">Selecione...</option>
+                    {supervisores.map((sup) => (
+                      <option key={sup.id} value={sup.id}>{sup.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-0">
+                  <label className="form-label">Departamento *</label>
+                  <input
+                    className="form-control"
+                    value={addTeamDepartamento}
+                    onChange={(e) => setAddTeamDepartamento(e.target.value)}
+                    disabled={addTeamSaving}
+                    placeholder="Equipe de operações Versatil"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={handleCloseAddTeam} disabled={addTeamSaving}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={addTeamSaving || !addTeamNome.trim() || !addTeamSupervisorId || !addTeamDepartamento.trim()}>
+                  {addTeamSaving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

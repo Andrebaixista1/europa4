@@ -34,16 +34,6 @@ export default function Login() {
 
   const loader = useLoading()
 
-  const [showChange, setShowChange] = useState(false)
-
-  const [currentPwd, setCurrentPwd] = useState('')
-
-  const [newPwd, setNewPwd] = useState('')
-
-  const [confirmPwd, setConfirmPwd] = useState('')
-
-  const [changeMsg, setChangeMsg] = useState('')
-
   const handleSubmit = async (e) => {
 
     e.preventDefault()
@@ -113,51 +103,6 @@ export default function Login() {
     } catch {}
 
   }, [])
-
-  const handleChangePassword = async (e) => {
-
-    e.preventDefault()
-
-    setError('')
-
-    if (newPwd.length < 6) {
-
-      const m = 'A nova senha deve ter pelo menos 6 caracteres.'
-
-      setError(m)
-
-      notify.error(m)
-
-      return
-
-    }
-
-    if (newPwd !== confirmPwd) {
-
-      const m = 'A confirmação não confere com a nova senha.'
-
-      setError(m)
-
-      notify.error(m)
-
-      return
-
-    }
-
-    setLoading(true)
-    setError('')
-    
-    // Mock: em produção, enviar para API
-    await new Promise(resolve => setTimeout(resolve, 800))
-    setLoading(false)
-    setShowChange(false)
-    const ok = 'Solicitação enviada! Em produção, verificaríamos a senha atual e enviaríamos uma confirmação para seu e-mail.'
-    setError('')
-    setNewPassword('')
-    setConfirmPassword('')
-    notify.success('Solicitação de alteração de senha enviada')
-
-  }
 
   return (
 
@@ -252,16 +197,6 @@ export default function Login() {
 
               </button>
 
-              <div className="d-flex justify-content-between mt-3">
-
-                <button type="button" className="btn btn-link p-0" onClick={() => setShowChange(true)}>
-
-                  Alterar senha
-
-                </button>
-
-              </div>
-
             </form>
 
           </div>
@@ -270,91 +205,6 @@ export default function Login() {
 
       </div>
 
-      {showChange && (
-
-        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
-
-          <div className="modal-dialog modal-dialog-centered">
-
-            <div className="modal-content">
-
-              <div className="modal-header">
-
-                <h5 className="modal-title">Alterar senha</h5>
-
-                <button type="button" className="btn-close" aria-label="Close" onClick={() => setShowChange(false)}></button>
-
-              </div>
-
-              <form onSubmit={handleChangePassword}>
-
-                <div className="modal-body">
-
-                  {changeMsg && (<div className="alert alert-info py-2" role="alert">{changeMsg}</div>)}
-
-                  <div className="mb-3">
-
-                    <label className="form-label">Login</label>
-
-                    <input type="text" className="form-control" value={login} onChange={(e) => setLogin(e.target.value)} required />
-
-                  </div>
-
-                  <div className="mb-3">
-
-                    <label className="form-label">Senha atual</label>
-
-                    <input type="password" className="form-control" value={currentPwd} onChange={(e) => setCurrentPwd(e.target.value)} required />
-
-                  </div>
-
-                  <div className="row g-2">
-
-                    <div className="col-12 col-md-6">
-
-                      <div className="mb-3">
-
-                        <label className="form-label">Nova senha</label>
-
-                        <input type="password" className="form-control" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} required />
-
-                      </div>
-
-                    </div>
-
-                    <div className="col-12 col-md-6">
-
-                      <div className="mb-3">
-
-                        <label className="form-label">Confirmar nova senha</label>
-
-                        <input type="password" className="form-control" value={confirmPwd} onChange={(e) => setConfirmPwd(e.target.value)} required />
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-                <div className="modal-footer">
-
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowChange(false)}>Cancelar</button>
-
-                  <button type="submit" className="btn btn-primary">Salvar</button>
-
-                </div>
-
-              </form>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      )}
 
     </div>
 
