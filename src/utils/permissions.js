@@ -1,4 +1,4 @@
-import { Roles } from './roles.js'
+import { Roles, normalizeRole } from './roles.js'
 
 // Simple permission map per role
 const map = {
@@ -10,5 +10,10 @@ const map = {
 
 export function can(role, permission) {
   const allowed = map[permission] || []
-  return allowed.includes(role)
+  if (!allowed.length) return false
+
+  const normalized = normalizeRole(role)
+  if (!normalized) return false
+
+  return allowed.some(allowedRole => normalizeRole(allowedRole) === normalized)
 }

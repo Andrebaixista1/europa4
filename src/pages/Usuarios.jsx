@@ -23,6 +23,22 @@ export default function Usuarios() {
   const [formEquipeId, setFormEquipeId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const [passwordUser, setPasswordUser] = useState(null)
+  const [passwordValue, setPasswordValue] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
+  const [passwordCurrent, setPasswordCurrent] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editUser, setEditUser] = useState(null)
+  const [editNome, setEditNome] = useState('')
+  const [editLogin, setEditLogin] = useState('')
+  const [editTipo, setEditTipo] = useState('Operador')
+  const [editStatusAtivo, setEditStatusAtivo] = useState(true)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
 
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
@@ -99,7 +115,7 @@ export default function Usuarios() {
           }
         }
       } catch (e) {
-        console.error('Falha API Usuarios:', e)
+        console.error('Falha API Usuários:', e)
         if (!aborted) { setError(e); setUsuarios([]); setSelectedId(null) }
       } finally {
         if (!aborted) setIsLoading(false)
@@ -171,6 +187,228 @@ export default function Usuarios() {
     setIsAddOpen(true)
   }
 
+  const openPasswordModal = (targetUser) => {
+    if (!targetUser) return
+    setPasswordUser(targetUser)
+    setPasswordValue('')
+    setPasswordConfirm('')
+    setPasswordCurrent('')
+    setShowNewPassword(false)
+    setShowCurrentPassword(false)
+    setIsPasswordModalOpen(true)
+  }
+
+  const closePasswordModal = () => {
+    setIsPasswordModalOpen(false)
+    setPasswordUser(null)
+    setPasswordValue('')
+    setPasswordConfirm('')
+    setPasswordCurrent('')
+    setShowNewPassword(false)
+    setShowCurrentPassword(false)
+    setIsChangingPassword(false)
+  }
+
+  const handleGeneratePassword = () => {
+    const length = Math.floor(Math.random() * 3) + 6
+    let generated = ''
+    for (let i = 0; i < length; i += 1) {
+      generated += Math.floor(Math.random() * 10).toString()
+    }
+    setPasswordValue(generated)
+    setPasswordConfirm(generated)
+    setShowNewPassword(true)
+  }
+
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault()
+    const senhaAtual = passwordCurrent.trim()
+    const senha = passwordValue.trim()
+    const confirmacao = passwordConfirm.trim()
+
+    if (!senhaAtual || !senha || !confirmacao) {
+      notify.warn('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    if (senha.length < 4) {
+      notify.warn('A senha deve ter pelo menos 4 caracteres')
+      return
+    }
+
+    if (senha !== confirmacao) {
+      notify.warn('As senhas não coincidem')
+      return
+    }
+
+    const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
+    if (userId == null) {
+      notify.error('Selecione um usuário válido')
+      return
+    }
+
+    setIsChangingPassword(true)
+
+    try {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-pass', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: userId,
+          senha_nova: senha,
+          senha_atual: senhaAtual,
+          confirmacao
+        })
+      })
+
+      const rawBody = await response.text()
+      if (!response.ok) {
+        const message = (rawBody || '').trim() || `Erro ${response.status}`
+        throw new Error(message)
+      }
+
+      let successMessage = 'Senha atualizada com sucesso.'
+      if (rawBody) {
+        try {
+          const parsed = JSON.parse(rawBody)
+          console.log('Senha alterada via API:', parsed)
+          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
+          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
+        } catch (_) {
+          console.log('Senha alterada via API (texto):', rawBody)
+          if (rawBody.trim()) successMessage = rawBody.trim()
+        }
+      }
+
+      notify.success(successMessage)
+      closePasswordModal()
+    } catch (error) {
+      console.error('Erro ao alterar senha:', error)
+      notify.error(`Erro ao alterar senha: ${error.message}`)
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  const roleToOption = (role) => {
+    switch ((role || '').toLowerCase()) {
+      case 'master':
+        return 'Master'
+      case 'administrador':
+        return 'Administrador'
+      case 'supervisor':
+        return 'Supervisor'
+      case 'operador':
+        return 'Operador'
+      default:
+        return 'Operador'
+    }
+  }
+
+  const optionToRole = (option) => {
+    const value = (option || '').toLowerCase()
+    switch (value) {
+      case 'master':
+        return 'Master'
+      case 'administrador':
+        return 'Master'
+      case 'supervisor':
+        return 'Supervisor'
+      case 'operador':
+        return 'Operador'
+      default:
+        return option || 'Operador'
+    }
+  }
+
+  const openEditModal = (targetUser) => {
+    if (!targetUser) return
+    setEditUser(targetUser)
+    setEditNome(targetUser.nome || '')
+    setEditLogin(targetUser.login || '')
+    setEditTipo(roleToOption(targetUser.role))
+    setEditStatusAtivo(targetUser.ativo !== false)
+    setIsEditModalOpen(true)
+  }
+
+  const closeEditModal = () => {
+    setIsEditModalOpen(false)
+    setEditUser(null)
+    setEditNome('')
+    setEditLogin('')
+    setEditTipo('Operador')
+    setEditStatusAtivo(true)
+    setIsSavingEdit(false)
+  }
+
+  const handleEditSubmit = async (event) => {
+    event.preventDefault()
+    const nome = editNome.trim()
+    const login = editLogin.trim()
+    const roleOption = optionToRole(editTipo)
+    const userId = normalizeId(editUser?.id ?? null) ?? editUser?.id ?? null
+
+    if (!userId) {
+      notify.error('Selecione um usuário valido')
+      return
+    }
+
+    if (!nome || !login) {
+      notify.warn('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    setIsSavingEdit(true)
+
+    try {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: userId,
+          nome,
+          login,
+          role: roleOption,
+          ativo: editStatusAtivo,
+          status: editStatusAtivo ? 'Ativo' : 'Inativo'
+        })
+      })
+
+      const rawBody = await response.text()
+      if (!response.ok) {
+        const message = (rawBody || '').trim() || `Erro ${response.status}`
+        throw new Error(message)
+      }
+
+      let successMessage = 'usuário atualizado com sucesso.'
+      if (rawBody) {
+        try {
+          const parsed = JSON.parse(rawBody)
+          console.log('usuário alterado via API:', parsed)
+          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
+          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
+        } catch (_) {
+          console.log('usuário alterado via API (texto):', rawBody)
+          if (rawBody.trim()) successMessage = rawBody.trim()
+        }
+      }
+
+      setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, nome, login, role: roleOption, ativo: editStatusAtivo } : u))
+      setSelectedId(userId)
+      notify.success(successMessage)
+      closeEditModal()
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error)
+      notify.error(`Erro ao atualizar usuário: ${error.message}`)
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
   async function handleAddSubmit(e) {
     e.preventDefault()
     console.log('🚀 Iniciando handleAddSubmit...')
@@ -179,7 +417,7 @@ export default function Usuarios() {
     const login = formLogin.trim()
     const senha = formSenha.trim()
     
-    console.log('📋 Dados do formulário:', { nome, login, senha, formEquipeId, formTipo })
+    console.log('Y Dados do formulário:', { nome, login, senha, formEquipeId, formTipo })
     
     if (!nome || !login || !senha) {
       notify.warn('Preencha todos os campos obrigatórios')
@@ -195,7 +433,7 @@ export default function Usuarios() {
     const roleOut = (tipoSel === 'Administrador') ? 'Master' : tipoSel
     const equipeId = isSupervisor ? (user?.equipe_id ?? formEquipeId) : formEquipeId
     
-    console.log('🔍 Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
+    console.log('Y Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
     
     if (!equipeId) {
       notify.warn('Selecione uma equipe')
@@ -205,7 +443,7 @@ export default function Usuarios() {
     setIsSaving(true)
     
     try {
-      console.log('🔄 Criando usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
+      console.log('Y Criando usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
       // Chamada para a API de adicionar usuário
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
@@ -230,7 +468,7 @@ export default function Usuarios() {
       }
 
       const result = await response.json()
-      console.log('✅ Usuário criado via API:', result)
+      console.log('a... usuário criado via API:', result)
 
       // Criar objeto local para atualizar a lista
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
@@ -254,10 +492,10 @@ export default function Usuarios() {
       setFormSenha('')
       if (!isSupervisor) setFormTipo('Operador')
       
-      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      notify.success(`usuário "${nome}" criado com sucesso!`)
       
     } catch (error) {
-      console.error('❌ Erro ao criar usuário:', error)
+      console.error('a Erro ao criar usuário:', error)
       notify.error(`Erro ao criar usuário: ${error.message}`)
     } finally {
       setIsSaving(false)
@@ -287,9 +525,9 @@ export default function Usuarios() {
 
       if (rawBody) {
         try {
-          console.log('Usuário removido via API:', JSON.parse(rawBody))
+          console.log('usuário removido via API:', JSON.parse(rawBody))
         } catch (_) {
-          console.log('Usuário removido via API (texto):', rawBody)
+          console.log('usuário removido via API (texto):', rawBody)
         }
       }
 
@@ -301,9 +539,9 @@ export default function Usuarios() {
       })
 
       if (removedUser?.nome) {
-        notify.success(`Usuário "${removedUser.nome}" excluído.`)
+        notify.success(`usuário "${removedUser.nome}" excluído.`)
       } else {
-        notify.success('Usuário excluído.')
+        notify.success('usuário excluído.')
       }
 
     } catch (error) {
@@ -311,6 +549,67 @@ export default function Usuarios() {
       notify.error(`Erro ao excluir usuário: ${error.message}`)
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  const handleToggleStatus = async (targetUser) => {
+    if (!targetUser) return
+    const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
+
+    if (targetId == null) {
+      notify.error('Não foi possível identificar o usuário.')
+      return
+    }
+
+    if (targetId === user?.id) {
+      notify.warn('Você não pode alterar o seu próprio status.')
+      return
+    }
+
+    const nextActive = !targetUser.ativo
+    setTogglingId(targetId)
+
+    try {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: targetId,
+          ativo: nextActive,
+          status: nextActive ? 'Ativo' : 'Inativo'
+        })
+      })
+
+      const rawBody = await response.text()
+      if (!response.ok) {
+        const message = (rawBody || '').trim() || `Erro ${response.status}`
+        throw new Error(message)
+      }
+
+      let successMessage = nextActive ? 'usuário ativado.' : 'usuário desativado.'
+      if (rawBody) {
+        try {
+          const parsed = JSON.parse(rawBody)
+          console.log('Status alterado via API:', parsed)
+          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
+          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
+        } catch (_) {
+          console.log('Status alterado via API (texto):', rawBody)
+          if (rawBody.trim()) successMessage = rawBody.trim()
+        }
+      }
+
+      setUsuarios(prev => prev.map(u => (
+        u.id === targetId ? { ...u, ativo: nextActive } : u
+      )))
+      notify.success(successMessage)
+    } catch (error) {
+      console.error('Erro ao alterar status:', error)
+      notify.error(`Erro ao alterar status: ${error.message}`)
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -336,7 +635,7 @@ export default function Usuarios() {
             <div className="neo-card neo-lg p-4 h-100">
               <div className="d-flex align-items-center gap-2 mb-3">
                 {canManage && (
-                  <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
+                  <button className="btn btn-primary btn-sm d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
                     <Fi.FiPlus />
                   </button>
                 )}
@@ -375,7 +674,9 @@ export default function Usuarios() {
                       <h5 className="mb-1">{selected.nome}</h5>
                     </div>
                     <div className="d-flex gap-2">
-                      <button className="btn btn-outline-primary btn-sm" disabled title="Editar" aria-label="Editar"><Fi.FiEdit /></button>
+                      <button className="btn btn-outline-primary btn-sm" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)} disabled={!canManage}>
+                        <Fi.FiEdit />
+                      </button>
                       <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={selected.id === user?.id || deletingId === selected.id}
                         onClick={() => setPendingDelete(selected)}>
                         {deletingId === selected.id ? (
@@ -394,7 +695,6 @@ export default function Usuarios() {
                         <div className="mb-1"><span className="opacity-75">Nome: </span>{selected.nome}</div>
                         <div className="mb-1"><span className="opacity-75">Login: </span>{selected.login}</div>
                         <div className="mb-2"><span className="opacity-75">Tipo: </span>{selected.role}</div>
-                        <button className="btn btn-outline-secondary btn-sm" disabled title="Alterar tipo" aria-label="Alterar tipo"><Fi.FiRefreshCcw /></button>
                       </div>
                     </div>
                     <div className="col-md-6">
@@ -403,21 +703,16 @@ export default function Usuarios() {
                         <div className="mb-2"><span className="opacity-75">Status: </span>{selected.ativo ? 'Ativo' : 'Inativo'}</div>
                         <div className="d-flex gap-2">
                           <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha"
-                            onClick={() => { 
-                              const nova = prompt('Nova senha para ' + selected.nome + ':')
-                              if (!nova) return
-                              if (nova.length < 4) {
-                                notify.warn('A senha deve ter pelo menos 4 caracteres')
-                                return
-                              }
-                              // TODO: Integrar com API de alteração de senha
-                              notify.info('Funcionalidade em desenvolvimento. Integre com a API.')
-                            }}>
+                            onClick={() => openPasswordModal(selected)}>
                             <Fi.FiKey />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={selected.id === user?.id}
-                            onClick={() => { if (selected.id === user?.id) return; setUsuarios(prev => prev.map(u => u.id === selected.id ? { ...u, ativo: !u.ativo } : u)) }}>
-                            <Fi.FiLock />
+                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={selected.id === user?.id || togglingId === selected.id}
+                            onClick={() => handleToggleStatus(selected)}>
+                            {togglingId === selected.id ? (
+                              <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            ) : (
+                              <Fi.FiLock />
+                            )}
                           </button>
                         </div>
                       </div>
@@ -426,7 +721,7 @@ export default function Usuarios() {
 
                 </>
               )}
-              {/* <div className="small mt-3 opacity-75">Integração com: https://webhook.sistemavieira.com.br/webhook/add-user</div> */}
+              {/* <div className="small mt-3 opacity-75">IntegraAAo com: https://webhook.sistemavieira.com.br/webhook/add-user</div> */}
             </div>
           </div>
         </div>
@@ -515,6 +810,143 @@ export default function Usuarios() {
           </div>
         </div>
       )}
+      {isEditModalOpen && editUser && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Editar usuário</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={closeEditModal} disabled={isSavingEdit}></button>
+              </div>
+              <form onSubmit={handleEditSubmit}>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label">Nome</label>
+                    <input className="form-control" value={editNome} onChange={(e) => setEditNome(e.target.value)} disabled={isSavingEdit} required />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Login</label>
+                    <input className="form-control" value={editLogin} onChange={(e) => setEditLogin(e.target.value)} disabled={isSavingEdit} required />
+                  </div>
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label">Tipo</label>
+                      <select className="form-select" value={editTipo} onChange={(e) => setEditTipo(e.target.value)} disabled={isSavingEdit}>
+                        <option>Master</option>
+                        <option>Administrador</option>
+                        <option>Supervisor</option>
+                        <option>Operador</option>
+                      </select>
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Status</label>
+                      <select className="form-select" value={editStatusAtivo ? 'Ativo' : 'Inativo'} onChange={(e) => setEditStatusAtivo(e.target.value === 'Ativo')} disabled={isSavingEdit}>
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer d-flex justify-content-end gap-2">
+                  <button type="button" className="btn btn-secondary" onClick={closeEditModal} disabled={isSavingEdit}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSavingEdit || !editNome.trim() || !editLogin.trim()}>Salvar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPasswordModalOpen && passwordUser && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Alterar senha</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={closePasswordModal} disabled={isChangingPassword}></button>
+              </div>
+              <form onSubmit={handlePasswordSubmit}>
+                <div className="modal-body">
+                  <p className="small opacity-75 mb-3">Defina uma nova senha para <strong>{passwordUser.nome}</strong>.</p>
+                  <div className="mb-3">
+                    <label className="form-label">Senha atual *</label>
+                    <div className="input-group">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        className="form-control"
+                        value={passwordCurrent}
+                        onChange={(e) => setPasswordCurrent(e.target.value)}
+                        disabled={isChangingPassword}
+                        placeholder="Digite a senha atual"
+                        minLength={4}
+                        required
+                      />
+                      <button type="button" className="btn btn-outline-secondary" onClick={() => setShowCurrentPassword((prev) => !prev)} disabled={isChangingPassword} title={showCurrentPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-label={showCurrentPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                        {showCurrentPassword ? <Fi.FiEyeOff /> : <Fi.FiEye />}
+                      </button>
+                    </div>
+                    <div className="form-text">Informe a senha utilizada no login.</div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Nova senha *</label>
+                    <div className="input-group">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        className="form-control"
+                        value={passwordValue}
+                        onChange={(e) => setPasswordValue(e.target.value)}
+                        disabled={isChangingPassword}
+                        placeholder="Digite a nova senha"
+                        minLength={4}
+                        required
+                      />
+                      <button type="button" className="btn btn-outline-secondary" onClick={() => setShowNewPassword((prev) => !prev)} disabled={isChangingPassword} title={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-label={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                        {showNewPassword ? <Fi.FiEyeOff /> : <Fi.FiEye />}
+                      </button>
+                      <button type="button" className="btn btn-outline-primary" onClick={handleGeneratePassword} disabled={isChangingPassword} title="Gerar senha" aria-label="Gerar senha">
+                        <Fi.FiZap />
+                      </button>
+                    </div>
+                    <div className="form-text">Use o gerador para criar uma senha entre 6 e 8 dígitos ou digite manualmente.</div>
+                  </div>
+                  <div className="mb-0">
+                    <label className="form-label">Confirmar senha *</label>
+                    <div className="input-group">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        className="form-control"
+                        value={passwordConfirm}
+                        onChange={(e) => setPasswordConfirm(e.target.value)}
+                        disabled={isChangingPassword}
+                        placeholder="Repita a nova senha"
+                        minLength={4}
+                        required
+                      />
+                      <button type="button" className="btn btn-outline-secondary" onClick={() => setShowNewPassword((prev) => !prev)} disabled={isChangingPassword} title={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-label={showNewPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                        {showNewPassword ? <Fi.FiEyeOff /> : <Fi.FiEye />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={closePasswordModal} disabled={isChangingPassword}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" disabled={isChangingPassword || !passwordCurrent.trim() || !passwordValue.trim() || !passwordConfirm.trim()}>
+                    {isChangingPassword ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Salvando...
+                      </>
+                    ) : (
+                      'Atualizar'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingDelete && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
@@ -548,4 +980,6 @@ export default function Usuarios() {
     </div>
   )
 }
+
+
 

@@ -19,6 +19,27 @@ export default function ConsultaIN100() {
   const resultRef = useRef(null)
 
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
+
+  const buildSaldoPayload = () => {
+    const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
+    const equipeNome = user?.equipe_nome ?? user?.team_name ?? user?.teamName ?? user?.equipeNome ?? null
+    const payload = {
+      id_user: user?.id,
+      id: user?.id,
+      login: user?.login,
+    }
+    if (equipeId != null) {
+      payload.equipe_id = equipeId
+      payload.team_id = equipeId
+      payload.id_equipe = equipeId
+    }
+    if (equipeNome) {
+      payload.equipe_nome = equipeNome
+      payload.team_name = equipeNome
+      payload.nome_equipe = equipeNome
+    }
+    return payload
+  }
   // Carrega saldos do usuário para preencher os cards
   useEffect(() => {
     const fetchSaldoUsuario = async () => {
@@ -28,7 +49,7 @@ export default function ConsultaIN100() {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_user: user.id, id: user.id, login: user.login }),
+          body: JSON.stringify(buildSaldoPayload()),
         })
         if (!res.ok) return
         const data = await res.json().catch(() => null)
@@ -87,6 +108,20 @@ export default function ConsultaIN100() {
   const mapTipoCredito = (v) => (v === 'magnetic_card' ? 'Cartão magnético' : v || '-')
   const mapSituacao = (v) => (v === 'elegible' ? 'Elegível' : v || '-')
 
+  const normalizeStatus = (value) => (value || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase()
+  const isResponseFinished = (value) => {
+    const normalized = normalizeStatus(value)
+    return normalized === 'concluido' || normalized === 'concluida'
+  }
+  const isStatusSuccess = (value) => normalizeStatus(value) === 'sucesso'
+  const hasValidName = (value) => typeof value === 'string' && value.trim().length > 0
+
   async function fetchBanco(code) {
     try {
       const res = await fetch(`https://brasilapi.com.br/api/banks/v1/${code}`)
@@ -131,10 +166,21 @@ export default function ConsultaIN100() {
       if (online) {
         // 1) Dispara consulta online
         const urlConsulta = 'https://webhook.sistemavieira.com.br/webhook/consulta-online'
+        const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
+        const consultaPayload = {
+          id: (typeof user?.id !== 'undefined' ? user.id : user),
+          cpf: digits,
+          nb: benDigits,
+        }
+        if (equipeId != null) {
+          consultaPayload.equipe_id = equipeId
+          consultaPayload.team_id = equipeId
+          consultaPayload.id_equipe = equipeId
+        }
         const resConsulta = await fetch(urlConsulta, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: (typeof user?.id !== 'undefined' ? user.id : user), cpf: digits, nb: benDigits })
+          body: JSON.stringify(consultaPayload)
         })
         if (!resConsulta.ok) throw new Error('Falha na consulta online')
 
@@ -149,9 +195,9 @@ export default function ConsultaIN100() {
             typeof o.id !== 'undefined' &&
             !!o.numero_beneficio &&
             !!o.numero_documento &&
-            !!o.nome &&
-            o.status_api === 'Sucesso' &&
-            o.resposta_api === 'Concluido'
+            hasValidName(o.nome) &&
+            isStatusSuccess(o.status_api) &&
+            isResponseFinished(o.resposta_api)
           )
         }
         let arr = null
@@ -165,11 +211,12 @@ export default function ConsultaIN100() {
             const dataTry = await resResposta.json().catch(() => null)
             if (Array.isArray(dataTry) && dataTry.length > 0) {
               const o = dataTry[0] || {}
-              // Caso especial: resposta_api = 'Concluida' e nome = null => erro com status_api
-              if (o.resposta_api === 'Concluida' && (o.nome === null || o.nome === undefined || o.nome === '')) {
-                loader.end()
-                notify.error(o.status_api || 'Erro na consulta online')
-                return
+              if (isResponseFinished(o.resposta_api)) {
+                if (!hasValidName(o.nome) || !isStatusSuccess(o.status_api)) {
+                  loader.end()
+                  notify.error((o.status_api || '').trim() || 'Erro na consulta online')
+                  return
+                }
               }
               if (isValidResposta(dataTry)) { arr = dataTry; break }
             }
@@ -224,7 +271,7 @@ export default function ConsultaIN100() {
           const resSaldo = await fetch(urlSaldo, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_user: user?.id, id: user?.id, login: user?.login })
+            body: JSON.stringify(buildSaldoPayload())
           })
           if (resSaldo.ok) {
             const dataSaldo = await resSaldo.json().catch(() => null)
@@ -253,10 +300,12 @@ export default function ConsultaIN100() {
       const dataOff = await resOff.json().catch(() => null)
       if (!Array.isArray(dataOff) || dataOff.length === 0) throw new Error('Resposta inválida (offline)')
       const o = dataOff[0] || {}
-      if (o.resposta_api === 'Concluida' && (o.nome === null || o.nome === undefined || o.nome === '')) {
-        loader.end()
-        notify.error(o.status_api || 'Erro na consulta (offline)')
-        return
+      if (isResponseFinished(o.resposta_api)) {
+        if (!hasValidName(o.nome) || !isStatusSuccess(o.status_api)) {
+          loader.end()
+          notify.error((o.status_api || '').trim() || 'Erro na consulta (offline)')
+          return
+        }
       }
       // validar formato mínimo esperado
       if (!(typeof o.id !== 'undefined' && o.numero_beneficio && o.numero_documento && o.nome)) {
