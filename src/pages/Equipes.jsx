@@ -423,9 +423,10 @@ export default function Equipes() {
   }
 
   const handleAddUserNomeChange = (value) => {
-    setAddUserNome(value)
+    const upper = (value || '').toUpperCase()
+    setAddUserNome(upper)
     if (!addUserLogin) {
-      setAddUserLogin(toLoginFromName(value))
+      setAddUserLogin(toLoginFromName(upper))
     }
   }
 
@@ -467,8 +468,8 @@ export default function Equipes() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          nome,
-          login,
+          nome: nome.toUpperCase(),
+          login: login.toLowerCase(),
           senha,
           role: roleOut,
           equipe_id: equipeId,
@@ -742,7 +743,7 @@ export default function Equipes() {
                   <input
                     className="form-control"
                     value={addUserLogin}
-                    onChange={(e) => setAddUserLogin(e.target.value)}
+                    onChange={(e) => setAddUserLogin((e.target.value || '').toLowerCase())}
                     disabled={addUserSaving}
                     placeholder="Ex: joaosilva"
                     required
@@ -859,4 +860,6 @@ export default function Equipes() {
     </>
   )
 }
+
+
 

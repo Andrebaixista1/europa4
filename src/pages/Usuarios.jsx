@@ -173,9 +173,11 @@ export default function Usuarios() {
 
   // Atualizar login automaticamente baseado no nome
   const handleNomeChange = (nome) => {
-    setFormNome(nome)
+    const upper = (nome || '').toUpperCase()
+    setFormNome(upper)
+    // se login estiver vazio ou era derivado do nome anterior, atualiza sugestão em minúsculas
     if (!formLogin || formLogin === toLoginFromName(formNome)) {
-      setFormLogin(toLoginFromName(nome))
+      setFormLogin(toLoginFromName(upper))
     }
   }
 
@@ -392,8 +394,8 @@ export default function Usuarios() {
     if (!isMaster) return
     if (!targetUser) return
     setEditUser(targetUser)
-    setEditNome(targetUser.nome || '')
-    setEditLogin(targetUser.login || '')
+    setEditNome((targetUser.nome || '').toUpperCase())
+    setEditLogin((targetUser.login || '').toLowerCase())
     setEditTipo(roleToOption(targetUser.role))
     setEditStatusAtivo(targetUser.ativo !== false)
     setIsEditModalOpen(true)
@@ -437,8 +439,8 @@ export default function Usuarios() {
         },
         body: JSON.stringify({
           id: userId,
-          nome,
-          login,
+          nome: nome.toUpperCase(),
+          login: login.toLowerCase(),
           role: roleOption,
           ativo: editStatusAtivo,
           status: editStatusAtivo ? 'Ativo' : 'Inativo'
@@ -464,7 +466,9 @@ export default function Usuarios() {
         }
       }
 
-      setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, nome, login, role: roleOption, ativo: editStatusAtivo } : u))
+      const nomeUpper = nome.toUpperCase()
+      const loginLower = login.toLowerCase()
+      setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, nome: nomeUpper, login: loginLower, role: roleOption, ativo: editStatusAtivo } : u))
       setSelectedId(userId)
       notify.success(successMessage)
       closeEditModal()
@@ -520,8 +524,8 @@ export default function Usuarios() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          nome: nome,
-          login: login,
+          nome: nome.toUpperCase(),
+          login: login.toLowerCase(),
           senha: senha,
           role: roleOut,
           equipe_id: equipeId,
@@ -542,8 +546,8 @@ export default function Usuarios() {
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
       const novo = {
         id: nextId,
-        nome,
-        login,
+        nome: nome.toUpperCase(),
+        login: login.toLowerCase(),
         role: roleOut,
         equipe_id: equipeId,
         ativo: true,
@@ -869,14 +873,14 @@ export default function Usuarios() {
                   </div>
                   <div className="mb-3">
                     <label className="form-label">Login *</label>
-                    <input 
-                      className="form-control" 
-                      value={formLogin} 
-                      onChange={(e) => setFormLogin(e.target.value)} 
-                      disabled={isSaving}
-                      placeholder="Ex: joaosilva"
-                      required 
-                    />
+                     <input 
+                       className="form-control" 
+                       value={formLogin} 
+                       onChange={(e) => setFormLogin((e.target.value || '').toLowerCase())} 
+                       disabled={isSaving}
+                       placeholder="Ex: joaosilva"
+                       required 
+                     />
                     <div className="form-text">Login será usado para acessar o sistema</div>
                   </div>
                   <div className="mb-3">
@@ -940,11 +944,11 @@ export default function Usuarios() {
                 <div className="modal-body">
                   <div className="mb-3">
                     <label className="form-label">Nome</label>
-                    <input className="form-control" value={editNome} onChange={(e) => setEditNome(e.target.value)} disabled={isSavingEdit} required />
+                     <input className="form-control" value={editNome} onChange={(e) => setEditNome((e.target.value || '').toUpperCase())} disabled={isSavingEdit} required />
                   </div>
                   <div className="mb-3">
                     <label className="form-label">Login</label>
-                    <input className="form-control" value={editLogin} onChange={(e) => setEditLogin(e.target.value)} disabled={isSavingEdit} required />
+                     <input className="form-control" value={editLogin} onChange={(e) => setEditLogin((e.target.value || '').toLowerCase())} disabled={isSavingEdit} required />
                   </div>
                   <div className="row g-3">
                     <div className="col-md-6">

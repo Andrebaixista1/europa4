@@ -285,7 +285,7 @@ export default function ConsultaIN100() {
           }
         } catch { /* silencioso */ }
         loader.end()
-        notify.success('Consulta online concluÃ­da')
+        notify.success('Consulta online concluída', { autoClose: 15000 })
         return
       }
       // Fluxo OFFLINE: chamada direta para webhook resposta-api
@@ -351,7 +351,7 @@ export default function ConsultaIN100() {
         try { setBancoInfo(await fetchBanco(mappedOff.banco_desembolso)) } catch { setBancoInfo(null) }
       }
       loader.end()
-      notify.success('Consulta concluÃ­da')
+      notify.success('Consulta concluída', { autoClose: 15000 })
       return
     } catch (err) {
       loader.end()
@@ -393,7 +393,7 @@ export default function ConsultaIN100() {
     setResultado(mock)
     try { setBancoInfo(await fetchBanco(mock.banco_desembolso)) } catch { setBancoInfo(null) }
     loader.end()
-    notify.success('Consulta concluÃ­da')
+    notify.success('Consulta concluída', { autoClose: 15000 })
   } finally {
     loader.end()
   }
@@ -578,3 +578,4 @@ export default function ConsultaIN100() {
     </div>
   )
 }
+
