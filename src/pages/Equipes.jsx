@@ -210,10 +210,9 @@ export default function Equipes() {
     try {
       const payload = {
         id_usuario: transferMember.id,
-        nova_equipe_id: newTeamNum,
-        supervisor: ((transferMember.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
+        equipe_id: newTeamNum,
       }
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -223,7 +222,7 @@ export default function Equipes() {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-      try { console.log('alter-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('alter-team:', rawBody) }
+      try { console.log('transfer-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('transfer-team:', rawBody) }
 
       // Atualiza lista local: remove do time atual e adiciona no novo
       setEquipes(prev => prev.map(e => {
@@ -860,6 +859,4 @@ export default function Equipes() {
     </>
   )
 }
-
-
 

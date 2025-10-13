@@ -213,7 +213,7 @@ export default function Equipes() {
         nova_equipe_id: newTeamNum,
         supervisor: ((transferMember.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
       }
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -262,7 +262,7 @@ export default function Equipes() {
         nome: name,
       }
 
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team-name', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

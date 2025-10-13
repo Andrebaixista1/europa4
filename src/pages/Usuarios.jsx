@@ -277,10 +277,9 @@ export default function Usuarios() {
     try {
       const payload = {
         id_usuario: transferUser.id,
-        nova_equipe_id: newIdNum,
-        supervisor: ((transferUser.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
+        equipe_id: newIdNum,
       }
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -290,7 +289,7 @@ export default function Usuarios() {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-      try { console.log('alter-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('alter-team:', rawBody) }
+      try { console.log('transfer-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('transfer-team:', rawBody) }
       setUsuarios(prev => prev.map(u => (
         u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
       )))
@@ -747,7 +746,7 @@ export default function Usuarios() {
                             <div className="d-flex align-items-center gap-2 mb-3">
                 
                 {canManage && (
-              <button className="btn btn-primary btn-sm d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
+              <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
                     <Fi.FiPlus />
                   </button>
                 )}
