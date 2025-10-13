@@ -279,7 +279,7 @@ export default function Usuarios() {
         id_usuario: transferUser.id,
         equipe_id: newIdNum,
       }
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
+      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

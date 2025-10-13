@@ -133,7 +133,7 @@ export function AuthProvider({ children }) {
       const userName = userData.nome || userData.Nome || userData.name;
       const userLogin = userData.login || userData.Login;
       const userRole = userData.role || userData.Role;
-      const userSucesso = userData.sucesso || userData.Sucesso;
+      const userSucesso = userData.sucesso ?? userData.Sucesso;
       
       console.log('🔍 Dados extraídos:');
       console.log('  - ID:', userId);
@@ -148,6 +148,18 @@ export function AuthProvider({ children }) {
         console.error('❌ userName:', userName);
         console.error('❌ userLogin:', userLogin);
         throw new Error('Dados de usuário incompletos');
+      }
+
+      // Bloquear login quando o servidor indicar falha
+      const statusContaRaw = (userData.status_conta ?? userData.StatusConta ?? '').toString().toUpperCase();
+      const sucessoValor = userSucesso === undefined || userSucesso === null ? undefined : Number(userSucesso);
+      const possuiFlagSucesso = sucessoValor !== undefined && !Number.isNaN(sucessoValor);
+      const autenticadoComSucesso = possuiFlagSucesso ? (sucessoValor === 1) : true; // se não vier flag, assume true
+
+      if (!autenticadoComSucesso || ['INVALID', 'BLOQUEADO', 'LOCKED'].includes(statusContaRaw)) {
+        const msgSrv = userData.mensagem || userData.Mensagem || 'Credenciais inválidas';
+        console.error('❌ Autenticação rejeitada:', { sucesso: userSucesso, status_conta: statusContaRaw, mensagem: msgSrv });
+        throw new Error(msgSrv);
       }
 
       // PASSO 4: Criar objeto do usuário - MAPEAMENTO CORRETO
@@ -172,7 +184,7 @@ export function AuthProvider({ children }) {
         equipe_nome: (userData.equipe_nome || userData.EquipeNome || userData.team_name || null),
         equipe_id: normalizedEquipeId ?? rawEquipeId,
         is_supervisor: (userData.is_supervisor ?? userData.IsSupervisor ?? false) ? true : false,
-        success: userData.sucesso || userData.Sucesso || true
+        success: (userSucesso !== undefined && userSucesso !== null) ? (Number(userSucesso) === 1) : true
       };
 
       setUser(payload);
