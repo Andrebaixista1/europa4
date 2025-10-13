@@ -60,7 +60,7 @@ export default function Equipes() {
         const payload = unwrap(data)
 
         const mapUser = (u) => ({
-          id: u?.id ?? u?.user_id ?? u?.Usuário_id ?? null,
+          id: u?.id ?? u?.user_id ?? u?.Usuï¿½rio_id ?? null,
           nome: u?.nome ?? u?.name ?? 'UsuÃ¡rio',
           role: u?.role ?? u?.papel ?? u?.perfil ?? '',
           equipe_id: u?.equipe_id ?? u?.team_id ?? u?.equipeId ?? null,
@@ -77,19 +77,19 @@ export default function Equipes() {
             return raw
           })(),
           departamento: t?.departamento ?? t?.department ?? '-',
-          membros: t?.membros ?? t?.users ?? t?.Usuários ?? [],
+          membros: t?.membros ?? t?.users ?? t?.Usuï¿½rios ?? [],
         })
 
         const collectUsers = () => {
           let arr = []
-          if (Array.isArray(payload?.Usuários)) arr = payload.Usuários
+          if (Array.isArray(payload?.Usuï¿½rios)) arr = payload.Usuï¿½rios
           else if (Array.isArray(payload?.users)) arr = payload.users
           else if (Array.isArray(payload?.equipes)) arr = payload.equipes.flatMap(eq => eq.membros || [])
           else if (Array.isArray(payload)) arr = payload
           return arr.map(mapUser).filter(u => u.id != null)
         }
 
-        const UsuáriosLista = (() => {
+        const Usuï¿½riosLista = (() => {
           const list = collectUsers()
           const map = new Map()
           list.forEach(u => {
@@ -102,9 +102,9 @@ export default function Equipes() {
         let eq = []
         if (Array.isArray(payload?.equipes)) {
           eq = payload.equipes.map(toTeam)
-        } else if (payload?.equipe || payload?.Usuários || payload?.users) {
+        } else if (payload?.equipe || payload?.Usuï¿½rios || payload?.users) {
           const base = toTeam(payload?.equipe || {})
-          const members = base.membros?.length ? base.membros : (payload?.Usuários || payload?.users || [])
+          const members = base.membros?.length ? base.membros : (payload?.Usuï¿½rios || payload?.users || [])
           base.membros = members
           if (!base.id && Array.isArray(members) && members[0]?.equipe_id) base.id = members[0].equipe_id
           eq = [base]
@@ -116,7 +116,7 @@ export default function Equipes() {
         if (!aborted) {
           setEquipes(eq)
           setSelectedId(eq[0]?.id ?? null)
-          setSupervisores(UsuáriosLista.filter(u => (u.role || '').toLowerCase().includes('supervisor')))
+          setSupervisores(Usuï¿½riosLista.filter(u => (u.role || '').toLowerCase().includes('supervisor')))
         }
       } catch (e) {
         console.error('Falha API Equipes:', e)
@@ -209,7 +209,7 @@ export default function Equipes() {
     }
     try {
       const payload = {
-        id_Usuário: transferMember.id,
+        id_Usuï¿½rio: transferMember.id,
         nova_equipe_id: newTeamNum,
         supervisor: ((transferMember.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
       }
@@ -257,7 +257,7 @@ export default function Equipes() {
 
     try {
       const payload = {
-        id_Usuário: user.id,
+        id_Usuï¿½rio: user.id,
         equipe_id: selected.id,
         nome: name,
       }
@@ -343,7 +343,7 @@ export default function Equipes() {
       // Send new team data to n8n webhook
       try {
         const payload = {
-          id_Usuário: supervisorId, // enviar o ID do supervisor selecionado
+          id_Usuï¿½rio: supervisorId, // enviar o ID do supervisor selecionado
           nome: nome,
           departamento: departamento,
           supervisor_id: supervisorId,
