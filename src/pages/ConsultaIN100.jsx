@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+ï»¿import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { FiSearch, FiArrowLeft } from 'react-icons/fi'
@@ -285,7 +285,8 @@ export default function ConsultaIN100() {
           }
         } catch { /* silencioso */ }
         loader.end()
-        notify.success('Consulta online concluída', { autoClose: 15000 })
+        notify.success('Consulta online concluÃ­da', { autoClose: 15000 })
+        if (document.hidden) playNotifyBeep(1200)
         return
       }
       // Fluxo OFFLINE: chamada direta para webhook resposta-api
@@ -351,7 +352,7 @@ export default function ConsultaIN100() {
         try { setBancoInfo(await fetchBanco(mappedOff.banco_desembolso)) } catch { setBancoInfo(null) }
       }
       loader.end()
-      notify.success('Consulta concluída', { autoClose: 15000 })
+      notify.success('Consulta concluÃ­da', { autoClose: 15000 }); if (document.hidden) playNotifyBeep(1200)
       return
     } catch (err) {
       loader.end()
@@ -393,7 +394,7 @@ export default function ConsultaIN100() {
     setResultado(mock)
     try { setBancoInfo(await fetchBanco(mock.banco_desembolso)) } catch { setBancoInfo(null) }
     loader.end()
-    notify.success('Consulta concluída', { autoClose: 15000 })
+    notify.success('Consulta concluÃ­da', { autoClose: 15000 }); if (document.hidden) playNotifyBeep(1200)
   } finally {
     loader.end()
   }
