@@ -262,7 +262,7 @@ export default function Equipes() {
         nome: name,
       }
 
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team-name', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -505,7 +505,6 @@ export default function Equipes() {
       }))
       notify.success(`Usuário "${nome}" criado com sucesso!`)
       handleCloseAddUser()
-      window.location.reload()
     } catch (error) {
       console.error('Erro ao criar usuário pela equipe:', error)
       notify.error(`Erro ao criar usuário: ${error.message}`)

@@ -39,6 +39,9 @@ export default function Usuarios() {
   const [editStatusAtivo, setEditStatusAtivo] = useState(true)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [togglingId, setTogglingId] = useState(null)
+  const [isTransferOpen, setIsTransferOpen] = useState(false)
+  const [transferUser, setTransferUser] = useState(null)
+  const [transferNewEquipeId, setTransferNewEquipeId] = useState('')
 
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
@@ -153,6 +156,11 @@ export default function Usuarios() {
   const canManage = isMaster
   const canChangePassword = isMaster || isSupervisor
 
+  const teamNameById = (id) => {
+    const found = (equipesLista || []).find(e => e.id === id)
+    return found ? found.nome : (id != null ? `Equipe ${id}` : '—')
+  }
+
   function toLoginFromName(nome) {
     const s = (nome || '')
       .normalize('NFD')
@@ -200,6 +208,58 @@ export default function Usuarios() {
     setShowNewPassword(false)
     setShowCurrentPassword(false)
     setIsPasswordModalOpen(true)
+  }
+
+  const openTransferModal = (targetUser) => {
+    if (!canManage) return
+    if (!targetUser) return
+    setTransferUser(targetUser)
+    // preseleciona diferente da atual se houver
+    const firstDifferent = (equipesLista || []).find(eq => eq.id !== targetUser.equipe_id)?.id ?? ''
+    setTransferNewEquipeId(firstDifferent !== undefined ? String(firstDifferent) : '')
+    setIsTransferOpen(true)
+  }
+
+  const closeTransferModal = () => {
+    setIsTransferOpen(false)
+    setTransferUser(null)
+    setTransferNewEquipeId('')
+  }
+
+  const handleConfirmTransfer = async (e) => {
+    e?.preventDefault?.()
+    if (!canManage) return
+    if (!transferUser) return
+    const newIdNum = transferNewEquipeId ? Number(transferNewEquipeId) : null
+    if (!newIdNum || newIdNum === transferUser.equipe_id) {
+      notify.warn('Selecione uma nova equipe diferente da atual')
+      return
+    }
+    try {
+      const payload = {
+        id_usuario: transferUser.id,
+        nova_equipe_id: newIdNum,
+        supervisor: ((transferUser.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
+      }
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const rawBody = await response.text()
+      if (!response.ok) {
+        const message = (rawBody || '').trim() || `Erro ${response.status}`
+        throw new Error(message)
+      }
+      try { console.log('alter-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('alter-team:', rawBody) }
+      setUsuarios(prev => prev.map(u => (
+        u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
+      )))
+      notify.success('Usuário transferido de equipe.')
+      closeTransferModal()
+    } catch (err) {
+      notify.error(`Erro ao transferir: ${err.message}`)
+    }
   }
 
   const closePasswordModal = () => {
@@ -518,7 +578,7 @@ export default function Usuarios() {
     setPendingDelete(null)
 
     try {
-      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/delete-user', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/delete-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -687,6 +747,9 @@ export default function Usuarios() {
                       <button className="btn btn-outline-primary btn-sm" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)} disabled={!canManage}>
                         <Fi.FiEdit />
                       </button>
+                      <button className="btn btn-outline-secondary btn-sm" title="Transferir" aria-label="Transferir" onClick={() => openTransferModal(selected)} disabled={!canManage}>
+                        <Fi.FiArrowRight />
+                      </button>
                       <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={!isMaster || selected.id === user?.id || deletingId === selected.id}
                         onClick={() => setPendingDelete(selected)}>
                         {deletingId === selected.id ? (
@@ -737,6 +800,51 @@ export default function Usuarios() {
         </div>
       </main>
       <Footer />
+
+      {isTransferOpen && transferUser && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Transferir usuário</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferModal}></button>
+              </div>
+              <form onSubmit={handleConfirmTransfer}>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <div className="small text-uppercase opacity-75 mb-2">Usuário</div>
+                    <div className="fw-semibold">{transferUser?.nome}</div>
+                  </div>
+                  <div className="d-flex align-items-center justify-content-between gap-3">
+                    <div className="flex-fill">
+                      <label className="form-label">Equipe atual</label>
+                      <input className="form-control" value={teamNameById(transferUser?.equipe_id)} disabled readOnly />
+                    </div>
+                    <div className="text-center" aria-hidden="true" style={{ width: '48px', marginTop: '22px' }}>
+                      <Fi.FiArrowRight size={24} />
+                    </div>
+                    <div className="flex-fill">
+                      <label className="form-label">Nova equipe</label>
+                      <select className="form-select" value={transferNewEquipeId} onChange={(e) => setTransferNewEquipeId(e.target.value)} required>
+                        <option value="">Selecione...</option>
+                        {(equipesLista || []).map(eq => (
+                          <option key={eq.id} value={eq.id} disabled={eq.id === transferUser?.equipe_id}>
+                            {eq.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={closeTransferModal}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" disabled={!transferNewEquipeId || Number(transferNewEquipeId) === transferUser?.equipe_id}>Confirmar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isAddOpen && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
