@@ -5,6 +5,18 @@ import { FiX, FiStar, FiCheckCircle } from 'react-icons/fi';
 const NovidadesModal = ({ isOpen, onClose }) => {
   const novidades = [
     {
+      titulo: "Cards Inteligentes",
+      descricao: "Cards que pertencem a sua hierarquia, você só vê o que é relevante.",
+      data: "14/10/2025",
+      tipo: "novo"
+    },
+    {
+      titulo: "Sistema de hierarquias de usuarios",
+      descricao: "Cada usuario tem sua própria hierarquia de acesso.",
+      data: "14/10/2025",
+      tipo: "melhoria"
+    },
+    {
       titulo: "🎉 Nova Estrutura de Autenticação",
       descricao: "Sistema de login completamente renovado com melhor segurança e performance.",
       data: "06/10/2025",
