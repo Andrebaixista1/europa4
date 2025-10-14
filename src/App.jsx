@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Landing from './pages/Landing.jsx'
-import Login from './pages/Login.jsx'
+import Login from './pages/Login2.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import SupervisionPanel from './pages/SupervisionPanel.jsx'
 import OperationPanel from './pages/OperationPanel.jsx'

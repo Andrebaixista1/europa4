@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -57,22 +57,25 @@ export default function Login() {
     } catch {}
   }, [])
 
-  // Typewriter: 3 descrições aleatórias (fallback se não houver)
-  const novidades = (() => {
-    try {
-      const pool = (novidadesList || []).map(x => x?.descricao).filter(Boolean)
-      if (pool.length > 0) {
-        const shuffled = [...pool].sort(() => Math.random() - 0.5)
-        return shuffled.slice(0, Math.min(3, shuffled.length))
-      }
-    } catch {}
+  // Build pool of descriptions from NovidadesModal once
+  const pool = useMemo(
+    () => (novidadesList || []).map(x => x?.descricao).filter(Boolean),
+    []
+  )
+  // Pick up to 3 descriptions in a random order once
+  const novidades = useMemo(() => {
+    if (pool.length > 0) {
+      const shuffled = [...pool].sort(() => Math.random() - 0.5)
+      return shuffled.slice(0, Math.min(3, shuffled.length))
+    }
     return [
-      'Novidades de estabilidade e performance.',
-      'Aprimoramentos no fluxo de autenticação.',
-      'Atualizações visuais e de usabilidade.',
+      'Estabilidade e performance melhoradas.',
+      'Aprimoramentos no fluxo de autenticacao.',
+      'Atualizacoes visuais e de usabilidade.',
     ]
-  })()
+  }, [pool])
 
+  // Typewriter state machine (one item at a time)
   const [twIndex, setTwIndex] = useState(0)
   const [twText, setTwText] = useState('')
   const [twPhase, setTwPhase] = useState('typing') // typing | pausing | deleting
@@ -81,16 +84,23 @@ export default function Login() {
     const full = novidades[twIndex % novidades.length] || ''
     let t
     if (twPhase === 'typing') {
-      if (twText.length < full.length) t = setTimeout(() => setTwText(full.slice(0, twText.length + 1)), 50)
-      else t = setTimeout(() => setTwPhase('pausing'), 900)
+      if (twText.length < full.length) {
+        t = setTimeout(() => setTwText(full.slice(0, twText.length + 1)), 45)
+      } else {
+        t = setTimeout(() => setTwPhase('pausing'), 1100)
+      }
     } else if (twPhase === 'pausing') {
-      t = setTimeout(() => setTwPhase('deleting'), 600)
+      t = setTimeout(() => setTwPhase('deleting'), 650)
     } else if (twPhase === 'deleting') {
-      if (twText.length > 0) t = setTimeout(() => setTwText(twText.slice(0, -1)), 30)
-      else { setTwIndex((i) => (i + 1) % novidades.length); setTwPhase('typing') }
+      if (twText.length > 0) {
+        t = setTimeout(() => setTwText(twText.slice(0, -1)), 28)
+      } else {
+        setTwIndex(i => (i + 1) % novidades.length)
+        setTwPhase('typing')
+      }
     }
     return () => { if (t) clearTimeout(t) }
-  }, [twText, twPhase, twIndex, novidades])
+  }, [twText, twPhase, twIndex, novidades.length])
 
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
@@ -100,7 +110,7 @@ export default function Login() {
           <div className="col-lg-6">
             <h2 className="fw-bold gradient-text mb-3">Bem-vindo(a) ao Nova Europa 4</h2>
             <p className="opacity-75">
-              <span className="me-2">Novidades:</span>
+              <span className="me-2">Novidade:</span>
               <span>{twText}</span>
             </p>
           </div>
