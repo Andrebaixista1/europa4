@@ -134,9 +134,9 @@ export default function Usuarios() {
   }, [user?.id])
 
   const baseUsuarios = useMemo(() => {
-    const isMasterRole = user?.role === 'Master'
+    const isAdminRole = ['master', 'administrador'].includes((user?.role || '').toLowerCase())
     const isMasterTeam = (user?.equipe_nome || '').toLowerCase() === 'master'
-    if (isMasterRole || isMasterTeam) return usuarios
+    if (isAdminRole || isMasterTeam) return usuarios
     if (user?.equipe_id != null) return usuarios.filter(u => u.equipe_id === user.equipe_id)
     return usuarios
   }, [usuarios, user])
@@ -148,7 +148,7 @@ export default function Usuarios() {
     const tipo = (filterTipo || '').trim()
     if (tipo) {
       const t = tipo.toLowerCase()
-      list = list.filter(u => (u.role || '').toLowerCase() === (t === 'administrador' ? 'master' : t))
+      list = list.filter(u => (u.role || '').toLowerCase() === t)
     }
     
     // Filtro por nome
@@ -188,10 +188,11 @@ export default function Usuarios() {
     if (!filtered.some(u => u.id === selectedId)) setSelectedId(filtered[0]?.id ?? null)
   }, [filtered, selectedId])
 
-  const isMaster = user?.role === 'Master'
+  const isSuperUser = (user?.role === 'Master') || ((user?.equipe_nome || '').toLowerCase() === 'master')
   const isSupervisor = user?.role === 'Supervisor'
-  const canManage = isMaster
-  const canChangePassword = isMaster || isSupervisor
+  const isAdminRole = (user?.role || '').toLowerCase() === 'administrador'
+  const canManage = isSuperUser
+  const canChangePassword = isSuperUser || isSupervisor || isAdminRole
 
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
@@ -220,7 +221,7 @@ export default function Usuarios() {
 
   // Função para abrir modal de adicionar usuário
   const handleOpenAddModal = () => {
-    if (!isMaster) return
+    if (!canManage) return
     // Limpar formulário
     setFormNome('')
     setFormLogin('')
@@ -416,7 +417,7 @@ export default function Usuarios() {
       case 'master':
         return 'Master'
       case 'administrador':
-        return 'Master'
+        return 'Administrador'
       case 'supervisor':
         return 'Supervisor'
       case 'operador':
@@ -427,7 +428,7 @@ export default function Usuarios() {
   }
 
   const openEditModal = (targetUser) => {
-    if (!isMaster) return
+    if (!canManage) return
     if (!targetUser) return
     setEditUser(targetUser)
     setEditNome((targetUser.nome || '').toUpperCase())
@@ -448,7 +449,7 @@ export default function Usuarios() {
   }
 
   const handleEditSubmit = async (event) => {
-    if (!isMaster) return
+    if (!canManage) return
     event.preventDefault()
     const nome = editNome.trim()
     const login = editLogin.trim()
@@ -517,7 +518,7 @@ export default function Usuarios() {
   }
 
   async function handleAddSubmit(e) {
-    if (!isMaster) return
+    if (!canManage) return
     e.preventDefault()
     console.log('🚀 Iniciando handleAddSubmit...')
     
@@ -538,7 +539,7 @@ export default function Usuarios() {
     }
     
     const tipoSel = (formTipo || 'Operador').trim()
-    const roleOut = (tipoSel === 'Administrador') ? 'Master' : tipoSel
+    const roleOut = tipoSel
     const equipeId = isSupervisor ? (user?.equipe_id ?? formEquipeId) : formEquipeId
     
     console.log('Y Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
@@ -611,7 +612,7 @@ export default function Usuarios() {
   }
 
   async function handleDeleteUser(targetId) {
-    if (!isMaster) return
+    if (!canManage) return
     if (targetId === user?.id) return
 
     setDeletingId(targetId)
@@ -662,7 +663,7 @@ export default function Usuarios() {
   }
 
   const handleToggleStatus = async (targetUser) => {
-    if (!isMaster) return
+    if (!canManage) return
     if (!targetUser) return
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
 
@@ -766,6 +767,7 @@ export default function Usuarios() {
                       <select className="form-select form-select-sm" value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
                         <option value="">Todos</option>
                         <option>Master</option>
+                        <option>Administrador</option>
                         <option>Supervisor</option>
                         <option>Operador</option>
                       </select>
@@ -832,7 +834,7 @@ export default function Usuarios() {
                       <button className="btn btn-outline-secondary btn-sm" title="Transferir" aria-label="Transferir" onClick={() => openTransferModal(selected)} disabled={!canManage}>
                         <Fi.FiArrowRight />
                       </button>
-                      <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={!isMaster || selected.id === user?.id || deletingId === selected.id}
+                      <button className="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir" disabled={!canManage || selected.id === user?.id || deletingId === selected.id}
                         onClick={() => setPendingDelete(selected)}>
                         {deletingId === selected.id ? (
                           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -861,7 +863,7 @@ export default function Usuarios() {
                             onClick={() => openPasswordModal(selected)}>
                             <Fi.FiKey />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={!isMaster || selected.id === user?.id || togglingId === selected.id}
+                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={!canManage || selected.id === user?.id || togglingId === selected.id}
                             onClick={() => handleToggleStatus(selected)}>
                             {togglingId === selected.id ? (
                               <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

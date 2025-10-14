@@ -7,6 +7,7 @@ import OperationPanel from './pages/OperationPanel.jsx'
 import ConsultaIN100 from './pages/ConsultaIN100.jsx'
 import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
+import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -23,9 +24,17 @@ function App() {
         }
       />
       <Route
+        path="/admin/controle-planejamento"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador"]}>
+            <AdminControlePlanejamento />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/usuarios"
         element={
-          <ProtectedRoute roles={["Master", "Supervisor"]}>
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
             <Usuarios />
           </ProtectedRoute>
         }
@@ -33,7 +42,7 @@ function App() {
       <Route
         path="/equipes"
         element={
-          <ProtectedRoute roles={["Master", "Supervisor"]}>
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
             <Equipes />
           </ProtectedRoute>
         }
@@ -41,7 +50,7 @@ function App() {
       <Route
         path="/supervisao"
         element={
-          <ProtectedRoute roles={["Master", "Supervisor"]}>
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
             <SupervisionPanel />
           </ProtectedRoute>
         }
@@ -49,7 +58,7 @@ function App() {
       <Route
         path="/operacao"
         element={
-          <ProtectedRoute roles={["Master", "Supervisor", "Operador"]}>
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor", "Operador"]}>
             <OperationPanel />
           </ProtectedRoute>
         }
@@ -57,7 +66,7 @@ function App() {
       <Route
         path="/consultas/in100"
         element={
-          <ProtectedRoute roles={["Master","Supervisor","Operador"]}>
+          <ProtectedRoute roles={["Master","Administrador","Supervisor","Operador"]}>
             <ConsultaIN100 />
           </ProtectedRoute>
         }

@@ -116,7 +116,12 @@ export default function Equipes() {
         if (!aborted) {
           setEquipes(eq)
           setSelectedId(eq[0]?.id ?? null)
-          setSupervisores(usuariosLista.filter(u => (u.role || '').toLowerCase().includes('supervisor')))
+          setSupervisores(
+            usuariosLista.filter(u => {
+              const r = (u.role || '').toLowerCase()
+              return r === 'supervisor' || r === 'administrador' || r === 'master'
+            })
+          )
         }
       } catch (e) {
         console.error('Falha API Equipes:', e)
@@ -393,7 +398,7 @@ export default function Equipes() {
       case 'master':
         return 'Master'
       case 'administrador':
-        return 'Master'
+        return 'Administrador'
       case 'supervisor':
         return 'Supervisor'
       case 'operador':
@@ -608,7 +613,7 @@ export default function Equipes() {
                     <div className="d-flex gap-2"></div>
                   </div>
 
-                  {(user?.role === 'Master' || user?.role === 'Supervisor' || (user?.equipe_nome || '').toLowerCase() === 'master') && (
+                  {(isMasterRole || user?.role === 'Supervisor' || (user?.equipe_nome || '').toLowerCase() === 'master') && (
                     <div className="mb-3 d-flex align-items-center gap-2">
                       <input className="form-control form-control-sm" value={editNome} onChange={(e) => setEditNome(e.target.value)} aria-label="Nome da equipe" />
                       <button className="btn btn-outline-primary btn-sm" onClick={handleSaveNomeEquipe} title="Salvar nome" aria-label="Salvar nome">
