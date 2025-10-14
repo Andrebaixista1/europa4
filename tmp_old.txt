@@ -751,7 +751,7 @@ export default function Usuarios() {
                     <Fi.FiPlus />
                   </button>
                 )}
-                <button type="button" className="btn btn-ghost btn-sm" title="Filtrar" aria-label="Filtrar" onClick={() => setIsFilterOpen(v => !v)}>
+                <button type="button" className="btn btn-outline-light btn-sm" title="Filtrar" aria-label="Filtrar" onClick={() => setIsFilterOpen(v => !v)}>
                   <Fi.FiFilter />
                 </button>
               <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar usuário..." />
@@ -1182,6 +1182,7 @@ export default function Usuarios() {
     </div>
   )
 }
+
 
 
 

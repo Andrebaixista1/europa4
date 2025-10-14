@@ -8,6 +8,7 @@ import ConsultaIN100 from './pages/ConsultaIN100.jsx'
 import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
+import Recargas from './pages/Recargas.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -20,6 +21,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recargas"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
+            <Recargas />
           </ProtectedRoute>
         }
       />

@@ -525,7 +525,7 @@ export default function Equipes() {
       <main className="container-xxl py-4 flex-grow-1">
         <div className="d-flex align-items-baseline justify-content-between mb-3">
           <div className="d-flex align-items-center gap-3">
-            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+            <Link to="/dashboard" className="btn btn-ghost btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
               <Fi.FiArrowLeft size={16} />
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
@@ -542,7 +542,7 @@ export default function Equipes() {
               <div className="d-flex align-items-center gap-2 mb-3">
                 {isMasterRole && (
                   <button
-                    className="btn btn-primary btn-sm d-flex align-items-center justify-content-center"
+                    className="btn btn-ghost btn-ghost-primary btn-icon d-flex align-items-center justify-content-center"
                     title="Adicionar equipe"
                     aria-label="Adicionar equipe"
                     onClick={handleOpenAddTeam}
@@ -557,7 +557,7 @@ export default function Equipes() {
                   className="form-control"
                   placeholder="Buscar equipe..."
                 />
-                <button className="btn btn-outline-secondary" onClick={() => setSearch('')} aria-label="Limpar busca" title="Limpar">
+                <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')} aria-label="Limpar busca" title="Limpar">
                   <Fi.FiX />
                 </button>
               </div>
@@ -616,7 +616,7 @@ export default function Equipes() {
                   {(isMasterRole || user?.role === 'Supervisor' || (user?.equipe_nome || '').toLowerCase() === 'master') && (
                     <div className="mb-3 d-flex align-items-center gap-2">
                       <input className="form-control form-control-sm" value={editNome} onChange={(e) => setEditNome(e.target.value)} aria-label="Nome da equipe" />
-                      <button className="btn btn-outline-primary btn-sm" onClick={handleSaveNomeEquipe} title="Salvar nome" aria-label="Salvar nome">
+                      <button className="btn btn-ghost btn-ghost-primary btn-icon" onClick={handleSaveNomeEquipe} title="Salvar nome" aria-label="Salvar nome">
                         <Fi.FiSave />
                       </button>
                     </div>
@@ -628,15 +628,15 @@ export default function Equipes() {
                   </div>
 
                   <div>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <h6 className="mb-0">Membros ({selected.membros?.length ?? 0})</h6>
-                      <button className="btn btn-primary btn-sm" title="Adicionar membro" aria-label="Adicionar membro"
-                        onClick={handleOpenAddUser}
-                        disabled={!isMasterRole}
-                      >
-                        <Fi.FiPlus />
-                      </button>
-                    </div>
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <h6 className="mb-0">Membros ({selected.membros?.length ?? 0})</h6>
+                        <button className="btn btn-ghost btn-ghost-primary btn-icon" title="Adicionar membro" aria-label="Adicionar membro"
+                          onClick={handleOpenAddUser}
+                          disabled={!isMasterRole}
+                        >
+                          <Fi.FiPlus />
+                        </button>
+                      </div>
                     <div className="table-responsive">
                       <table className="table table-dark table-sm align-middle mb-0">
                         <thead>
@@ -654,7 +654,7 @@ export default function Equipes() {
                               <td>{m.nome}</td>
                               <td>{m.login}</td>
                               <td className="text-end">
-                                <button className="btn btn-outline-secondary btn-sm" title="Transferir" aria-label="Transferir" onClick={() => openTransferMemberModal(m)} disabled={!isMasterRole}>
+                                <button className="btn btn-ghost btn-icon" title="Transferir" aria-label="Transferir" onClick={() => openTransferMemberModal(m)} disabled={!isMasterRole}>
                                   <Fi.FiArrowRight />
                                 </button>
                               </td>

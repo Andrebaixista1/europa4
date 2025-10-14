@@ -1,62 +1,50 @@
 {
-    "Consultas": [
-        {
-            "title": "Consulta Individual (IN100)",
-            "description": "Pesquise informações específicas com precisão e resultados detalhados.",
-            "icon": "FiSearch",
-            "route": "/consultas/in100"
-        }
-    ],
-    "Em Desenvolvimento": [
-        {
-            "title": "Consulta Individual (Maciça)",
-            "status": "development",
-            "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
-            "icon": "FiDatabase"
-        },
-        {
-            "title": "Extração (Maciça)",
-            "status": "development",
-            "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
-            "icon": "FiDownload"
-        },
-        {
-            "title": "Gestão de Usuários",
-            "status": "development",
-            "description": "Gerencie e crie novos logins de acesso.",
-            "icon": "FiUsers"
-        },
-        {
-            "title": "Gestão de Recargas",
-            "status": "development",
-            "description": "Administração eficiente de recargas de saldo.",
-            "icon": "FiCreditCard"
-        },
-        {
-            "title": "Consulta em Lote (IN100)",
-            "status": "development",
-            "description": "Faça consultas em lote para múltiplos cadastros de uma só vez.",
-            "icon": "FiLayers"
-        },
-        {
-            "title": "Configurações gerais",
-            "description": "Gerencie parâmetros globais do sistema.",
-            "icon": "FiSliders"
-        },
-        {
-            "title": "Planos e billing",
-            "description": "Acompanhe assinaturas e faturas.",
-            "icon": "FiDollarSign"
-        },
-        {
-            "title": "Relatórios executivos",
-            "description": "KPIs de alto nível e tendências.",
-            "icon": "FiTrendingUp"
-        },
-        {
-            "title": "Segurança e papéis",
-            "description": "Defina papéis e permissões.",
-            "icon": "FiShield"
-        }
-    ]
+  "Consultas": [
+    {
+      "title": "Consulta Individual (IN100)",
+      "description": "Pesquise informações específicas com precisão e resultados detalhados.",
+      "icon": "FiSearch",
+      "route": "/consultas/in100"
+    }
+  ],
+  "Em Desenvolvimento": [
+    {
+      "title": "Consulta Individual (Maciça)",
+      "status": "development",
+      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+      "icon": "FiDatabase"
+    },
+    {
+      "title": "Extração (Maciça)",
+      "status": "development",
+      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+      "icon": "FiDownload"
+    },
+    {
+      "title": "Consulta em Lote (IN100)",
+      "status": "development",
+      "description": "Faça consultas em lote para múltiplos cadastros de uma só vez.",
+      "icon": "FiLayers"
+    },
+    {
+      "title": "Configurações gerais",
+      "description": "Gerencie parâmetros globais do sistema.",
+      "icon": "FiSliders"
+    },
+    {
+      "title": "Planos e billing",
+      "description": "Acompanhe assinaturas e faturas.",
+      "icon": "FiDollarSign"
+    },
+    {
+      "title": "Relatórios executivos",
+      "description": "KPIs de alto nível e tendências.",
+      "icon": "FiTrendingUp"
+    },
+    {
+      "title": "Segurança e papéis",
+      "description": "Defina papéis e permissões.",
+      "icon": "FiShield"
+    }
+  ]
 }

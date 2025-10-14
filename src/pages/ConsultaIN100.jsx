@@ -407,7 +407,7 @@ export default function ConsultaIN100() {
       <main className="container-xxl py-4 flex-grow-1">
         <div className="d-flex align-items-baseline justify-content-between mb-4">
           <div className="d-flex align-items-center gap-3">
-            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+            <Link to="/dashboard" className="btn btn-ghost btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
               <FiArrowLeft size={16} />
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>

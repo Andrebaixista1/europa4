@@ -1,0 +1,20 @@
+  117: .btn-primary { background-color: var(--primary); border-color: var(--primary); }
+  118: .btn-primary:hover { background-color: var(--primary); border-color: var(--primary); filter: brightness(0.9); }
+  123: .btn-ghost {
+  129: .btn-ghost:hover { background: var(--glass); color: var(--text); border-color: var(--border); }
+  130: .btn-ghost:active { filter: brightness(0.95); }
+  131: .btn-ghost:disabled { opacity: 0.6; }
+  132: .btn-ghost.btn-sm { padding: 6px 10px; height: 36px; border-radius: 10px; }
+  135: .btn-ghost-primary { color: var(--primary); border-color: rgba(0, 122, 255, 0.35); }
+  136: [data-theme="dark"] .btn-ghost-primary { border-color: rgba(90, 168, 255, 0.35); }
+  137: .btn-ghost-primary:hover { background: rgba(0,122,255,0.10); color: var(--primary); }
+  139: .btn-ghost-info { color: var(--info); border-color: rgba(0, 199, 255, 0.35); }
+  140: [data-theme="dark"] .btn-ghost-info { border-color: rgba(122, 209, 255, 0.35); }
+  141: .btn-ghost-info:hover { background: rgba(0,199,255,0.10); color: var(--info); }
+  143: .btn-ghost-danger { color: var(--danger); border-color: rgba(255, 45, 85, 0.35); }
+  144: [data-theme="dark"] .btn-ghost-danger { border-color: rgba(255, 107, 107, 0.35); }
+  145: .btn-ghost-danger:hover { background: rgba(255,45,85,0.10); color: var(--danger); }
+  147: .btn-ghost-success { color: var(--success); border-color: rgba(7, 188, 12, 0.35); }
+  148: .btn-ghost-success:hover { background: rgba(7,188,12,0.10); color: var(--success); }
+  151: .btn-icon { width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 9px; }
+  152: .btn-icon svg { width: 16px; height: 16px; }

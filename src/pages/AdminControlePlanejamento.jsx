@@ -4,6 +4,7 @@ import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
+import { Link } from 'react-router-dom'
 
 function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
   return (
@@ -35,6 +36,8 @@ export default function AdminControlePlanejamento() {
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [inactivatingId, setInactivatingId] = useState(null)
+  const [renewingId, setRenewingId] = useState(null)
 
   const [search, setSearch] = useState('')
   const [grupo, setGrupo] = useState('')
@@ -63,6 +66,58 @@ export default function AdminControlePlanejamento() {
   }
 
   useEffect(() => { load() }, [])
+
+  async function handleInativar(item) {
+    if (!item || !item.id) return
+    if (user?.role !== 'Master') {
+      notify.error('Apenas Master pode inativar usuários')
+      return
+    }
+    try {
+      setInactivatingId(item.id)
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/api/del-vanguard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id })
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // Tenta ler JSON, mas não exige formato específico
+      let data
+      try { data = await res.json() } catch (_) { /* ignore */ }
+      notify.success('Usuário inativado com sucesso')
+      await load()
+    } catch (e) {
+      console.error('Falha ao inativar usuario:', e)
+      notify.error(`Falha ao inativar: ${e.message}`)
+    } finally {
+      setInactivatingId(null)
+    }
+  }
+
+  async function handleRenovar(item) {
+    if (!item || !item.id) return
+    if (user?.role !== 'Master') {
+      notify.error('Apenas Master pode renovar usuários')
+      return
+    }
+    try {
+      setRenewingId(item.id)
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/api/up-vanguard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id })
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      try { await res.json() } catch (_) { /* ignore non-JSON */ }
+      notify.success('Usuário renovado com sucesso')
+      await load()
+    } catch (e) {
+      console.error('Falha ao renovar usuario:', e)
+      notify.error(`Falha ao renovar: ${e.message}`)
+    } finally {
+      setRenewingId(null)
+    }
+  }
 
   const grupos = useMemo(() => {
     return Array.from(new Set((items || []).map(i => i.grupo).filter(Boolean))).sort()
@@ -132,10 +187,16 @@ export default function AdminControlePlanejamento() {
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
       <main className="container-xxl py-4 flex-grow-1">
-        <div className="d-flex align-items-center justify-content-between mb-3">
-          <div>
-            <h2 className="fw-bold mb-1">Controle Planejamento</h2>
-            <div className="opacity-75 small">Vanguard - Sistema de Controle de Usuarios</div>
+        <div className="d-flex align-items-baseline justify-content-between mb-3">
+          <div className="d-flex align-items-center gap-3">
+            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+              <Fi.FiArrowLeft size={16} />
+              <span className="d-none d-sm-inline">Voltar</span>
+            </Link>
+            <div>
+              <h2 className="fw-bold mb-1">Controle Planejamento</h2>
+              <div className="opacity-75 small">Vanguard - Sistema de Controle de Usuarios</div>
+            </div>
           </div>
         </div>
 
@@ -184,11 +245,23 @@ export default function AdminControlePlanejamento() {
                 <option>Aguardando</option>
               </select>
             </div>
-            <div className="col-12 col-md-4 d-flex gap-2 justify-content-end">
-              <button className="btn btn-outline-secondary" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>Limpar</button>
-              <button className="btn btn-outline-light" onClick={load} disabled={isLoading}><Fi.FiRefreshCcw className="me-1" /> Atualizar</button>
-              <button className="btn btn-outline-info" onClick={downloadCsv} disabled={isLoading}><Fi.FiDownload className="me-1" /> Download</button>
-              <button className="btn btn-primary" disabled title="Apenas Supervisor pode adicionar"><Fi.FiPlus className="me-1" /> Adicionar</button>
+            <div className="col-12 col-md-auto ms-md-auto d-flex gap-2 justify-content-end flex-nowrap">
+              <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
+                <Fi.FiX className="me-1" />
+                <span className="d-none d-sm-inline">Limpar</span>
+              </button>
+              <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
+                <Fi.FiRefreshCcw className="me-1" />
+                <span className="d-none d-sm-inline">Atualizar</span>
+              </button>
+              <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
+                <Fi.FiDownload className="me-1" />
+                <span className="d-none d-sm-inline">Download</span>
+              </button>
+              <button className="btn btn-ghost btn-ghost-primary btn-sm" disabled title="Apenas Supervisor pode adicionar">
+                <Fi.FiPlus className="me-1" />
+                <span className="d-none d-sm-inline">Adicionar</span>
+              </button>
             </div>
           </div>
         </div>
@@ -211,7 +284,7 @@ export default function AdminControlePlanejamento() {
                     <th>DATA RENOVACAO</th>
                     <th>DATA VENCIMENTO</th>
                     <th>STATUS</th>
-                    <th>Ações</th>
+                    <th>AÇÕES</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -230,10 +303,10 @@ export default function AdminControlePlanejamento() {
                       <td><Badge status={i.status} /></td>
                       <td>
                         <div className="d-flex gap-2">
-                          <button className="btn btn-outline-primary btn-sm d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master'} title={user?.role === 'Master' ? 'Renovar' : 'Apenas Master'} aria-label="Renovar">
+                          <button className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master' || renewingId === i.id} title={user?.role === 'Master' ? 'Renovar' : 'Apenas Master'} aria-label="Renovar" onClick={() => handleRenovar(i)}>
                             <Fi.FiRotateCcw />
                           </button>
-                          <button className="btn btn-outline-danger btn-sm d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master'} title={user?.role === 'Master' ? 'Inativar' : 'Apenas Master'} aria-label="Inativar">
+                          <button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master' || inactivatingId === i.id} title={user?.role === 'Master' ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
                             <Fi.FiUserX />
                           </button>
                         </div>

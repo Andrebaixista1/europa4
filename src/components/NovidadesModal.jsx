@@ -5,6 +5,12 @@ import { FiX, FiStar, FiCheckCircle } from 'react-icons/fi';
 const NovidadesModal = ({ isOpen, onClose }) => {
   const novidades = [
     {
+      titulo: "Gestão de saldos e recargas",
+      descricao: "Adicionado novo card para gestão de saldos e recargas.",
+      data: "14/10/2025",
+      tipo: "novo"
+    },
+    {
       titulo: "Cards Inteligentes",
       descricao: "Cards que pertencem a sua hierarquia, você só vê o que é relevante.",
       data: "14/10/2025",

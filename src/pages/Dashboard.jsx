@@ -94,6 +94,9 @@ export default function Dashboard() {
               <div className="col-md-6">
                 <Card title="Equipes" icon="FiGrid" accent="info" to="/equipes">Estruture e visualize sua equipe.</Card>
               </div>
+              <div className="col-md-6">
+                <Card title="Gestão de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">Gerencie e acompanhe as recargas da equipe.</Card>
+              </div>
             </div>
           </section>
         </Can>
