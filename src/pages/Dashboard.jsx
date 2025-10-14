@@ -86,7 +86,7 @@ export default function Dashboard() {
 
         <Can permission="view:supervision">
           <section className="mb-4">
-            <h5 className="section-title">Supervisao</h5>
+            <h5 className="section-title">Supervisão</h5>
             <div className="row g-3">
               <div className="col-md-6">
                 <Card title="Usuarios" icon="FiUserCheck" accent="primary" to="/usuarios">Supervisor ve apenas sua propria equipe.</Card>
