@@ -2,8 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { FiX, FiStar, FiCheckCircle } from 'react-icons/fi';
 
-const NovidadesModal = ({ isOpen, onClose }) => {
-  const novidades = [
+export const novidadesList = [
     {
       titulo: "Gestão de saldos e recargas",
       descricao: "Adicionado novo card para gestão de saldos e recargas.",
@@ -41,6 +40,9 @@ const NovidadesModal = ({ isOpen, onClose }) => {
       tipo: "correcao"
     }
   ];
+
+const NovidadesModal = ({ isOpen, onClose }) => {
+  const novidades = novidadesList;
 
   return (
     <>

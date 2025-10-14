@@ -27,7 +27,7 @@ function App() {
       <Route
         path="/recargas"
         element={
-          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
+          <ProtectedRoute roles={["Master"]}>
             <Recargas />
           </ProtectedRoute>
         }

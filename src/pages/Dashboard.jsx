@@ -71,6 +71,17 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {isMaster && (
+          <section className="mb-4">
+            <h5 className="section-title">Master</h5>
+            <div className="row g-3">
+              <div className="col-md-6 col-lg-4 col-xl-3">
+                <Card title="Gestão de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">Gerencie e acompanhe as recargas da equipe.</Card>
+              </div>
+            </div>
+          </section>
+        )}
+
         <Can permission="view:admin">
           <section className="mb-4">
             <h5 className="section-title">Administrador</h5>
@@ -93,9 +104,6 @@ export default function Dashboard() {
               </div>
               <div className="col-md-6">
                 <Card title="Equipes" icon="FiGrid" accent="info" to="/equipes">Estruture e visualize sua equipe.</Card>
-              </div>
-              <div className="col-md-6">
-                <Card title="Gestão de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">Gerencie e acompanhe as recargas da equipe.</Card>
               </div>
             </div>
           </section>
