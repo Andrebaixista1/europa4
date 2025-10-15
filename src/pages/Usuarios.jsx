@@ -196,7 +196,7 @@ export default function Usuarios() {
 
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
-    return found ? found.nome : (id != null ? `Equipe ${id}` : 'ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â')
+    return found ? found.nome : (id != null ? `Equipe ${id}` : '—')
   }
 
   function toLoginFromName(nome) {
@@ -213,16 +213,16 @@ export default function Usuarios() {
   const handleNomeChange = (nome) => {
     const upper = (nome || '').toUpperCase()
     setFormNome(upper)
-    // se login estiver vazio ou era derivado do nome anterior, atualiza sugestÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o em minÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âºsculas
+    // se login estiver vazio ou era derivado do nome anterior, atualiza sugestão em minúsculas
     if (!formLogin || formLogin === toLoginFromName(formNome)) {
       setFormLogin(toLoginFromName(upper))
     }
   }
 
-  // FunÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o para abrir modal de adicionar Usuários
+  // Função para abrir modal de adicionar Usuário
   const handleOpenAddModal = () => {
     if (!canManage) return
-    // Limpar formulÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio
+    // Limpar formulário
     setFormNome('')
     setFormLogin('')
     setFormSenha('')
@@ -294,7 +294,7 @@ export default function Usuarios() {
       setUsuarios(prev => prev.map(u => (
         u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
       )))
-      notify.success('Usuários transferido de equipe.')
+      notify.success('Usuário transferido de equipe.')
       closeTransferModal()
     } catch (err) {
       notify.error(`Erro ao transferir: ${err.message}`)
@@ -331,7 +331,7 @@ export default function Usuarios() {
     const confirmacao = passwordConfirm.trim()
 
     if (!senhaAtual || !senha || !confirmacao) {
-      notify.warn('Preencha todos os campos obrigatório')
+      notify.warn('Preencha todos os campos obrigatórios')
       return
     }
 
@@ -341,13 +341,13 @@ export default function Usuarios() {
     }
 
     if (senha !== confirmacao) {
-      notify.warn('As senhas digitadas coincidem')
+      notify.warn('As senhas não coincidem')
       return
     }
 
     const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
     if (userId == null) {
-      notify.error('Selecione um Usuários valido')
+      notify.error('Selecione um usuário válido')
       return
     }
 
@@ -457,12 +457,12 @@ export default function Usuarios() {
     const userId = normalizeId(editUser?.id ?? null) ?? editUser?.id ?? null
 
     if (!userId) {
-      notify.error('Selecione um Usuários valido')
+      notify.error('Selecione um usuário válido')
       return
     }
 
     if (!nome || !login) {
-      notify.warn('Preencha todos os campos obrigatório')
+      notify.warn('Preencha todos os campos obrigatórios')
       return
     }
 
@@ -490,15 +490,15 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
-      let successMessage = 'Usuários atualizado com sucesso.'
+      let successMessage = 'Usuário atualizado com sucesso.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
-          console.log('Usuários alterado via API:', parsed)
+          console.log('Usuário alterado via API:', parsed)
           const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
           if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
         } catch (_) {
-          console.log('Usuários alterado via API (texto):', rawBody)
+          console.log('Usuário alterado via API (texto):', rawBody)
           if (rawBody.trim()) successMessage = rawBody.trim()
         }
       }
@@ -510,8 +510,8 @@ export default function Usuarios() {
       notify.success(successMessage)
       closeEditModal()
     } catch (error) {
-      console.error('Erro ao atualizar Usuários:', error)
-      notify.error(`Erro ao atualizar Usuários: ${error.message}`)
+      console.error('Erro ao atualizar Usuário:', error)
+      notify.error(`Erro ao atualizar Usuário: ${error.message}`)
     } finally {
       setIsSavingEdit(false)
     }
@@ -520,16 +520,16 @@ export default function Usuarios() {
   async function handleAddSubmit(e) {
     if (!canManage) return
     e.preventDefault()
-    console.log('ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ Iniciando handleAddSubmit...')
+    console.log('✅ Iniciando handleAddSubmit...')
     
     const nome = formNome.trim()
     const login = formLogin.trim()
     const senha = formSenha.trim()
     
-    console.log('Y Dados do formulÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio:', { nome, login, senha, formEquipeId, formTipo })
+    console.log('Y Dados do formulário:', { nome, login, senha, formEquipeId, formTipo })
     
     if (!nome || !login || !senha) {
-      notify.warn('Preencha todos os campos obrigatório')
+      notify.warn('Preencha todos os campos obrigatórios')
       return
     }
 
@@ -542,7 +542,7 @@ export default function Usuarios() {
     const roleOut = tipoSel
     const equipeId = isSupervisor ? (user?.equipe_id ?? formEquipeId) : formEquipeId
     
-    console.log('Y Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
+    console.log('Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
     
     if (!equipeId) {
       notify.warn('Selecione uma equipe')
@@ -552,9 +552,9 @@ export default function Usuarios() {
     setIsSaving(true)
     
     try {
-      console.log('Y Criando Usuários via API...', { nome, login, role: roleOut, equipe_id: equipeId })
+      console.log('Criando usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
-      // Chamada para a API de adicionar Usuários
+      // Chamada para a API de adicionar Usuário
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
         method: 'POST',
         headers: {
@@ -577,7 +577,7 @@ export default function Usuarios() {
       }
 
       const result = await response.json()
-      console.log('a... Usuários criado via API:', result)
+      console.log('Usuário criado via API:', result)
 
       // Criar objeto local para atualizar a lista
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
@@ -595,17 +595,17 @@ export default function Usuarios() {
       setSelectedId(nextId)
       setIsAddOpen(false)
       
-      // Limpar formulÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio
+      // Limpar formulário
       setFormNome('')
       setFormLogin('')
       setFormSenha('')
       if (!isSupervisor) setFormTipo('Operador')
       
-      notify.success(`Usuários "${nome}" criado com sucesso!`)
+      notify.success(`Usuário "${nome}" criado com sucesso!`)
       
     } catch (error) {
-      console.error('a Erro ao criar Usuários:', error)
-      notify.error(`Erro ao criar Usuários: ${error.message}`)
+      console.error('a Erro ao criar Usuário:', error)
+      notify.error(`Erro ao criar Usuário: ${error.message}`)
     } finally {
       setIsSaving(false)
     }
@@ -635,9 +635,9 @@ export default function Usuarios() {
 
       if (rawBody) {
         try {
-          console.log('Usuários removido via API:', JSON.parse(rawBody))
+          console.log('Usuário removido via API:', JSON.parse(rawBody))
         } catch (_) {
-          console.log('Usuários removido via API (texto):', rawBody)
+          console.log('Usuário removido via API (texto):', rawBody)
         }
       }
 
@@ -649,14 +649,14 @@ export default function Usuarios() {
       })
 
       if (removedUser?.nome) {
-        notify.success(`Usuários "${removedUser.nome}" excluÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­do.`)
+        notify.success(`Usuário "${removedUser.nome}" excluído.`)
       } else {
-        notify.success('Usuários excluÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­do.')
+        notify.success('Usuário excluído.')
       }
 
     } catch (error) {
-      console.error('Erro ao excluir Usuários:', error)
-      notify.error(`Erro ao excluir Usuários: ${error.message}`)
+      console.error('Erro ao excluir Usuário:', error)
+      notify.error(`Erro ao excluir Usuário: ${error.message}`)
     } finally {
       setDeletingId(null)
     }
@@ -668,12 +668,12 @@ export default function Usuarios() {
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
 
     if (targetId == null) {
-      notify.error('digitadas foi possÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vel identificar o Usuários.')
+      notify.error('Não foi possível identificar o Usuário.')
       return
     }
 
     if (targetId === user?.id) {
-      notify.warn('VocÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âª digitadas pode alterar o seu prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³prio status.')
+      notify.warn('Você não pode alterar o seu próprio status.')
       return
     }
 
@@ -699,7 +699,7 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
-      let successMessage = nextActive ? 'Usuários ativado.' : 'Usuários desativado.'
+      let successMessage = nextActive ? 'usuário ativado.' : 'usuário desativado.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
@@ -754,7 +754,7 @@ export default function Usuarios() {
                 <button type="button" className="btn btn-ghost btn-sm" title="Filtrar" aria-label="Filtrar" onClick={() => setIsFilterOpen(v => !v)}>
                   <Fi.FiFilter />
                 </button>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar usuário..." />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar Usuário..." />
                 <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')} aria-label="Limpar busca" title="Limpar">
                   <Fi.FiX />
                 </button>
@@ -802,7 +802,7 @@ export default function Usuarios() {
               {error && (<div className="alert alert-danger py-2">{String(error)}</div>)}
               {!isLoading && !error && (
                 <ul className="list-group">
-                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum Usuários encontrado</li>)}
+                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum usuário encontrado</li>)}
                   {filtered.map((u) => (
                     <li key={u.id} className={`list-group-item d-flex justify-content-between align-items-center ${selectedId === u.id ? 'active' : ''}`} role="button" onClick={() => setSelectedId(u.id)}>
                       <div className="me-3">
@@ -820,7 +820,7 @@ export default function Usuarios() {
           <div className="col-12 col-lg-7">
             <div className="neo-card neo-lg p-4 h-100">
               {!selected ? (
-                <div className="opacity-75">Selecione um Usuários para ver os detalhes.</div>
+                <div className="opacity-75">Selecione um usuário para ver os detalhes.</div>
               ) : (
                 <>
                   <div className="d-flex align-items-start justify-content-between mb-3">
@@ -863,7 +863,7 @@ export default function Usuarios() {
                             onClick={() => openPasswordModal(selected)}>
                             <Fi.FiKey />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} aria-label={selected.ativo ? 'Desativar usuário' : 'Ativar usuário'} disabled={!canManage || selected.id === user?.id || togglingId === selected.id}
+                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar Usuário' : 'Ativar Usuário'} aria-label={selected.ativo ? 'Desativar Usuário' : 'Ativar Usuário'} disabled={!canManage || selected.id === user?.id || togglingId === selected.id}
                             onClick={() => handleToggleStatus(selected)}>
                             {togglingId === selected.id ? (
                               <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -890,7 +890,7 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Transferir Usuários</h5>
+                <h5 className="modal-title">Transferir Usuário</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferModal}></button>
               </div>
               <form onSubmit={handleConfirmTransfer}>
@@ -934,7 +934,7 @@ export default function Usuarios() {
   <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
     <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
       <div className="d-flex align-items-center justify-content-between mb-2">
-        <h5 className="mb-0">Adicionar usuário</h5>
+        <h5 className="mb-0">Adicionar Usuário</h5>
         <button type="button" className="btn btn-ghost btn-icon" aria-label="Fechar" onClick={() => setIsAddOpen(false)} disabled={isSaving}>
           <Fi.FiX />
         </button>
@@ -948,7 +948,7 @@ export default function Usuarios() {
           <div className="col-12">
             <label className="form-label">Login *</label>
             <input className="form-control" value={formLogin} onChange={(e) => setFormLogin((e.target.value || '').toLowerCase())} disabled={isSaving} placeholder="Ex: joaosilva" required />
-            <div className="form-label" >Login sera usado para acessar o sistema</div>
+            <div className="form-text">Login será usado para acessar o sistema</div>
           </div>
           <div className="col-12">
             <label className="form-label">Tipo</label>
@@ -958,7 +958,7 @@ export default function Usuarios() {
               <option>Supervisor</option>
               <option>Operador</option>
             </select>
-            {isSupervisor && <div className="form-text">Como supervisora, voce so pode criar operadores</div>}
+            {isSupervisor && <div className="form-text">Como supervisor(a), você só pode criar operadores</div>}
           </div>
           <div className="col-12">
             <label className="form-label">Senha *</label>
@@ -970,7 +970,7 @@ export default function Usuarios() {
               <option value="" disabled>Selecione uma equipe...</option>
               {(equipesLista || []).map(eq => (<option key={eq.id} value={eq.id}>{eq.nome}</option>))}
             </select>
-            {isSupervisor && <div className="form-text">Como supervisora, voce so pode criar usuarios na sua equipe</div>}
+            {isSupervisor && <div className="form-text">Como supervisor(a), você só pode criar usuários na sua equipe</div>}
           </div>
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4">
@@ -1132,12 +1132,12 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Confirmar exclusÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o</h5>
+                <h5 className="modal-title">Confirmar exclusão</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setPendingDelete(null)} disabled={deletingId != null}></button>
               </div>
               <div className="modal-body">
                 <p>Tem certeza que deseja excluir <strong>{pendingDelete.nome}</strong>?</p>
-                <p className="mb-0 small opacity-75">Esta aÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o digitadas pode ser desfeita.</p>
+                <p className="mb-0 small opacity-75">Esta ação não pode ser desfeita.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deletingId != null}>Cancelar</button>

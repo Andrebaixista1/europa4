@@ -3,7 +3,7 @@
 // Simple permission map per role
 const map = {
   'view:admin': [Roles.Master, Roles.Administrador, 'master', 'administrador'],
-  // Aceita tanto maiÃºsculo quanto minÃºsculo
+  // Aceita tanto maiúsculo quanto minúsculo
   'view:supervision': [Roles.Master, Roles.Administrador, Roles.Supervisor, 'master', 'administrador', 'supervisor'],
   'view:operation': [Roles.Master, Roles.Administrador, Roles.Supervisor, Roles.Operador, 'master', 'administrador', 'supervisor', 'operador'],
   'manage:users': [Roles.Master, 'master'],

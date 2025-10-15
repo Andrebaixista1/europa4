@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -99,7 +99,7 @@ export default function AdminControlePlanejamento() {
     }).length
   }, [items])
 
-  // OpÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes derivadas para o modal de Adicionar
+  // Opções derivadas para o modal de Adicionar
   const agencias = useMemo(() => {
     const map = new Map()
     for (const it of (items || [])) {
@@ -115,7 +115,7 @@ export default function AdminControlePlanejamento() {
     return Array.from(new Set((items || []).map(i => i.cargo).filter(Boolean))).sort()
   }, [items])
 
-  // Atualiza empresa/grupo ao escolher agÃƒÆ’Ã‚Âªncia
+  // Atualiza empresa/grupo ao escolher agência
   useEffect(() => {
     if (!addAgencia) { setAddEmpresa(''); setAddGrupo(''); return }
     if (addAgencia === ADD_NEW_AGENCIA) { setAddEmpresa(''); setAddGrupo(''); return }
@@ -143,7 +143,7 @@ export default function AdminControlePlanejamento() {
       notify.error('Apenas Master pode adicionar usuários')
       return
     }
-    // ValidaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes simples
+    // Validações simples
     if (!addAgencia) return notify.error('Selecione uma agência')
     if (isNewAgencia) {
       if (!addNovaAgencia?.trim()) return notify.error('Informe o nome da nova agência')
@@ -151,7 +151,7 @@ export default function AdminControlePlanejamento() {
       if (!addGrupo?.trim()) return notify.error('Selecione o grupo')
     }
     if (!addLogin) return notify.error('Informe o login')
-    // nome serÃƒÆ’Ã‚Â¡ enviado igual ao campo empresa
+    // nome será enviado igual ao campo empresa
     if (!addCargo) return notify.error('Selecione um cargo')
     if (!addDataCadastro) return notify.error('Informe a data de cadastro')
 
@@ -204,7 +204,7 @@ export default function AdminControlePlanejamento() {
         body: JSON.stringify({ id: item.id })
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      // Tenta ler JSON, mas nÃƒÆ’Ã‚Â£o exige formato especÃƒÆ’Ã‚Â­fico
+      // Tenta ler JSON, mas não exige formato específico
       let data
       try { data = await res.json() } catch (_) { /* ignore */ }
       notify.success('Usuário inativado com sucesso')
@@ -231,7 +231,7 @@ export default function AdminControlePlanejamento() {
     if (!deleteItem) { closeDeleteModal(); return }
     try {
       setIsDeleting(true)
-      // SimulaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o: remove apenas localmente, sem chamar API
+      // Simulação: remove apenas localmente, sem chamar API
       setItems(prev => (prev || []).filter(it => it.id !== deleteItem.id))
       notify.success('Usuário excluído (simulação)')
       closeDeleteModal()
@@ -343,7 +343,7 @@ export default function AdminControlePlanejamento() {
             </Link>
             <div>
               <h2 className="fw-bold mb-1">Controle Planejamento</h2>
-              <div className="opacity-75 small">Vanguard - Sistema de Controle de Usuarios</div>
+              <div className="opacity-75 small">Vanguard - Sistema de Controle de Usuários</div>
             </div>
           </div>
         </div>
@@ -366,7 +366,7 @@ export default function AdminControlePlanejamento() {
           <div className="row g-2 align-items-end">
             <div className="col-12 col-md-4">
               <label className="form-label small opacity-75">Buscar</label>
-              <input className="form-control" placeholder="Buscar por login, nome ou agencia..." value={search} onChange={e => setSearch(e.target.value)} />
+              <input className="form-control" placeholder="Buscar por login, nome ou agência..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="col-6 col-md-2">
               <label className="form-label small opacity-75">Renovação - De</label>
@@ -426,7 +426,7 @@ export default function AdminControlePlanejamento() {
           </div>
         </div>
 
-        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuarios</div>
+        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuários</div>
 
         <div className="neo-card neo-lg p-0">
           {isLoading && (<div className="p-4 text-center opacity-75">Carregando...</div>)}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿﻿import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 
-// PÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡gina Equipes: estrutura pronta para integrar API em seguida.
+// Página Equipes: estrutura pronta para integrar API em seguida.
 export default function Equipes() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -334,7 +334,7 @@ async function handleSaveNomeEquipe() {
     try {
       setIsDeletingTeam(true)
       try {
-        await fetch('https://n8n.sistemavieira.com.br/webhook-test/del-team', {
+        await fetch('https://webhook.sistemavieira.com.br/webhook/del-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: selected.id })
@@ -347,6 +347,9 @@ async function handleSaveNomeEquipe() {
         return next
       })
       closeDeleteTeamModal()
+      setTimeout(() => {
+        try { window.location.reload() } catch (_) { /* ignore */ }
+      }, 3000)
     } finally {
       setIsDeletingTeam(false)
     }
