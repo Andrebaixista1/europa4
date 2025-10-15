@@ -218,7 +218,7 @@ const [addTeamSaving, setAddTeamSaving] = useState(false)
         id_usuario: transferMember.id,
         equipe_id: newTeamNum,
       }
-      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/transfer-team', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

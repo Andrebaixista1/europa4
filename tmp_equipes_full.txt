@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 
-// Página Equipes: estrutura pronta para integrar API em seguida.
+// Pï¿½gina Equipes: estrutura pronta para integrar API em seguida.
 export default function Equipes() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -31,7 +31,7 @@ export default function Equipes() {
   const [transferMember, setTransferMember] = useState(null)
   const [transferNewTeamId, setTransferNewTeamId] = useState('')
 
-  // MOCK até a API ficar pronta
+  // MOCK atï¿½ a API ficar pronta
   useEffect(() => {
     let aborted = false
     async function load() {
@@ -61,7 +61,7 @@ export default function Equipes() {
 
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? u?.usuario_id ?? null,
-          nome: u?.nome ?? u?.name ?? 'Usuário',
+          nome: u?.nome ?? u?.name ?? 'Usuï¿½rio',
           role: u?.role ?? u?.papel ?? u?.perfil ?? '',
           equipe_id: u?.equipe_id ?? u?.team_id ?? u?.equipeId ?? null,
         })
@@ -168,7 +168,7 @@ export default function Equipes() {
   const selected = useMemo(() => filtered.find(e => e.id === selectedId) || null, [filtered, selectedId])
 
   useEffect(() => {
-    // Garante seleção válida quando a lista visível muda (ex.: Supervisor)
+    // Garante seleï¿½ï¿½o vï¿½lida quando a lista visï¿½vel muda (ex.: Supervisor)
     if (!filtered.some(e => e.id === selectedId)) {
       setSelectedId(filtered[0]?.id ?? null)
     }
@@ -217,7 +217,7 @@ export default function Equipes() {
         id_usuario: transferMember.id,
         equipe_id: newTeamNum,
       }
-      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/transfer-team', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -241,7 +241,7 @@ export default function Equipes() {
         }
         return e
       }))
-      notify.success('Usuário transferido de equipe.')
+      notify.success('Usuï¿½rio transferido de equipe.')
       closeTransferMemberModal()
       window.location.reload()
     } catch (err) {
@@ -252,7 +252,7 @@ export default function Equipes() {
   async function handleSaveNomeEquipe() {
     if (!selected) return
     if (!user?.id) {
-      notify.error('Usuário inválido para alteração de equipe.')
+      notify.error('Usuï¿½rio invï¿½lido para alteraï¿½ï¿½o de equipe.')
       return
     }
     const name = (editNome || '').trim()
@@ -302,7 +302,7 @@ export default function Equipes() {
   const handleOpenAddTeam = () => {
     if (!canCreateTeam) return
     setAddTeamNome('')
-    setAddTeamDepartamento('Equipe de operações Versatil')
+    setAddTeamDepartamento('Equipe de operaï¿½ï¿½es Versatil')
     const firstSupervisorId = supervisores[0]?.id ?? ''
     setAddTeamSupervisorId(firstSupervisorId !== undefined ? String(firstSupervisorId) : '')
     setIsAddTeamOpen(true)
@@ -319,7 +319,7 @@ export default function Equipes() {
   async function handleAddTeamSubmit(event) {
     event.preventDefault()
     if (!canCreateTeam) {
-      notify.warn('Apenas usuários Master podem criar equipes.')
+      notify.warn('Apenas usuï¿½rios Master podem criar equipes.')
       return
     }
     const nome = addTeamNome.trim()
@@ -446,7 +446,7 @@ export default function Equipes() {
     const tipoSel = (isMasterRole ? addUserTipo : 'Operador').trim()
 
     if (!nome || !login || !senha) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigatï¿½rios')
       return
     }
 
@@ -459,7 +459,7 @@ export default function Equipes() {
     const equipeId = selected.id
 
     if (!equipeId) {
-      notify.error('Equipe inválida para adicionar usuário')
+      notify.error('Equipe invï¿½lida para adicionar usuï¿½rio')
       return
     }
 
@@ -508,12 +508,12 @@ export default function Equipes() {
         const membros = e.membros ? [...e.membros, novo] : [novo]
         return { ...e, membros }
       }))
-      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      notify.success(`Usuï¿½rio "${nome}" criado com sucesso!`)
       handleCloseAddUser()
       window.location.reload()
     } catch (error) {
-      console.error('Erro ao criar usuário pela equipe:', error)
-      notify.error(`Erro ao criar usuário: ${error.message}`)
+      console.error('Erro ao criar usuï¿½rio pela equipe:', error)
+      notify.error(`Erro ao criar usuï¿½rio: ${error.message}`)
       setAddUserSaving(false)
     }
   }
@@ -582,10 +582,10 @@ export default function Equipes() {
                     >
                       <div className="me-3">
                         <div className="fw-semibold">{e.nome}</div>
-                        <div className="small opacity-75">{e.descricao || 'Sem descrição'}</div>
+                        <div className="small opacity-75">{e.descricao || 'Sem descriï¿½ï¿½o'}</div>
                       </div>
                       <div className="text-end small">
-                        <div className="opacity-85">Sup.: {e.supervisor?.nome || '—'}</div>
+                        <div className="opacity-85">Sup.: {e.supervisor?.nome || 'ï¿½'}</div>
                         <div className="opacity-75">Operadores: {e.membros?.length ?? 0}</div>
                       </div>
                     </li>
@@ -607,7 +607,7 @@ export default function Equipes() {
                   <div className="d-flex align-items-start justify-content-between mb-3">
                     <div>
                       <h5 className="mb-1">{selected.nome}</h5>
-                      <div className="small opacity-75">{selected.descricao || 'Sem descrição'}</div>
+                      <div className="small opacity-75">{selected.descricao || 'Sem descriï¿½ï¿½o'}</div>
                       
                     </div>
                     <div className="d-flex gap-2"></div>
@@ -624,7 +624,7 @@ export default function Equipes() {
 
                   <div className="mb-3 p-3 rounded-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
                     <div className="small text-uppercase opacity-75 mb-1">Supervisor</div>
-                    <div>{selected.supervisor?.nome || '—'}</div>
+                    <div>{selected.supervisor?.nome || 'ï¿½'}</div>
                   </div>
 
                   <div>
@@ -644,7 +644,7 @@ export default function Equipes() {
                             <th style={{ width: 80 }}>ID</th>
                             <th>Nome</th>
                             <th>Login</th>
-                            <th style={{ width: 100 }} className="text-end">Ações</th>
+                            <th style={{ width: 100 }} className="text-end">Aï¿½ï¿½es</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -682,13 +682,13 @@ export default function Equipes() {
         <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Transferir usuário</h5>
+              <h5 className="modal-title">Transferir usuï¿½rio</h5>
               <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferMemberModal}></button>
             </div>
             <form onSubmit={handleConfirmTransferMember}>
               <div className="modal-body">
                 <div className="mb-3">
-                  <div className="small text-uppercase opacity-75 mb-2">Usuário</div>
+                  <div className="small text-uppercase opacity-75 mb-2">Usuï¿½rio</div>
                   <div className="fw-semibold">{transferMember?.nome}</div>
                 </div>
                 <div className="d-flex align-items-center justify-content-between gap-3">
@@ -774,7 +774,7 @@ export default function Equipes() {
   </div>
 )}
                     disabled={addUserSaving}
-                    placeholder="Ex: João Silva"
+                    placeholder="Ex: Joï¿½o Silva"
                     required
                   />
                 </div>
@@ -808,7 +808,7 @@ export default function Equipes() {
                     value={addUserSenha}
                     onChange={(e) => setAddUserSenha(e.target.value)}
                     disabled={addUserSaving}
-                    placeholder="Mínimo 4 caracteres"
+                    placeholder="Mï¿½nimo 4 caracteres"
                     required
                   />
                 </div>
@@ -861,7 +861,7 @@ export default function Equipes() {
               </div>
               <div className="col-12">
                 <label className="form-label">Departamento *</label>
-                <input className="form-control" value={addTeamDepartamento} onChange={(e) => setAddTeamDepartamento(e.target.value)} disabled={addTeamSaving} placeholder="Equipe de operações Versatil" required />
+                <input className="form-control" value={addTeamDepartamento} onChange={(e) => setAddTeamDepartamento(e.target.value)} disabled={addTeamSaving} placeholder="Equipe de operaï¿½ï¿½es Versatil" required />
               </div>
             </div>
             <div className="d-flex justify-content-end gap-2 mt-4">
