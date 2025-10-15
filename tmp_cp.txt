@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -144,9 +144,9 @@ export default function AdminControlePlanejamento() {
       return
     }
     // ValidaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes simples
-    if (!addAgencia) return notify.error('Selecione uma agência')
+    if (!addAgencia) return notify.error('Selecione uma agÃƒÆ’Ã‚Âªncia')
     if (isNewAgencia) {
-      if (!addNovaAgencia?.trim()) return notify.error('Informe o nome da nova agência')
+      if (!addNovaAgencia?.trim()) return notify.error('Informe o nome da nova agÃƒÆ’Ã‚Âªncia')
       if (!addEmpresa?.trim()) return notify.error('Informe a empresa')
       if (!addGrupo?.trim()) return notify.error('Selecione o grupo')
     }
@@ -177,13 +177,13 @@ export default function AdminControlePlanejamento() {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       try { await res.json() } catch (_) { /* ignore */ }
-      notify.success('Usuário adicionado com sucesso')
+      notify.success('UsuÃƒÆ’Ã‚Â¡rio adicionado com sucesso')
       setShowAdd(false)
       // limpa form
       setAddAgencia(''); setAddNovaAgencia(''); setAddEmpresa(''); setAddGrupo(''); setAddCargo(''); setAddLogin(''); setAddDataCadastro(ymdLocal(new Date()))
       await load()
     } catch (e) {
-      console.error('Falha ao adicionar usuário:', e)
+      console.error('Falha ao adicionar usuÃƒÆ’Ã‚Â¡rio:', e)
       notify.error(`Falha ao adicionar: ${e.message}`)
     } finally {
       setIsSubmittingAdd(false)
@@ -193,7 +193,7 @@ export default function AdminControlePlanejamento() {
   async function handleInativar(item) {
     if (!item || !item.id) return
     if (user?.role !== 'Master') {
-      notify.error('Apenas Master pode inativar usuários')
+      notify.error('Apenas Master pode inativar usuÃƒÆ’Ã‚Â¡rios')
       return
     }
     try {
@@ -207,10 +207,10 @@ export default function AdminControlePlanejamento() {
       // Tenta ler JSON, mas nÃƒÆ’Ã‚Â£o exige formato especÃƒÆ’Ã‚Â­fico
       let data
       try { data = await res.json() } catch (_) { /* ignore */ }
-      notify.success('Usuário inativado com sucesso')
+      notify.success('UsuÃƒÆ’Ã‚Â¡rio inativado com sucesso')
       await load()
     } catch (e) {
-      console.error('Falha ao inativar usuário:', e)
+      console.error('Falha ao inativar usuario:', e)
       notify.error(`Falha ao inativar: ${e.message}`)
     } finally {
       setInactivatingId(null)
@@ -233,10 +233,10 @@ export default function AdminControlePlanejamento() {
       setIsDeleting(true)
       // SimulaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o: remove apenas localmente, sem chamar API
       setItems(prev => (prev || []).filter(it => it.id !== deleteItem.id))
-      notify.success('Usuário excluído (simulação)')
+      notify.success('UsuÃƒÆ’Ã‚Â¡rio excluÃƒÆ’Ã‚Â­do (simulaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o)')
       closeDeleteModal()
     } catch (e) {
-      notify.error('Falha ao excluir (simulação)')
+      notify.error('Falha ao excluir (simulaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o)')
     } finally {
       setIsDeleting(false)
     }
@@ -245,7 +245,7 @@ export default function AdminControlePlanejamento() {
   async function handleRenovar(item) {
     if (!item || !item.id) return
     if (user?.role !== 'Master') {
-      notify.error('Apenas Master pode renovar usuários')
+      notify.error('Apenas Master pode renovar usuÃƒÆ’Ã‚Â¡rios')
       return
     }
     try {
@@ -257,10 +257,10 @@ export default function AdminControlePlanejamento() {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       try { await res.json() } catch (_) { /* ignore non-JSON */ }
-      notify.success('Usuário renovado com sucesso')
+      notify.success('UsuÃƒÆ’Ã‚Â¡rio renovado com sucesso')
       await load()
     } catch (e) {
-      console.error('Falha ao renovar usuário:', e)
+      console.error('Falha ao renovar usuario:', e)
       notify.error(`Falha ao renovar: ${e.message}`)
     } finally {
       setRenewingId(null)
@@ -358,7 +358,7 @@ export default function AdminControlePlanejamento() {
         {renovacoesHoje > 0 && (
           <div className="alert alert-primary d-flex align-items-center gap-2" role="alert">
             <Fi.FiInfo size={18} />
-            <div>Hoje vencem {renovacoesHoje} usuário(s).</div>
+            <div>Hoje vencem {renovacoesHoje} usuÃƒÆ’Ã‚Â¡rio(s).</div>
           </div>
         )}
 
@@ -369,11 +369,11 @@ export default function AdminControlePlanejamento() {
               <input className="form-control" placeholder="Buscar por login, nome ou agencia..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Renovação - De</label>
+              <label className="form-label small opacity-75">Renovacao - De</label>
               <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
             </div>
             <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Renovação - Até</label>
+              <label className="form-label small opacity-75">Renovacao - Ate</label>
               <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
             </div>
             <div className="col-6 col-md-2">
@@ -381,7 +381,7 @@ export default function AdminControlePlanejamento() {
               <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
             </div>
             <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Vencimento - Até</label>
+              <label className="form-label small opacity-75">Vencimento - Ate</label>
               <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
             </div>
             <div className="col-6 col-md-2">
@@ -444,7 +444,7 @@ export default function AdminControlePlanejamento() {
                     <th>DATA RENOVACAO</th>
                     <th>DATA VENCIMENTO</th>
                     <th>STATUS</th>
-                    <th>AÇÕES</th>
+                    <th>AÃƒÆ’Ã¢â‚¬Â¡ÃƒÆ’Ã¢â‚¬Â¢ES</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -482,11 +482,11 @@ export default function AdminControlePlanejamento() {
           )}
         </div>
       </main>
-      {user?.role === 'Master' && showAdd && (
+      {showAdd && (
         <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
           <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
             <div className="d-flex align-items-center justify-content-between mb-2">
-              <h5 className="mb-0">Adicionar Novo Usuário</h5>
+              <h5 className="mb-0">Adicionar Novo UsuÃƒÆ’Ã‚Â¡rio</h5>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowAdd(false)} aria-label="Fechar">
                 <Fi.FiX />
               </button>
@@ -494,9 +494,9 @@ export default function AdminControlePlanejamento() {
             <form onSubmit={handleAddSubmit}>
               <div className="row g-3">
                 <div className="col-12">
-                  <label className="form-label small">Agência *</label>
+                  <label className="form-label small">AgÃƒÆ’Ã‚Âªncia *</label>
                   <select className="form-select" value={addAgencia} onChange={e => setAddAgencia(e.target.value)} required>
-                    <option value="">Selecione uma opção</option>
+                    <option value="">Selecione uma opÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o</option>
                     <option value={ADD_NEW_AGENCIA}>+ Adicionar Nova Empresa</option>
                     {agencias.map(a => (
                       <option key={a.codigo} value={a.codigo}>{a.codigo} - {a.empresa}</option>
@@ -505,13 +505,13 @@ export default function AdminControlePlanejamento() {
                 </div>
                 {isNewAgencia && (
                   <div className="col-12">
-                    <label className="form-label small">Nova Agência *</label>
-                    <input className="form-control" value={addNovaAgencia} onChange={e => setAddNovaAgencia(e.target.value)} placeholder="Digite o nome da nova agência" required={isNewAgencia} />
+                    <label className="form-label small">Nova AgÃƒÆ’Ã‚Âªncia *</label>
+                    <input className="form-control" value={addNovaAgencia} onChange={e => setAddNovaAgencia(e.target.value)} placeholder="Digite o nome da nova agÃƒÆ’Ã‚Âªncia" required={isNewAgencia} />
                   </div>
                 )}
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Empresa {isNewAgencia ? '*' : ''}</label>
-                  <input className="form-control" value={addEmpresa} onChange={e => setAddEmpresa(e.target.value)} disabled={!isNewAgencia} placeholder={isNewAgencia ? 'Digite a empresa' : 'Selecione uma agência'} />
+                  <input className="form-control" value={addEmpresa} onChange={e => setAddEmpresa(e.target.value)} disabled={!isNewAgencia} placeholder={isNewAgencia ? 'Digite a empresa' : 'Selecione uma agÃƒÆ’Ã‚Âªncia'} />
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Grupo {isNewAgencia ? '*' : ''}</label>
@@ -521,7 +521,7 @@ export default function AdminControlePlanejamento() {
                       {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
                     </select>
                   ) : (
-                    <input className="form-control" value={addGrupo} disabled placeholder="Selecione uma agência" />
+                    <input className="form-control" value={addGrupo} disabled placeholder="Selecione uma agÃƒÆ’Ã‚Âªncia" />
                   )}
                 </div>
                 <div className="col-12 col-md-6">
@@ -540,7 +540,7 @@ export default function AdminControlePlanejamento() {
                   <input type="date" className="form-control" value={addDataCadastro} onChange={e => setAddDataCadastro(e.target.value)} required />
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Data Renovação</label>
+                  <label className="form-label small">Data RenovaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o</label>
                   <input type="date" className="form-control" value={addRenovacao} disabled />
                 </div>
                 <div className="col-12 col-md-4">
@@ -559,24 +559,24 @@ export default function AdminControlePlanejamento() {
                   (!isNewAgencia && !addAgencia) ||
                   (isNewAgencia && (!addNovaAgencia?.trim() || !addEmpresa?.trim() || !addGrupo?.trim())) ||
                   !addCargo || !addLogin
-                }>Adicionar Usuário</button>
+                }>Adicionar UsuÃƒÆ’Ã‚Â¡rio</button>
               </div>
             </form>
           </div>
         </div>
       )}
-      {user?.role === 'Master' && showDelete && (
+      {showDelete && (
         <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
           <div className="neo-card neo-lg p-4" style={{maxWidth:520, width:'95%'}}>
             <div className="d-flex align-items-center justify-content-between mb-2">
-              <h5 className="mb-0">Confirmar Exclusão</h5>
+              <h5 className="mb-0">Confirmar ExclusÃƒÆ’Ã‚Â£o</h5>
               <button className="btn btn-ghost btn-icon" onClick={closeDeleteModal} aria-label="Fechar">
                 <Fi.FiX />
               </button>
             </div>
             <div className="mb-3">
-              Tem certeza que deseja excluir o usuário {deleteItem?.login || deleteItem?.nome || deleteItem?.id}?<br />
-              <span className="opacity-75 small">Ação de teste: não envia para o servidor.</span>
+              Tem certeza que deseja excluir o usuÃƒÆ’Ã‚Â¡rio {deleteItem?.login || deleteItem?.nome || deleteItem?.id}?<br />
+              <span className="opacity-75 small">AÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o de teste: nÃƒÆ’Ã‚Â£o envia para o servidor.</span>
             </div>
             <div className="d-flex justify-content-end gap-2">
               <button className="btn btn-ghost" onClick={closeDeleteModal}>Cancelar</button>
@@ -589,4 +589,3 @@ export default function AdminControlePlanejamento() {
     </div>
   )
 }
-
