@@ -10,17 +10,17 @@ export function normalizeRole(role, level) {
     const r = role.trim().toLowerCase()
     if (['master'].includes(r)) return Roles.Master
     if (['admin', 'administrador', 'adm'].includes(r)) return Roles.Administrador
-    if (['supervisor', 'supervisao', 'supervisÃ£o'].includes(r)) return Roles.Supervisor
-    if (['operador', 'operator', 'user', 'usuario', 'usuÃ¡rio', 'operacao', 'operaÃ§Ã£o'].includes(r)) return Roles.Operador
+    if (['supervisor', 'supervisao', 'supervisão'].includes(r)) return Roles.Supervisor
+    if (['operador', 'operator', 'user', 'usuario', 'usuário', 'operacao', 'operação'].includes(r)) return Roles.Operador
   }
-  // Fallback pelo nÃ­vel hierÃ¡rquico
+  // Fallback pelo nível hierárquico
   const n = typeof level === 'number' ? level : parseInt(level, 10)
   if (!Number.isNaN(n)) {
     if (n === 1) return Roles.Master
     if (n === 2) return Roles.Supervisor
     return Roles.Operador
   }
-  // Ãšltimo recurso
+  // Último recurso
   return Roles.Operador
 }
 
@@ -33,4 +33,3 @@ export function defaultRouteFor(role) {
       return '/dashboard'
   }
 }
-

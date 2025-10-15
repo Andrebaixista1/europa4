@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 
-// PÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡gina Equipes: estrutura pronta para integrar API em seguida.
+// Página Equipes: estrutura pronta para integrar API em seguida.
 export default function Equipes() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -19,9 +19,9 @@ export default function Equipes() {
   const [isAddTeamOpen, setIsAddTeamOpen] = useState(false)
   const [addTeamNome, setAddTeamNome] = useState('')
   const [addTeamSupervisorId, setAddTeamSupervisorId] = useState('')
-  const [addTeamDepartamento, setAddTeamDepartamento] = useState('')
+    const [addTeamSaldo, setAddTeamSaldo] = useState('200')
+const [addTeamSaving, setAddTeamSaving] = useState(false)
   const [addTeamSaldo, setAddTeamSaldo] = useState('200')
-  const [addTeamSaving, setAddTeamSaving] = useState(false)
   const [isAddUserOpen, setIsAddUserOpen] = useState(false)
   const [addUserNome, setAddUserNome] = useState('')
   const [addUserLogin, setAddUserLogin] = useState('')
@@ -32,7 +32,7 @@ export default function Equipes() {
   const [transferMember, setTransferMember] = useState(null)
   const [transferNewTeamId, setTransferNewTeamId] = useState('')
 
-  // MOCK atÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â© a API ficar pronta
+  // MOCK até a API ficar pronta
   useEffect(() => {
     let aborted = false
     async function load() {
@@ -62,7 +62,7 @@ export default function Equipes() {
 
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? u?.usuario_id ?? null,
-          nome: u?.nome ?? u?.name ?? 'UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio',
+          nome: u?.nome ?? u?.name ?? 'Usuário',
           role: u?.role ?? u?.papel ?? u?.perfil ?? '',
           equipe_id: u?.equipe_id ?? u?.team_id ?? u?.equipeId ?? null,
         })
@@ -169,7 +169,7 @@ export default function Equipes() {
   const selected = useMemo(() => filtered.find(e => e.id === selectedId) || null, [filtered, selectedId])
 
   useEffect(() => {
-    // Garante seleÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lida quando a lista visÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vel muda (ex.: Supervisor)
+    // Garante seleção válida quando a lista visível muda (ex.: Supervisor)
     if (!filtered.some(e => e.id === selectedId)) {
       setSelectedId(filtered[0]?.id ?? null)
     }
@@ -242,7 +242,7 @@ export default function Equipes() {
         }
         return e
       }))
-      notify.success('UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio transferido de equipe.')
+      notify.success('Usuário transferido de equipe.')
       closeTransferMemberModal()
       window.location.reload()
     } catch (err) {
@@ -253,7 +253,7 @@ export default function Equipes() {
   async function handleSaveNomeEquipe() {
     if (!selected) return
     if (!user?.id) {
-      notify.error('UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio invÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido para alteraÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o de equipe.')
+      notify.error('Usuário inválido para alteração de equipe.')
       return
     }
     const name = (editNome || '').trim()
@@ -303,10 +303,10 @@ export default function Equipes() {
   const handleOpenAddTeam = () => {
     if (!canCreateTeam) return
     setAddTeamNome('')
-    setAddTeamDepartamento('Equipe de operacoes Versatil')
-    setAddTeamSaldo('200')
+    setAddTeamDepartamento('Equipe de operações Versatil')
     const firstSupervisorId = supervisores[0]?.id ?? ''
-    setAddTeamSupervisorId(firstSupervisorId !== undefined ? String(firstSupervisorId) : '')
+    
+    setAddTeamSaldo('200')
     setIsAddTeamOpen(true)
   }
 
@@ -314,7 +314,7 @@ export default function Equipes() {
     setIsAddTeamOpen(false)
     setAddTeamNome('')
     setAddTeamDepartamento('')
-    setAddTeamSupervisorId('')
+    
     setAddTeamSaldo('200')
     setAddTeamSaving(false)
   }
@@ -322,11 +322,9 @@ export default function Equipes() {
   async function handleAddTeamSubmit(event) {
     event.preventDefault()
     if (!canCreateTeam) {
-      notify.warn('Apenas usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios Master podem criar equipes.')
+      notify.warn('Apenas usuários Master podem criar equipes.')
       return
     }
-    const nome = addTeamNome.trim()
-    const departamento = addTeamDepartamento.trim()
     
     const saldoNum = addTeamSaldo === '' ? NaN : Number(addTeamSaldo)
 
@@ -340,7 +338,7 @@ export default function Equipes() {
     }
     
     if (Number.isNaN(saldoNum)) {
-      notify.warn('Informe um saldo numÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©rico.')
+      notify.warn('Informe um saldo numérico.')
       return
     }
 
@@ -453,7 +451,7 @@ export default function Equipes() {
     const tipoSel = (isMasterRole ? addUserTipo : 'Operador').trim()
 
     if (!nome || !login || !senha) {
-      notify.warn('Preencha todos os campos obrigatÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³rios')
+      notify.warn('Preencha todos os campos obrigatórios')
       return
     }
 
@@ -466,7 +464,7 @@ export default function Equipes() {
     const equipeId = selected.id
 
     if (!equipeId) {
-      notify.error('Equipe invÃƒÆ’Ã‚Â¡lida para adicionar usuÃƒÆ’Ã‚Â¡rio')
+      notify.error('Equipe inválida para adicionar usuário')
       return
     }
 
@@ -515,13 +513,13 @@ export default function Equipes() {
         const membros = e.membros ? [...e.membros, novo] : [novo]
         return { ...e, membros }
       }))
-      notify.success(`UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio "${nome}" criado com sucesso!`)
-      notify.success(`UsuÃƒÂ¡rio "${nome}" criado com sucesso!`)
+      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      handleCloseAddUser()
       window.location.reload()
     } catch (error) {
-      console.error('Erro ao criar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio pela equipe:', error)
-      console.error('Erro ao criar usuÃƒÂ¡rio pela equipe:', error)
-      notify.error(`Erro ao criar usuÃƒÂ¡rio: ${error.message}`)
+      console.error('Erro ao criar usuário pela equipe:', error)
+      notify.error(`Erro ao criar usuário: ${error.message}`)
+      setAddUserSaving(false)
     }
   }
 
@@ -539,6 +537,11 @@ export default function Equipes() {
             <div>
               <h2 className="fw-bold mb-1">Equipes</h2>
               <div className="opacity-75 small">Estruture times, supervisor e operadores</div>
+
+              <div className="col-12">
+                <label className="form-label">Saldo *</label>
+                <input type="number" inputMode="numeric" pattern="\d*" min="0" step="1" className="form-control" value={addTeamSaldo} onChange={(e) => setAddTeamSaldo((e.target.value || "").replace(/[^0-9]/g, ""))} disabled={addTeamSaving} placeholder="Ex: 200" required />
+              </div
             </div>
           </div>
         </div>
@@ -589,10 +592,10 @@ export default function Equipes() {
                     >
                       <div className="me-3">
                         <div className="fw-semibold">{e.nome}</div>
-                        <div className="small opacity-75">{e.descricao || 'Sem descriÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o'}</div>
+                        <div className="small opacity-75">{e.descricao || 'Sem descrição'}</div>
                       </div>
                       <div className="text-end small">
-                        <div className="opacity-85">Sup.: {e.supervisor?.nome || 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â'}</div>
+                        <div className="opacity-85">Sup.: {e.supervisor?.nome || '—'}</div>
                         <div className="opacity-75">Operadores: {e.membros?.length ?? 0}</div>
                       </div>
                     </li>
@@ -614,7 +617,7 @@ export default function Equipes() {
                   <div className="d-flex align-items-start justify-content-between mb-3">
                     <div>
                       <h5 className="mb-1">{selected.nome}</h5>
-                      <div className="small opacity-75">{selected.descricao || 'Sem descriÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o'}</div>
+                      <div className="small opacity-75">{selected.descricao || 'Sem descrição'}</div>
                       
                     </div>
                     <div className="d-flex gap-2"></div>
@@ -631,7 +634,7 @@ export default function Equipes() {
 
                   <div className="mb-3 p-3 rounded-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
                     <div className="small text-uppercase opacity-75 mb-1">Supervisor</div>
-                    <div>{selected.supervisor?.nome || 'ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â'}</div>
+                    <div>{selected.supervisor?.nome || '—'}</div>
                   </div>
 
                   <div>
@@ -689,13 +692,13 @@ export default function Equipes() {
         <div className="modal-dialog modal-dialog-centered">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Transferir usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio</h5>
+              <h5 className="modal-title">Transferir usuário</h5>
               <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferMemberModal}></button>
             </div>
             <form onSubmit={handleConfirmTransferMember}>
               <div className="modal-body">
                 <div className="mb-3">
-                  <div className="small text-uppercase opacity-75 mb-2">UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio</div>
+                  <div className="small text-uppercase opacity-75 mb-2">Usuário</div>
                   <div className="fw-semibold">{transferMember?.nome}</div>
                 </div>
                 <div className="d-flex align-items-center justify-content-between gap-3">
@@ -729,23 +732,59 @@ export default function Equipes() {
       </div>
     )}
     {isMasterRole && selected && isAddUserOpen && (
-      <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
-        <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Adicionar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio</h5>
-              <button type="button" className="btn-close" aria-label="Close" onClick={handleCloseAddUser} disabled={addUserSaving}></button>
+  <div className=\"position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center\" style={{background:'rgba(0,0,0,0.6)', position:'fixed', inset:0, zIndex:1050}} role=\"dialog\" aria-modal=\"true\">
+    <div className=\"neo-card neo-lg p-4\" style={{maxWidth:720, width:'95%'}}>
+      <div className=\"d-flex align-items-center justify-content-between mb-2\">
+        <h5 className=\"mb-0\">Adicionar usu?rio</h5>
+        <button type=\"button\" className=\"btn btn-ghost btn-icon\" aria-label=\"Fechar\" onClick={handleCloseAddUser} disabled={addUserSaving}>
+          <Fi.FiX />
+        </button>
+      </div>
+      <form onSubmit={handleAddUserSubmit}>
+        <div className=\"row g-3\">
+          <div className=\"col-12\">
+            <label className=\"form-label\">Nome Completo *</label>
+            <input className=\"form-control\" value={addUserNome} onChange={(e) => handleAddUserNomeChange(e.target.value)} disabled={addUserSaving} placeholder=\"Ex: Jo?o Silva\" required />
+          </div>
+          <div className=\"col-12\">
+            <label className=\"form-label\">Login *</label>
+            <input className=\"form-control\" value={addUserLogin} onChange={(e) => setAddUserLogin((e.target.value || '').toLowerCase())} disabled={addUserSaving} placeholder=\"Ex: joaosilva\" required />
+          </div>
+          {isMasterRole && (
+            <div className=\"col-12\">
+              <label className=\"form-label\">Tipo</label>
+              <select className=\"form-select\" value={addUserTipo} onChange={(e) => setAddUserTipo(e.target.value)} disabled={addUserSaving}>
+                <option>Master</option>
+                <option>Administrador</option>
+                <option>Supervisor</option>
+                <option>Operador</option>
+              </select>
             </div>
-            <form onSubmit={handleAddUserSubmit}>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <label className="form-label">Nome Completo *</label>
-                  <input
-                    className="form-control"
-                    value={addUserNome}
-                    onChange={(e) => handleAddUserNomeChange(e.target.value)}
+          )}
+          <div className=\"col-12\">
+            <label className=\"form-label\">Senha *</label>
+            <input type=\"password\" className=\"form-control\" value={addUserSenha} onChange={(e) => setAddUserSenha(e.target.value)} disabled={addUserSaving} placeholder=\"M?nimo 4 caracteres\" required />
+          </div>
+        </div>
+        <div className=\"d-flex justify-content-end gap-2 mt-4\">
+          <button type=\"button\" className=\"btn btn-ghost\" onClick={handleCloseAddUser} disabled={addUserSaving}>Cancelar</button>
+          <button type=\"submit\" className=\"btn btn-primary\" disabled={addUserSaving || !addUserNome.trim() || !addUserLogin.trim() || !addUserSenha.trim()}>
+            {addUserSaving ? (
+              <>
+                <span className=\"spinner-border spinner-border-sm me-2\" role=\"status\" aria-hidden=\"true\"></span>
+                Salvando...
+              </>
+            ) : (
+              'Salvar'
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
                     disabled={addUserSaving}
-                    placeholder="Ex: JoÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o Silva"
+                    placeholder="Ex: João Silva"
                     required
                   />
                 </div>
@@ -779,7 +818,7 @@ export default function Equipes() {
                     value={addUserSenha}
                     onChange={(e) => setAddUserSenha(e.target.value)}
                     disabled={addUserSaving}
-                    placeholder="MÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­nimo 4 caracteres"
+                    placeholder="Mínimo 4 caracteres"
                     required
                   />
                 </div>
@@ -809,53 +848,49 @@ export default function Equipes() {
       </div>
     )}
     {canCreateTeam && isAddTeamOpen && (
-  <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
-    <div className="neo-card neo-lg p-4" style={{maxWidth:680, width:'95%'}}>
-      <div className="d-flex align-items-center justify-content-between mb-2">
-        <h5 className="mb-0">Adicionar equipe</h5>
-        <button type="button" className="btn btn-ghost btn-icon" aria-label="Fechar" onClick={handleCloseAddTeam} disabled={addTeamSaving}>
-          <Fi.FiX />
-        </button>
+      <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', position:'fixed', inset:0, zIndex:1050}} role="dialog" aria-modal="true">
+        <div className="neo-card neo-lg p-4" style={{maxWidth:680, width:'95%'}}>
+          <div className="d-flex align-items-center justify-content-between mb-2">
+            <h5 className="mb-0">Adicionar equipe</h5>
+            <button type="button" className="btn btn-ghost btn-icon" aria-label="Fechar" onClick={handleCloseAddTeam} disabled={addTeamSaving}>
+              <Fi.FiX />
+            </button>
+          </div>
+          <form onSubmit={handleAddTeamSubmit}>
+            <div className="row g-3">
+              <div className="col-12">
+                <label className="form-label">Nome da equipe *</label>
+                <input className="form-control" value={addTeamNome} onChange={(e) => setAddTeamNome(e.target.value)} disabled={addTeamSaving} placeholder="Nome da equipe" required />
+              </div>
+              <div className="col-12">
+                <label className="form-label">Supervisor *</label>
+                <select className="form-select" value={addTeamSupervisorId} onChange={(e) => setAddTeamSupervisorId(e.target.value)} disabled={addTeamSaving} required>
+                  <option value="">Selecione...</option>
+                  {supervisores.map((sup) => (<option key={sup.id} value={sup.id}>{sup.nome}</option>))}
+                </select>
+              </div>
+              <div className="col-12">
+                <label className="form-label">Departamento *</label>
+                <input className="form-control" value={addTeamDepartamento} onChange={(e) => setAddTeamDepartamento(e.target.value)} disabled={addTeamSaving} placeholder="Equipe de operações Versatil" required />
+              </div>
+            </div>
+            <div className="d-flex justify-content-end gap-2 mt-4">
+              <button type="button" className="btn btn-ghost" onClick={handleCloseAddTeam} disabled={addTeamSaving}>Cancelar</button>
+              <button type="submit" className="btn btn-primary" disabled={addTeamSaving || !addTeamNome.trim() || !addTeamSupervisorId || !addTeamDepartamento.trim()}>
+                {addTeamSaving ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Salvando...
+                  </>
+                ) : (
+                  'Salvar'
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-      <form onSubmit={handleAddTeamSubmit}>
-        <div className="row g-3">
-          <div className="col-12">
-            <label className="form-label">Nome da equipe *</label>
-            <input className="form-control" value={addTeamNome} onChange={(e) => setAddTeamNome(e.target.value)} disabled={addTeamSaving} placeholder="Nome da equipe" required />
-          </div>
-          <div className="col-12">
-            <label className="form-label">Supervisor *</label>
-            <select className="form-select" value={addTeamSupervisorId} onChange={(e) => setAddTeamSupervisorId(e.target.value)} disabled={addTeamSaving} required>
-              <option value="">Selecione...</option>
-              {supervisores.map((sup) => (<option key={sup.id} value={sup.id}>{sup.nome}</option>))}
-            </select>
-          </div>
-          <div className="col-12">
-            <label className="form-label">Departamento *</label>
-            <input className="form-control" value={addTeamDepartamento} onChange={(e) => setAddTeamDepartamento(e.target.value)} disabled={addTeamSaving} placeholder="Equipe de operaÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âµes Versatil" required />
-          </div>
-          <div className="col-12">
-            <label className="form-label">Saldo *</label>
-            <input type="number" inputMode="numeric" pattern="\\d*" min="0" step="1" className="form-control" value={addTeamSaldo} onChange={(e) => setAddTeamSaldo((e.target.value || '').replace(/[^0-9]/g, ''))} disabled={addTeamSaving} placeholder="Ex: 200" required />
-          </div>
-        </div>
-        <div className="d-flex justify-content-end gap-2 mt-4">
-          <button type="button" className="btn btn-ghost" onClick={handleCloseAddTeam} disabled={addTeamSaving}>Cancelar</button>
-          <button type="submit" className="btn btn-primary" disabled={addTeamSaving || !addTeamNome.trim() || !addTeamSupervisorId || !addTeamDepartamento.trim() || !String(addTeamSaldo || '').trim()}>
-            {addTeamSaving ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                Salvando...
-              </>
-            ) : (
-              'Salvar'
-            )}
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
-</>
-)
+    )}
+    </>
+  )
 }
