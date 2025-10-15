@@ -81,7 +81,7 @@ export default function Usuarios() {
         const payload = unwrap(data)
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? null,
-          nome: u?.nome ?? u?.name ?? 'usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio',
+          nome: u?.nome ?? u?.name ?? 'Usuários',
           email: u?.email ?? '',
           role: u?.role ?? u?.papel ?? 'Operador',
           equipe_id: u?.equipe_id ?? u?.team_id ?? null,
@@ -110,7 +110,7 @@ export default function Usuarios() {
             
             setEquipesLista(eq)
           } else {
-            // Fallback: criar equipes baseado nos usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rios
+            // Fallback: criar equipes baseado nos Usuárioss
             const uniq = Array.from(new Set(arr.map(u => u.equipe_id).filter(Boolean)))
             setEquipesLista(uniq.map(id => ({ id, nome: `Equipe ${id}` })))
           }
@@ -123,7 +123,7 @@ export default function Usuarios() {
           }
         }
       } catch (e) {
-        console.error('Falha API UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rios:', e)
+        console.error('Falha API Usuárioss:', e)
         if (!aborted) { setError(e); setUsuarios([]); setSelectedId(null) }
       } finally {
         if (!aborted) setIsLoading(false)
@@ -219,7 +219,7 @@ export default function Usuarios() {
     }
   }
 
-  // FunÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o para abrir modal de adicionar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio
+  // FunÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o para abrir modal de adicionar Usuários
   const handleOpenAddModal = () => {
     if (!canManage) return
     // Limpar formulÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio
@@ -280,7 +280,7 @@ export default function Usuarios() {
         id_usuario: transferUser.id,
         equipe_id: newIdNum,
       }
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
+      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -294,7 +294,7 @@ export default function Usuarios() {
       setUsuarios(prev => prev.map(u => (
         u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
       )))
-      notify.success('UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio transferido de equipe.')
+      notify.success('Usuários transferido de equipe.')
       closeTransferModal()
     } catch (err) {
       notify.error(`Erro ao transferir: ${err.message}`)
@@ -331,7 +331,7 @@ export default function Usuarios() {
     const confirmacao = passwordConfirm.trim()
 
     if (!senhaAtual || !senha || !confirmacao) {
-      notify.warn('Preencha todos os campos obrigatÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³rios')
+      notify.warn('Preencha todos os campos obrigatório')
       return
     }
 
@@ -341,13 +341,13 @@ export default function Usuarios() {
     }
 
     if (senha !== confirmacao) {
-      notify.warn('As senhas nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o coincidem')
+      notify.warn('As senhas digitadas coincidem')
       return
     }
 
     const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
     if (userId == null) {
-      notify.error('Selecione um usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio vÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡lido')
+      notify.error('Selecione um Usuários valido')
       return
     }
 
@@ -457,12 +457,12 @@ export default function Usuarios() {
     const userId = normalizeId(editUser?.id ?? null) ?? editUser?.id ?? null
 
     if (!userId) {
-      notify.error('Selecione um usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio valido')
+      notify.error('Selecione um Usuários valido')
       return
     }
 
     if (!nome || !login) {
-      notify.warn('Preencha todos os campos obrigatÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³rios')
+      notify.warn('Preencha todos os campos obrigatório')
       return
     }
 
@@ -490,15 +490,15 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
-      let successMessage = 'usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio atualizado com sucesso.'
+      let successMessage = 'Usuários atualizado com sucesso.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
-          console.log('usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio alterado via API:', parsed)
+          console.log('Usuários alterado via API:', parsed)
           const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
           if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
         } catch (_) {
-          console.log('usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio alterado via API (texto):', rawBody)
+          console.log('Usuários alterado via API (texto):', rawBody)
           if (rawBody.trim()) successMessage = rawBody.trim()
         }
       }
@@ -510,8 +510,8 @@ export default function Usuarios() {
       notify.success(successMessage)
       closeEditModal()
     } catch (error) {
-      console.error('Erro ao atualizar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio:', error)
-      notify.error(`Erro ao atualizar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio: ${error.message}`)
+      console.error('Erro ao atualizar Usuários:', error)
+      notify.error(`Erro ao atualizar Usuários: ${error.message}`)
     } finally {
       setIsSavingEdit(false)
     }
@@ -529,7 +529,7 @@ export default function Usuarios() {
     console.log('Y Dados do formulÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio:', { nome, login, senha, formEquipeId, formTipo })
     
     if (!nome || !login || !senha) {
-      notify.warn('Preencha todos os campos obrigatÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³rios')
+      notify.warn('Preencha todos os campos obrigatório')
       return
     }
 
@@ -552,9 +552,9 @@ export default function Usuarios() {
     setIsSaving(true)
     
     try {
-      console.log('Y Criando usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio via API...', { nome, login, role: roleOut, equipe_id: equipeId })
+      console.log('Y Criando Usuários via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
-      // Chamada para a API de adicionar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio
+      // Chamada para a API de adicionar Usuários
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
         method: 'POST',
         headers: {
@@ -577,7 +577,7 @@ export default function Usuarios() {
       }
 
       const result = await response.json()
-      console.log('a... usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio criado via API:', result)
+      console.log('a... Usuários criado via API:', result)
 
       // Criar objeto local para atualizar a lista
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
@@ -601,11 +601,11 @@ export default function Usuarios() {
       setFormSenha('')
       if (!isSupervisor) setFormTipo('Operador')
       
-      notify.success(`usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio "${nome}" criado com sucesso!`)
+      notify.success(`Usuários "${nome}" criado com sucesso!`)
       
     } catch (error) {
-      console.error('a Erro ao criar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio:', error)
-      notify.error(`Erro ao criar usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio: ${error.message}`)
+      console.error('a Erro ao criar Usuários:', error)
+      notify.error(`Erro ao criar Usuários: ${error.message}`)
     } finally {
       setIsSaving(false)
     }
@@ -635,9 +635,9 @@ export default function Usuarios() {
 
       if (rawBody) {
         try {
-          console.log('usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio removido via API:', JSON.parse(rawBody))
+          console.log('Usuários removido via API:', JSON.parse(rawBody))
         } catch (_) {
-          console.log('usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio removido via API (texto):', rawBody)
+          console.log('Usuários removido via API (texto):', rawBody)
         }
       }
 
@@ -649,14 +649,14 @@ export default function Usuarios() {
       })
 
       if (removedUser?.nome) {
-        notify.success(`usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio "${removedUser.nome}" excluÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­do.`)
+        notify.success(`Usuários "${removedUser.nome}" excluÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­do.`)
       } else {
-        notify.success('usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio excluÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­do.')
+        notify.success('Usuários excluÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­do.')
       }
 
     } catch (error) {
-      console.error('Erro ao excluir usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio:', error)
-      notify.error(`Erro ao excluir usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio: ${error.message}`)
+      console.error('Erro ao excluir Usuários:', error)
+      notify.error(`Erro ao excluir Usuários: ${error.message}`)
     } finally {
       setDeletingId(null)
     }
@@ -668,12 +668,12 @@ export default function Usuarios() {
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
 
     if (targetId == null) {
-      notify.error('NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o foi possÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vel identificar o usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio.')
+      notify.error('digitadas foi possÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­vel identificar o Usuários.')
       return
     }
 
     if (targetId === user?.id) {
-      notify.warn('VocÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âª nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o pode alterar o seu prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³prio status.')
+      notify.warn('VocÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âª digitadas pode alterar o seu prÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³prio status.')
       return
     }
 
@@ -699,7 +699,7 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
-      let successMessage = nextActive ? 'usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio ativado.' : 'usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio desativado.'
+      let successMessage = nextActive ? 'Usuários ativado.' : 'Usuários desativado.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
@@ -802,7 +802,7 @@ export default function Usuarios() {
               {error && (<div className="alert alert-danger py-2">{String(error)}</div>)}
               {!isLoading && !error && (
                 <ul className="list-group">
-                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio encontrado</li>)}
+                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum Usuários encontrado</li>)}
                   {filtered.map((u) => (
                     <li key={u.id} className={`list-group-item d-flex justify-content-between align-items-center ${selectedId === u.id ? 'active' : ''}`} role="button" onClick={() => setSelectedId(u.id)}>
                       <div className="me-3">
@@ -820,7 +820,7 @@ export default function Usuarios() {
           <div className="col-12 col-lg-7">
             <div className="neo-card neo-lg p-4 h-100">
               {!selected ? (
-                <div className="opacity-75">Selecione um usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio para ver os detalhes.</div>
+                <div className="opacity-75">Selecione um Usuários para ver os detalhes.</div>
               ) : (
                 <>
                   <div className="d-flex align-items-start justify-content-between mb-3">
@@ -890,13 +890,13 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Transferir usuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio</h5>
+                <h5 className="modal-title">Transferir Usuários</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferModal}></button>
               </div>
               <form onSubmit={handleConfirmTransfer}>
                 <div className="modal-body">
                   <div className="mb-3">
-                    <div className="small text-uppercase opacity-75 mb-2">UsuÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡rio</div>
+                    <div className="small text-uppercase opacity-75 mb-2">Usuário</div>
                     <div className="fw-semibold">{transferUser?.nome}</div>
                   </div>
                   <div className="d-flex align-items-center justify-content-between gap-3">
@@ -1087,7 +1087,7 @@ export default function Usuarios() {
                         <Fi.FiZap />
                       </button>
                     </div>
-                    <div className="form-text">Use o gerador para criar uma senha entre 6 e 8 dÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­gitos ou digite manualmente.</div>
+                    <div className="form-text">Use o gerador para criar uma senha entre 6 e 8 digitos ou digite manualmente.</div>
                   </div>
                   <div className="mb-0">
                     <label className="form-label">Confirmar senha *</label>
@@ -1137,7 +1137,7 @@ export default function Usuarios() {
               </div>
               <div className="modal-body">
                 <p>Tem certeza que deseja excluir <strong>{pendingDelete.nome}</strong>?</p>
-                <p className="mb-0 small opacity-75">Esta aÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o pode ser desfeita.</p>
+                <p className="mb-0 small opacity-75">Esta aÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â£o digitadas pode ser desfeita.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deletingId != null}>Cancelar</button>
