@@ -373,17 +373,30 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
+      const trimmedBody = (rawBody || '').trim()
+      const normalizedBody = trimmedBody.toLowerCase()
+      if (!trimmedBody || trimmedBody === '{}' || trimmedBody === '[]' || normalizedBody === 'null' || normalizedBody === 'undefined') {
+        const message = 'Senha não alterada: usuário não encontrado.'
+        console.warn(`API alter-pass retornou payload vazio para o usuário ${userId}`, trimmedBody)
+        notify.error(message)
+        return
+      }
+
       let successMessage = 'Senha atualizada com sucesso.'
-      if (rawBody) {
-        try {
-          const parsed = JSON.parse(rawBody)
-          console.log('Senha alterada via API:', parsed)
-          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
-          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
-        } catch (_) {
-          console.log('Senha alterada via API (texto):', rawBody)
-          if (rawBody.trim()) successMessage = rawBody.trim()
+      try {
+        const parsed = JSON.parse(trimmedBody)
+        console.log('Senha alterada via API:', parsed)
+        if (parsed == null || (Array.isArray(parsed) && parsed.length === 0) || (typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length === 0)) {
+          const message = 'Senha não alterada: usuário não encontrado.'
+          console.warn(`API alter-pass retornou objeto vazio para o usuário ${userId}`, parsed)
+          notify.error(message)
+          return
         }
+        const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
+        if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
+      } catch (_) {
+        console.log('Senha alterada via API (texto):', trimmedBody)
+        successMessage = trimmedBody
       }
 
       notify.success(successMessage)
