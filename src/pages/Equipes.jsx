@@ -331,25 +331,35 @@ async function handleSaveNomeEquipe() {
 
   async function handleConfirmDeleteTeam() {
     if (!selected || !selected.id) { closeDeleteTeamModal(); return }
+    const teamId = selected.id
+    const teamName = selected.nome || 'Equipe'
     try {
       setIsDeletingTeam(true)
-      try {
-        await fetch('https://webhook.sistemavieira.com.br/webhook/del-team', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: selected.id })
-        })
-      } catch (_) { /* ignore API errors */ }
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/del-team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: teamId })
+      })
+
+      if (!response.ok) {
+        let message = ''
+        try { message = (await response.text())?.trim() ?? '' } catch (_) { /* ignore */ }
+        throw new Error(message || `HTTP ${response.status}`)
+      }
+
       setEquipes(prev => {
-        const next = (prev || []).filter(e => e.id !== selected.id)
+        const next = (prev || []).filter(e => e.id !== teamId)
         const nextId = next[0]?.id ?? null
         setSelectedId(nextId)
         return next
       })
+      notify.success(`Equipe ${teamName} excluida com sucesso.`)
       closeDeleteTeamModal()
       setTimeout(() => {
         try { window.location.reload() } catch (_) { /* ignore */ }
-      }, 3000)
+      }, 1000)
+    } catch (error) {
+      notify.error(`Falha ao excluir equipe: ${error.message}`)
     } finally {
       setIsDeletingTeam(false)
     }

@@ -8,10 +8,7 @@ import { notify } from '../utils/notify.js'
 
 const endpoint = 'https://webhook.sistemavieira.com.br/webhook/get-saldos'
 
-const currency = (value) => {
-  const num = Number(value) || 0
-  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
+const ROWS_PER_PAGE = 100
 
 const integer = (value) => {
   const num = Number(value) || 0
@@ -43,6 +40,13 @@ export default function Recargas() {
   const [search, setSearch] = useState('')
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [selectedTeamKey, setSelectedTeamKey] = useState('')
+  const [addAmount, setAddAmount] = useState('200')
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const addAmountValue = Number(addAmount)
+  const showAboveRecommended = Number.isFinite(addAmountValue) && addAmountValue > 200
 
   useEffect(() => {
     let aborted = false
@@ -71,6 +75,47 @@ export default function Recargas() {
     return () => { aborted = true }
   }, [])
 
+  const teamOptions = useMemo(() => {
+    const map = new Map()
+    rows.forEach(row => {
+      if (!row) return
+      const name = String(row.equipeNome || 'Equipe sem nome')
+      const key = row.equipeId != null ? `id:${row.equipeId}` : `nome:${name}`
+      if (!map.has(key)) {
+        map.set(key, { key, id: row.equipeId ?? null, name })
+      }
+    })
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [rows])
+
+  const selectedTeam = useMemo(() => {
+    return teamOptions.find(option => option.key === selectedTeamKey) ?? null
+  }, [teamOptions, selectedTeamKey])
+
+  const handleAddRecarga = () => {
+    setSelectedTeamKey('')
+    setAddAmount('200')
+    setIsAddOpen(true)
+  }
+
+  const handleCloseAdd = () => {
+    setIsAddOpen(false)
+  }
+
+  const handleSubmitAddRecarga = (event) => {
+    event?.preventDefault?.()
+    if (!selectedTeam) {
+      notify.error('Selecione uma equipe')
+      return
+    }
+    if (!Number.isFinite(addAmountValue) || addAmountValue <= 0) {
+      notify.error('Informe uma quantidade valida para a recarga')
+      return
+    }
+    notify.info(`Envio de recarga para ${selectedTeam.name} ainda nao esta disponivel.`)
+    handleCloseAdd()
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const hasInicio = Boolean(inicio)
@@ -91,6 +136,45 @@ export default function Recargas() {
       return true
     })
   }, [rows, search, inicio, fim])
+
+  useEffect(() => { setCurrentPage(1) }, [search, inicio, fim])
+
+  useEffect(() => {
+    const total = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE))
+    if (currentPage > total) {
+      setCurrentPage(total)
+    }
+  }, [filtered.length, currentPage])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE))
+  const hasPagination = filtered.length > ROWS_PER_PAGE
+
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE
+    return filtered.slice(start, start + ROWS_PER_PAGE)
+  }, [filtered, currentPage])
+
+  const paginationItems = useMemo(() => {
+    const total = Math.ceil(filtered.length / ROWS_PER_PAGE)
+    if (total <= 1) return []
+    const pages = new Set([1, total, currentPage])
+    for (let i = currentPage - 2; i <= currentPage + 2; i += 1) {
+      if (i > 1 && i < total) pages.add(i)
+    }
+    const sorted = Array.from(pages).sort((a, b) => a - b)
+    const items = []
+    for (let i = 0; i < sorted.length; i += 1) {
+      const page = sorted[i]
+      if (i > 0) {
+        const prev = sorted[i - 1]
+        if (page - prev > 1) {
+          items.push({ type: 'ellipsis', key: `ellipsis-${prev}-${page}` })
+        }
+      }
+      items.push({ type: 'page', key: `page-${page}`, page })
+    }
+    return items
+  }, [filtered.length, currentPage])
 
   const stats = useMemo(() => {
     const totalCarregado = filtered.reduce((acc, row) => acc + row.total, 0)
@@ -114,6 +198,18 @@ export default function Recargas() {
               <h2 className="fw-bold mb-1">Gestão de Recargas</h2>
               <div className="opacity-75 small">Resumo financeiro das equipes</div>
             </div>
+          </div>
+          <div className="d-flex align-items-center">
+            <button
+              type="button"
+              className="btn btn-primary d-flex align-items-center gap-2"
+              onClick={handleAddRecarga}
+              title="Adicionar nova recarga"
+            >
+              <Fi.FiPlus size={16} />
+              <span className="d-none d-sm-inline">Adicionar Recarga</span>
+              <span className="d-sm-none">Nova</span>
+            </button>
           </div>
         </div>
 
@@ -156,7 +252,7 @@ export default function Recargas() {
           </div>
         </div>
 
-        <div className="neo-card neo-lg p-4 mb-3">
+        <div className="neo-card neo-lg p-3 mb-3">
           <div className="row g-2 align-items-end">
             <div className="col-12 col-md-4">
               <label className="form-label small opacity-75">Buscar por equipe ou ID</label>
@@ -184,6 +280,49 @@ export default function Recargas() {
           {error && (<div className="p-4 alert alert-danger">{error.message}</div>)}
           {!isLoading && !error && (
             <div className="table-responsive">
+              {hasPagination && (
+                <div className="d-flex justify-content-end px-3 pt-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      title="Pagina anterior"
+                    >
+                      <Fi.FiChevronLeft />
+                    </button>
+                    {paginationItems.map(item => {
+                      if (item.type === 'ellipsis') {
+                        return (
+                          <span key={item.key} className="btn btn-ghost btn-sm disabled" aria-hidden>...</span>
+                        )
+                      }
+                      const isActive = item.page === currentPage
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}`}
+                          onClick={() => setCurrentPage(item.page)}
+                          aria-current={isActive ? 'page' : undefined}
+                        >
+                          {item.page}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      title="Proxima pagina"
+                    >
+                      <Fi.FiChevronRight />
+                    </button>
+                  </div>
+                </div>
+              )}
               <table className="table table-dark table-hover align-middle mb-0">
                 <thead>
                   <tr>
@@ -197,20 +336,21 @@ export default function Recargas() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && (
+                  {filtered.length === 0 ? (
                     <tr><td colSpan={7} className="text-center opacity-75 p-4">Sem registros</td></tr>
+                  ) : (
+                    paginatedRows.map(row => (
+                      <tr key={row.id}>
+                        <td>{row.id}</td>
+                        <td>{row.equipeId ?? '-'}</td>
+                        <td className="text-uppercase">{row.equipeNome}</td>
+                      <td>{integer(row.total)}</td>
+                      <td>{integer(row.limite)}</td>
+                        <td>{integer(row.consultas)}</td>
+                        <td>{row.data ? row.data.toLocaleString('pt-BR') : '-'}</td>
+                      </tr>
+                    ))
                   )}
-                  {filtered.map(row => (
-                    <tr key={row.id}>
-                      <td>{row.id}</td>
-                      <td>{row.equipeId ?? '-'}</td>
-                      <td className="text-uppercase">{row.equipeNome}</td>
-                      <td>{currency(row.total)}</td>
-                      <td>{currency(row.limite)}</td>
-                      <td>{integer(row.consultas)}</td>
-                      <td>{row.data ? row.data.toLocaleString('pt-BR') : '-'}</td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>
@@ -218,6 +358,64 @@ export default function Recargas() {
         </div>
       </main>
       <Footer />
+      {isAddOpen && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Adicionar recarga</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={handleCloseAdd}></button>
+              </div>
+              <form onSubmit={handleSubmitAddRecarga}>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label">Equipe</label>
+                    <select
+                      className="form-select"
+                      value={selectedTeamKey}
+                      onChange={event => setSelectedTeamKey(event.target.value)}
+                      required
+                    >
+                      <option value="">Selecione uma equipe...</option>
+                      {teamOptions.map(option => (
+                        <option key={option.key} value={option.key}>
+                          {option.name}
+                          {option.id != null ? ` (ID ${option.id})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {selectedTeam && (
+                    <div className="mb-3">
+                      <label className="form-label">ID da equipe</label>
+                      <input className="form-control" value={selectedTeam.id ?? '-'} readOnly disabled />
+                    </div>
+                  )}
+                  <div>
+                    <label className="form-label">Quantidade da recarga</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      min="0"
+                      step="1"
+                      value={addAmount}
+                      onChange={event => setAddAmount(event.target.value)}
+                    />
+                    <div className="form-text">Quantidade padrao 200.</div>
+                    {showAboveRecommended && (
+                      <div className="form-text text-primary">Para manter o controle, prefira quantidades abaixo de 200.</div>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-footer d-flex justify-content-end gap-2">
+                  <button type="button" className="btn btn-ghost fw-bold" onClick={handleCloseAdd}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary" disabled={!selectedTeam}>Confirmar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
