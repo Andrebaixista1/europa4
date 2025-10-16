@@ -1,9 +1,8 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
-import { useAuth } from '../context/AuthContext.jsx'
+import { Link } from 'react-router-dom'
 import { notify } from '../utils/notify.js'
 
 const endpoint = 'https://webhook.sistemavieira.com.br/webhook/get-saldos'
@@ -33,7 +32,6 @@ const parseRow = (raw) => {
 }
 
 export default function Recargas() {
-  const { user } = useAuth()
   const [rows, setRows] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -41,6 +39,7 @@ export default function Recargas() {
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isSavingAdd, setIsSavingAdd] = useState(false)
   const [selectedTeamKey, setSelectedTeamKey] = useState('')
   const [addAmount, setAddAmount] = useState('200')
   const [currentPage, setCurrentPage] = useState(1)
@@ -48,32 +47,27 @@ export default function Recargas() {
   const addAmountValue = Number(addAmount)
   const showAboveRecommended = Number.isFinite(addAmountValue) && addAmountValue > 200
 
-  useEffect(() => {
-    let aborted = false
-
-    async function load() {
-      setIsLoading(true)
-      setError(null)
-      try {
-        const res = await fetch(endpoint, { cache: 'no-store' })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
-        if (!aborted) setRows(data.map(parseRow).filter(r => r.id != null))
-      } catch (err) {
-        if (!aborted) {
-          setError(err)
-          setRows([])
-          notify.error(`Falha ao carregar recargas: ${err.message}`)
-        }
-      } finally {
-        if (!aborted) setIsLoading(false)
-      }
+  const fetchRows = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(endpoint, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (!Array.isArray(data)) throw new Error('Resposta invalida da API')
+      setRows(data.map(parseRow).filter(r => r.id != null))
+    } catch (err) {
+      setError(err)
+      setRows([])
+      notify.error(`Falha ao carregar recargas: ${err.message}`)
+    } finally {
+      setIsLoading(false)
     }
-
-    load()
-    return () => { aborted = true }
   }, [])
+
+  useEffect(() => {
+    fetchRows()
+  }, [fetchRows])
 
   const teamOptions = useMemo(() => {
     const map = new Map()
@@ -95,14 +89,19 @@ export default function Recargas() {
   const handleAddRecarga = () => {
     setSelectedTeamKey('')
     setAddAmount('200')
+    setIsSavingAdd(false)
     setIsAddOpen(true)
   }
 
   const handleCloseAdd = () => {
     setIsAddOpen(false)
+    setSelectedTeamKey('')
+    setAddAmount('200')
+    setIsSavingAdd(false)
   }
 
-  const handleSubmitAddRecarga = (event) => {
+
+  const handleSubmitAddRecarga = async (event) => {
     event?.preventDefault?.()
     if (!selectedTeam) {
       notify.error('Selecione uma equipe')
@@ -112,8 +111,31 @@ export default function Recargas() {
       notify.error('Informe uma quantidade valida para a recarga')
       return
     }
-    notify.info(`Envio de recarga para ${selectedTeam.name} ainda nao esta disponivel.`)
-    handleCloseAdd()
+    try {
+      setIsSavingAdd(true)
+      const payload = {
+        equipeNome: selectedTeam.name,
+        equipeId: selectedTeam.id,
+        quantidade: addAmountValue,
+      }
+      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/adc-saldo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!response.ok) {
+        let message = ''
+        try { message = (await response.text())?.trim() ?? '' } catch (_) {}
+        throw new Error(message || `HTTP ${response.status}`)
+      }
+      notify.success('Recarga enviada com sucesso.')
+      handleCloseAdd()
+      await fetchRows()
+    } catch (error) {
+      notify.error(`Falha ao enviar recarga: ${error.message}`)
+    } finally {
+      setIsSavingAdd(false)
+    }
   }
 
   const filtered = useMemo(() => {
@@ -195,7 +217,7 @@ export default function Recargas() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Gestão de Recargas</h2>
+              <h2 className="fw-bold mb-1">Gestao de Recargas</h2>
               <div className="opacity-75 small">Resumo financeiro das equipes</div>
             </div>
           </div>
@@ -225,7 +247,7 @@ export default function Recargas() {
           </div>
           <div className="col-lg-3 col-md-6">
             <div className="neo-card neo-lg p-4 h-100">
-              <div className="small opacity-75 mb-1">Limite Disponível</div>
+              <div className="small opacity-75 mb-1">Limite Disponivel</div>
               <div className="d-flex align-items-center gap-2">
                 <Fi.FiTrendingUp className="opacity-50" />
                 <div className="display-6 fw-bold">{integer(stats.limiteDisponivel)}</div>
@@ -259,7 +281,7 @@ export default function Recargas() {
               <input className="form-control" placeholder="Digite para filtrar..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <div className="col-6 col-md-3">
-              <label className="form-label small opacity-75">Início</label>
+              <label className="form-label small opacity-75">Inicio</label>
               <input type="date" className="form-control" value={inicio} onChange={e => setInicio(e.target.value)} />
             </div>
             <div className="col-6 col-md-3">
@@ -330,7 +352,7 @@ export default function Recargas() {
                     <th style={{ width: 120 }}>Equipe ID</th>
                     <th>Equipe</th>
                     <th>Total Carregado</th>
-                    <th>Limite Disponível</th>
+                    <th>Limite Disponivel</th>
                     <th>Consultas Realizadas</th>
                     <th style={{ width: 180 }}>Data da Recarga</th>
                   </tr>
@@ -359,63 +381,80 @@ export default function Recargas() {
       </main>
       <Footer />
       {isAddOpen && (
-        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Adicionar recarga</h5>
-                <button type="button" className="btn-close" aria-label="Close" onClick={handleCloseAdd}></button>
+        <div
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center"
+          style={{ background: 'rgba(0,0,0,0.6)', zIndex: 1050 }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="modal-dark p-4" style={{ maxWidth: 520, width: '95%' }}>
+            <div className="d-flex align-items-start justify-content-between mb-3">
+              <div>
+                <h5 className="modal-dark-title mb-1">Adicionar Recarga</h5>
+                <div className="small modal-dark-subtitle">Informe os dados da equipe e o valor que deseja adicionar.</div>
               </div>
-              <form onSubmit={handleSubmitAddRecarga}>
-                <div className="modal-body">
-                  <div className="mb-3">
-                    <label className="form-label">Equipe</label>
-                    <select
-                      className="form-select"
-                      value={selectedTeamKey}
-                      onChange={event => setSelectedTeamKey(event.target.value)}
-                      required
-                    >
-                      <option value="">Selecione uma equipe...</option>
-                      {teamOptions.map(option => (
-                        <option key={option.key} value={option.key}>
-                          {option.name}
-                          {option.id != null ? ` (ID ${option.id})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {selectedTeam && (
-                    <div className="mb-3">
-                      <label className="form-label">ID da equipe</label>
-                      <input className="form-control" value={selectedTeam.id ?? '-'} readOnly disabled />
-                    </div>
-                  )}
-                  <div>
-                    <label className="form-label">Quantidade da recarga</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      min="0"
-                      step="1"
-                      value={addAmount}
-                      onChange={event => setAddAmount(event.target.value)}
-                    />
-                    <div className="form-text">Quantidade padrao 200.</div>
-                    {showAboveRecommended && (
-                      <div className="form-text text-primary">Para manter o controle, prefira quantidades abaixo de 200.</div>
-                    )}
-                  </div>
-                </div>
-                <div className="modal-footer d-flex justify-content-end gap-2">
-                  <button type="button" className="btn btn-ghost fw-bold" onClick={handleCloseAdd}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary" disabled={!selectedTeam}>Confirmar</button>
-                </div>
-              </form>
+              <button type="button" className="btn btn-ghost btn-icon text-light" onClick={handleCloseAdd} aria-label="Fechar">
+                <Fi.FiX />
+              </button>
             </div>
+            <form onSubmit={handleSubmitAddRecarga}>
+              <div className="row g-3">
+                <div className="col-12">
+                  <label className="form-label small">Equipe *</label>
+                  <select
+                    className="form-select"
+                    disabled={isSavingAdd}
+                    value={selectedTeamKey}
+                    onChange={event => setSelectedTeamKey(event.target.value)}
+                    required
+                  >
+                    <option value="">Selecione uma equipe...</option>
+                    {teamOptions.map(option => (
+                      <option key={option.key} value={option.key}>
+                        {option.name}
+                        {option.id != null ? ` (ID ${option.id})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedTeam && (
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small">ID da equipe</label>
+                    <input className="form-control" value={selectedTeam.id ?? '-'} readOnly disabled />
+                  </div>
+                )}
+                <div className={selectedTeam ? 'col-12 col-md-6' : 'col-12'}>
+                  <label className="form-label small">Quantidade da recarga *</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    min="0"
+                    step="1"
+                    disabled={isSavingAdd}
+                    value={addAmount}
+                    onChange={event => setAddAmount(event.target.value)}
+                  />
+                  <div className="form-text">Quantidade padrao 200.</div>
+                  {showAboveRecommended && (
+                    <div className="form-text text-primary">Para manter o controle, prefira quantidades abaixo de 200.</div>
+                  )}
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2 mt-4">
+                <button type="button" className="btn btn-ghost fw-bold" onClick={handleCloseAdd} disabled={isSavingAdd}>Cancelar</button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={!selectedTeam || isSavingAdd}
+                >
+                  {isSavingAdd ? 'Enviando...' : 'Confirmar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
     </div>
   )
 }
+

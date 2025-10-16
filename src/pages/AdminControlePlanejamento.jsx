@@ -31,6 +31,8 @@ function Badge({ status }) {
   return <span className={`badge ${cls}`}>{label}</span>
 }
 
+const ROWS_PER_PAGE = 50
+
 export default function AdminControlePlanejamento() {
   const { user } = useAuth()
   const [items, setItems] = useState([])
@@ -65,6 +67,8 @@ export default function AdminControlePlanejamento() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleteItem, setDeleteItem] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isPageAnimating, setIsPageAnimating] = useState(false)
 
   async function load() {
     setIsLoading(true)
@@ -298,6 +302,51 @@ export default function AdminControlePlanejamento() {
     })
   }, [items, search, grupo, status, renovacaoDe, renovacaoAte, vencimentoDe, vencimentoAte])
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, grupo, status, renovacaoDe, renovacaoAte, vencimentoDe, vencimentoAte])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE))
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [totalPages, currentPage])
+
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * ROWS_PER_PAGE
+    return filtered.slice(start, start + ROWS_PER_PAGE)
+  }, [filtered, currentPage])
+
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 1) return []
+    const candidates = new Set([1, totalPages, currentPage])
+    for (let i = currentPage - 2; i <= currentPage + 2; i += 1) {
+      if (i > 1 && i < totalPages) candidates.add(i)
+    }
+    const pages = Array.from(candidates).sort((a, b) => a - b)
+    const result = []
+    for (let i = 0; i < pages.length; i += 1) {
+      const page = pages[i]
+      if (i > 0) {
+        const prev = pages[i - 1]
+        if (page - prev > 1) {
+          result.push({ type: 'ellipsis', key: `ellipsis-${prev}-${page}` })
+        }
+      }
+      result.push({ type: 'page', key: `page-${page}`, page })
+    }
+    return result
+  }, [totalPages, currentPage])
+
+  useEffect(() => {
+    if (filtered.length === 0) return
+    setIsPageAnimating(true)
+    const timer = setTimeout(() => setIsPageAnimating(false), 500)
+    return () => clearTimeout(timer)
+  }, [currentPage, filtered.length])
+
   const stats = useMemo(() => {
     const base = filtered
     const total = base.length
@@ -426,13 +475,56 @@ export default function AdminControlePlanejamento() {
           </div>
         </div>
 
-        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuários</div>
+        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuarios</div>
 
         <div className="neo-card neo-lg p-0">
           {isLoading && (<div className="p-4 text-center opacity-75">Carregando...</div>)}
           {error && (<div className="p-4 alert alert-danger">{String(error)}</div>)}
           {!isLoading && !error && (
-            <div className="table-responsive">
+            <div className={`table-responsive ${isPageAnimating ? 'page-fade' : ''}`}>
+              {totalPages > 1 && (
+                <div className="d-flex justify-content-end px-3 pt-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      title="Pagina anterior"
+                    >
+                      <Fi.FiChevronLeft />
+                    </button>
+                    {paginationItems.map(item => {
+                      if (item.type === 'ellipsis') {
+                        return (
+                          <span key={item.key} className="btn btn-ghost btn-sm disabled" aria-hidden>...</span>
+                        )
+                      }
+                      const isActive = item.page === currentPage
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}`}
+                          onClick={() => setCurrentPage(item.page)}
+                          aria-current={isActive ? 'page' : undefined}
+                        >
+                          {item.page}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      title="Proxima pagina"
+                    >
+                      <Fi.FiChevronRight />
+                    </button>
+                  </div>
+                </div>
+              )}
               <table className="table table-dark table-hover align-middle mb-0">
                 <thead>
                   <tr>
@@ -451,7 +543,7 @@ export default function AdminControlePlanejamento() {
                   {filtered.length === 0 && (
                     <tr><td colSpan={9} className="text-center opacity-75 p-4">Sem registros</td></tr>
                   )}
-                  {filtered.map((i) => (
+                  {paginated.map((i) => (
                     <tr key={i.id}>
                       <td>{i.id}</td>
                       <td>{i.codigo}</td>
