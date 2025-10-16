@@ -118,7 +118,7 @@ export default function Recargas() {
         equipeId: selectedTeam.id,
         quantidade: addAmountValue,
       }
-      const response = await fetch('https://n8n.sistemavieira.com.br/webhook-test/adc-saldo', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/adc-saldo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
