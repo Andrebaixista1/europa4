@@ -62,11 +62,28 @@ export default function AdminControlePlanejamento() {
     const dd = String(d.getDate()).padStart(2,'0')
     return `${yyyy}-${mm}-${dd}`
   }
+  const toDateOnly = (value) => {
+    if (!value) return null
+    if (typeof value === 'string') {
+      const match = value.match(/^(\d{4}-\d{2}-\d{2})/)
+      if (match) return match[1]
+    }
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return null
+      return value.toISOString().slice(0, 10)
+    }
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return null
+    return parsed.toISOString().slice(0, 10)
+  }
+  const formatDateDisplay = (value) => {
+    const str = toDateOnly(value)
+    if (!str) return ''
+    const [yyyy, mm, dd] = str.split('-')
+    return `${dd}/${mm}/${yyyy}`
+  }
   const [addDataCadastro, setAddDataCadastro] = useState(() => ymdLocal(new Date()))
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false)
-  const [showDelete, setShowDelete] = useState(false)
-  const [deleteItem, setDeleteItem] = useState(null)
-  const [isDeleting, setIsDeleting] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [isPageAnimating, setIsPageAnimating] = useState(false)
 
@@ -92,15 +109,8 @@ export default function AdminControlePlanejamento() {
 
   // Calcular quantos vencem (renovacao) hoje
   const renovacoesHoje = useMemo(() => {
-    const today = new Date()
-    const y = today.getFullYear(), m = today.getMonth(), d = today.getDate()
-    const start = new Date(y, m, d, 0, 0, 0, 0).getTime()
-    const end = new Date(y, m, d, 23, 59, 59, 999).getTime()
-    return (items || []).filter(i => {
-      if (!i?.renovacao) return false
-      const t = new Date(i.renovacao).getTime()
-      return t >= start && t <= end
-    }).length
+    const todayKey = new Date().toISOString().slice(0, 10)
+    return (items || []).filter(i => toDateOnly(i?.renovacao) === todayKey).length
   }, [items])
 
   // Opções derivadas para o modal de Adicionar
@@ -221,31 +231,6 @@ export default function AdminControlePlanejamento() {
     }
   }
 
-  function openDeleteModal(item) {
-    setDeleteItem(item || null)
-    setShowDelete(true)
-  }
-
-  function closeDeleteModal() {
-    setShowDelete(false)
-    setDeleteItem(null)
-  }
-
-  async function handleConfirmDelete() {
-    if (!deleteItem) { closeDeleteModal(); return }
-    try {
-      setIsDeleting(true)
-      // Simulação: remove apenas localmente, sem chamar API
-      setItems(prev => (prev || []).filter(it => it.id !== deleteItem.id))
-      notify.success('Usuário excluído (simulação)')
-      closeDeleteModal()
-    } catch (e) {
-      notify.error('Falha ao excluir (simulação)')
-    } finally {
-      setIsDeleting(false)
-    }
-  }
-
   async function handleRenovar(item) {
     if (!item || !item.id) return
     if (user?.role !== 'Master') {
@@ -276,12 +261,11 @@ export default function AdminControlePlanejamento() {
   }, [items])
 
   const filtered = useMemo(() => {
-    const parseDate = (s) => (s ? new Date(s) : null)
-    const inRange = (d, de, ate) => {
-      if (!d) return !(de || ate) ? true : false
-      const t = d.getTime()
-      if (de) { const tde = new Date(de).setHours(0,0,0,0); if (t < tde) return false }
-      if (ate) { const tate = new Date(ate).setHours(23,59,59,999); if (t > tate) return false }
+    const inRange = (rawValue, de, ate) => {
+      const date = toDateOnly(rawValue)
+      if (!date) return !(de || ate)
+      if (de && date < de) return false
+      if (ate && date > ate) return false
       return true
     }
     const q = search.trim().toLowerCase()
@@ -294,10 +278,8 @@ export default function AdminControlePlanejamento() {
       }
       if (gp && (String(it.grupo || '').toLowerCase() !== gp)) return false
       if (st && String(it.status || '').toLowerCase() !== st) return false
-      const ren = parseDate(it.renovacao)
-      if (!inRange(ren, renovacaoDe, renovacaoAte)) return false
-      const ven = parseDate(it.vencimento)
-      if (!inRange(ven, vencimentoDe, vencimentoAte)) return false
+      if (!inRange(it.renovacao, renovacaoDe, renovacaoAte)) return false
+      if (!inRange(it.vencimento, vencimentoDe, vencimentoAte)) return false
       return true
     })
   }, [items, search, grupo, status, renovacaoDe, renovacaoAte, vencimentoDe, vencimentoAte])
@@ -364,8 +346,8 @@ export default function AdminControlePlanejamento() {
       i.login,
       (i.empresa || i.nome || ''),
       (i.grupo || ''),
-      i.renovacao ? new Date(i.renovacao).toLocaleDateString('pt-BR') : '',
-      i.vencimento ? new Date(i.vencimento).toLocaleDateString('pt-BR') : '',
+      formatDateDisplay(i.renovacao),
+      formatDateDisplay(i.vencimento),
       (i.status || '')
     ])
     const lines = [header, ...rows].map(r => r.map(v => String(v).replaceAll('"','""')).map(v => `"${v}"`).join(';'))
@@ -550,8 +532,8 @@ export default function AdminControlePlanejamento() {
                       <td className="text-uppercase">{i.login}</td>
                       <td className="text-uppercase">{i.empresa || i.nome}</td>
                       <td className="text-uppercase">{i.grupo}</td>
-                      <td>{i.renovacao ? new Date(i.renovacao).toLocaleDateString('pt-BR') : '-'}</td>
-                      <td>{i.vencimento ? new Date(i.vencimento).toLocaleDateString('pt-BR') : '-'}</td>
+                      <td>{i.renovacao ? formatDateDisplay(i.renovacao) : '-'}</td>
+                      <td>{i.vencimento ? formatDateDisplay(i.vencimento) : '-'}</td>
                       <td><Badge status={i.status} /></td>
                       <td>
                         <div className="d-flex gap-2">
@@ -560,9 +542,6 @@ export default function AdminControlePlanejamento() {
                           </button>
                           <button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master' || inactivatingId === i.id} title={user?.role === 'Master' ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
                             <Fi.FiUserX />
-                          </button>
-                          <button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master'} title={user?.role === 'Master' ? 'Excluir (teste)' : 'Apenas Master'} aria-label="Excluir" onClick={() => openDeleteModal(i)}>
-                            <Fi.FiTrash2 />
                           </button>
                         </div>
                       </td>
@@ -654,26 +633,6 @@ export default function AdminControlePlanejamento() {
                 }>Adicionar Usuário</button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-      {user?.role === 'Master' && showDelete && (
-        <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
-          <div className="neo-card neo-lg p-4" style={{maxWidth:520, width:'95%'}}>
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <h5 className="mb-0">Confirmar Exclusão</h5>
-              <button className="btn btn-ghost btn-icon" onClick={closeDeleteModal} aria-label="Fechar">
-                <Fi.FiX />
-              </button>
-            </div>
-            <div className="mb-3">
-              Tem certeza que deseja excluir o usuário {deleteItem?.login || deleteItem?.nome || deleteItem?.id}?<br />
-              <span className="opacity-75 small">Ação de teste: não envia para o servidor.</span>
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button className="btn btn-ghost" onClick={closeDeleteModal}>Cancelar</button>
-              <button className="btn btn-danger" onClick={handleConfirmDelete} disabled={isDeleting}>Excluir</button>
-            </div>
           </div>
         </div>
       )}
