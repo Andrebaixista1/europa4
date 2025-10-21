@@ -144,7 +144,7 @@ export default function AcompanhamentoDisparos() {
       
       setCampanhas(Object.values(grouped))
     } catch (e) {
-      setError('Falha ao carregar acompanhamento. Tente novamente mais tarde.')
+      // setError('Falha ao carregar acompanhamento. Tente novamente mais tarde.')
       console.error('Erro ao buscar tracking:', e)
     } finally {
       setLoading(false)
