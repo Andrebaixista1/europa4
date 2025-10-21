@@ -110,13 +110,27 @@ export default function Dashboard() {
             <div className="row g-3">
               <div className="col-md-6 col-lg-4 col-xl-3">
                 <Card title="Controle Planejamento" icon="FiClipboard" accent="primary" to="/admin/controle-planejamento">
-                  Vanguard - Sistema de controle de usuarios.
+                  Vanguard - Sistema de controle de usuários.
                 </Card>
               </div>
               {canSeeCard({ teamIds: [1014], allowMaster: true }) && (
                 <div className="col-md-6 col-lg-4 col-xl-3">
                   <Card title="Status WhatsApp" icon="FiSmartphone" accent="primary" to="/status/whatsapp">
                     Centralize os textos combinados para manter o status oficial atualizado.
+                  </Card>
+                </div>
+              )}
+              {canSeeCard({ teamIds: [1, 1014], allowMaster: true }) && (
+                <div className="col-md-6 col-lg-4 col-xl-3">
+                  <Card title="Múltiplos Disparos" icon="FiSend" accent="primary" to="/disparos/multiplos">
+                    Configure e agende múltiplos disparos em massa para diferentes canais.
+                  </Card>
+                </div>
+              )}
+              {canSeeCard({ teamIds: [1, 1014], allowMaster: true }) && (
+                <div className="col-md-6 col-lg-4 col-xl-3">
+                  <Card title="Acompanhamento de Disparos" icon="FiActivity" accent="primary" to="/disparos/acompanhamento">
+                    Monitore e acompanhe o status de todos os seus disparos agendados.
                   </Card>
                 </div>
               )}
@@ -129,8 +143,8 @@ export default function Dashboard() {
             <h5 className="section-title">Supervisão</h5>
             <div className="row g-3">
               <div className="col-md-6">
-                <Card title="Usuarios" icon="FiUserCheck" accent="primary" to="/usuarios">
-                  Supervisor ve apenas sua propria equipe.
+                <Card title="Usuários" icon="FiUserCheck" accent="primary" to="/usuarios">
+                  Supervisor vê apenas sua própria equipe.
                 </Card>
               </div>
               <div className="col-md-6">
@@ -159,7 +173,7 @@ export default function Dashboard() {
                       </div>
                     ) : visibleItems.length === 0 ? (
                       <div className="col-12">
-                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponivel para sua equipe.</div>
+                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponível para sua equipe.</div>
                       </div>
                     ) : (
                       visibleItems.map((c) => {

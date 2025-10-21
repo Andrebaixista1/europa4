@@ -10,6 +10,8 @@ import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
+import MultiploDisparos from './pages/MultiploDisparos.jsx'
+import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -30,6 +32,14 @@ function App() {
         element={
           <ProtectedRoute teamIds={[1014]}>
             <StatusWhatsapp />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/multiplos-disparos"
+        element={
+          <ProtectedRoute teamIds={[1, 1014]}>
+            <MultiploDisparos />
           </ProtectedRoute>
         }
       />
@@ -86,6 +96,22 @@ function App() {
         element={
           <ProtectedRoute roles={["Master","Administrador","Supervisor","Operador"]}>
             <ConsultaIN100 />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/disparos/multiplos"
+        element={
+          <ProtectedRoute teamIds={[1, 1014]}>
+            <MultiploDisparos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/disparos/acompanhamento"
+        element={
+          <ProtectedRoute teamIds={[1, 1014]}>
+            <AcompanhamentoDisparos />
           </ProtectedRoute>
         }
       />
