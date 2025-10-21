@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import users from '../data/users.json'
-import { normalizeRole } from '../utils/roles.js'
+import { normalizeRole, Roles } from '../utils/roles.js'
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -37,6 +37,46 @@ const resolveClientIp = async () => {
     return cached || '0.0.0.0'
   }
 }
+const normalizePermissionsList = (value) => {
+  if (!value) return []
+  if (Array.isArray(value)) {
+    return value
+      .map(item => (item === null || item === undefined ? '' : String(item).trim()))
+      .filter(Boolean)
+  }
+  return String(value)
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+const deriveRoleFromProfile = (rawRole, level, permissionsList = []) => {
+  const normalizedPermissions = permissionsList.map(permission => {
+    const available = typeof permission.normalize === 'function' ? permission.normalize('NFD') : String(permission)
+    return available.replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+  })
+
+  let resolved = normalizeRole(rawRole, level)
+
+  if (!resolved || resolved === Roles.Master) {
+    const hasManageCapabilities = normalizedPermissions.some(p => p.startsWith('manage:'))
+    const hasAdminView = normalizedPermissions.includes('view:admin')
+    const hasSupervisionView = normalizedPermissions.includes('view:supervision')
+    const hasOperationView = normalizedPermissions.includes('view:operation')
+
+    if (hasAdminView && !hasManageCapabilities) {
+      resolved = Roles.Administrador
+    } else if (hasSupervisionView && !hasAdminView) {
+      resolved = Roles.Supervisor
+    } else if (!resolved && hasOperationView) {
+      resolved = Roles.Operador
+    }
+  }
+
+  return resolved || Roles.Operador
+}
+
+
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -46,12 +86,13 @@ export function AuthProvider({ children }) {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        const normalizedRole = normalizeRole(parsed.role, parsed.level)
+        const permissions = normalizePermissionsList(parsed.permissions ?? parsed.Permissoes)
+        const normalizedRole = deriveRoleFromProfile(parsed.role, parsed.level, permissions)
         const normalizedId = toNumberOrNull(parsed.id) ?? parsed.id
         const normalizedEquipeId = toNumberOrNull(parsed.equipe_id) ?? parsed.equipe_id
-        const fixed = { ...parsed, role: normalizedRole, id: normalizedId, equipe_id: normalizedEquipeId }
+        const fixed = { ...parsed, role: normalizedRole, id: normalizedId, equipe_id: normalizedEquipeId, permissions }
         setUser(fixed)
-        if (fixed.role !== parsed.role || fixed.id !== parsed.id || fixed.equipe_id !== parsed.equipe_id) {
+        if (fixed.role !== parsed.role || fixed.id !== parsed.id || fixed.equipe_id !== parsed.equipe_id || JSON.stringify(fixed.permissions) !== JSON.stringify(parsed.permissions)) {
           localStorage.setItem('ne_auth_user', JSON.stringify(fixed))
         }
       } catch (_) {
@@ -166,19 +207,25 @@ export function AuthProvider({ children }) {
       const normalizedUserId = toNumberOrNull(userId) ?? userId
       const rawEquipeId = userData.equipe_id ?? userData.EquipeId ?? userData.equipeId ?? null
       const normalizedEquipeId = toNumberOrNull(rawEquipeId)
+      const permissions = normalizePermissionsList(userData.permissoes || userData.Permissoes || 'view:operation')
+      const normalizedRole = deriveRoleFromProfile(
+        userData.role || userData.Role,
+        userData.nivel_hierarquia || userData.NivelHierarquia,
+        permissions
+      )
+
       const payload = {
         id: normalizedUserId,
         name: userName,
         login: userLogin,
         email: userData.email || userData.Email || `${userLogin}@novaeuropa.com`,
-        role: normalizeRole(userData.role || userData.Role, userData.nivel_hierarquia || userData.NivelHierarquia),
+        role: normalizedRole,
         level: userData.nivel_hierarquia || userData.NivelHierarquia || 3,
         levelDescription: userData.DescricaoNivel || `Acesso ${userData.role || 'básico'}`,
         lastLogin: userData.data_ultimo_login || userData.DataUltimoLogin,
         blocked: userData.conta_bloqueada || userData.ContaBloqueada || false,
         loginAttempts: userData.tentativas_login || userData.TentativasLogin || 0,
-        permissions: (userData.permissoes || userData.Permissoes || 'view:operation')
-          .split(',').map(p => p.trim()).filter(p => p),
+        permissions,
         status: userData.status_conta || userData.StatusConta || 'VALID',
         loginTime: new Date().toISOString(),
         equipe_nome: (userData.equipe_nome || userData.EquipeNome || userData.team_name || null),

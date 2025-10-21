@@ -35,6 +35,7 @@ const ROWS_PER_PAGE = 50
 
 export default function AdminControlePlanejamento() {
   const { user } = useAuth()
+  const isMaster = (user?.role || '').toLowerCase() === 'master'
   const [items, setItems] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -94,7 +95,7 @@ export default function AdminControlePlanejamento() {
       const res = await fetch('https://n8n.sistemavieira.com.br/webhook/api/getall-vanguard')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      if (!Array.isArray(data)) throw new Error('Resposta invalida da API')
+      if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
       setItems(data)
     } catch (e) {
       console.error('Falha ao carregar Vanguard:', e)
@@ -106,12 +107,6 @@ export default function AdminControlePlanejamento() {
   }
 
   useEffect(() => { load() }, [])
-
-  // Calcular quantos vencem (renovacao) hoje
-  const renovacoesHoje = useMemo(() => {
-    const todayKey = new Date().toISOString().slice(0, 10)
-    return (items || []).filter(i => toDateOnly(i?.renovacao) === todayKey).length
-  }, [items])
 
   // Opções derivadas para o modal de Adicionar
   const agencias = useMemo(() => {
@@ -153,7 +148,7 @@ export default function AdminControlePlanejamento() {
 
   async function handleAddSubmit(e) {
     e?.preventDefault?.()
-    if (user?.role !== 'Master') {
+    if (!isMaster) {
       notify.error('Apenas Master pode adicionar usuários')
       return
     }
@@ -206,7 +201,7 @@ export default function AdminControlePlanejamento() {
 
   async function handleInativar(item) {
     if (!item || !item.id) return
-    if (user?.role !== 'Master') {
+    if (!isMaster) {
       notify.error('Apenas Master pode inativar usuários')
       return
     }
@@ -233,7 +228,7 @@ export default function AdminControlePlanejamento() {
 
   async function handleRenovar(item) {
     if (!item || !item.id) return
-    if (user?.role !== 'Master') {
+    if (!isMaster) {
       notify.error('Apenas Master pode renovar usuários')
       return
     }
@@ -386,13 +381,6 @@ export default function AdminControlePlanejamento() {
           <div className="col-lg-3 col-md-6"><StatCard title="Aguardando" value={stats.aguard} icon={Fi.FiClock} accent="warning" /></div>
         </div>
 
-        {renovacoesHoje > 0 && (
-          <div className="alert alert-primary d-flex align-items-center gap-2" role="alert">
-            <Fi.FiInfo size={18} />
-            <div>Hoje vencem {renovacoesHoje} usuário(s).</div>
-          </div>
-        )}
-
         <div className="neo-card neo-lg p-4 mb-3">
           <div className="row g-2 align-items-end">
             <div className="col-12 col-md-4">
@@ -446,9 +434,9 @@ export default function AdminControlePlanejamento() {
               </button>
               <button
                 className="btn btn-ghost btn-ghost-primary btn-sm"
-                disabled={user?.role !== 'Master'}
-                title={user?.role === 'Master' ? 'Adicionar' : 'Apenas Master'}
-                onClick={() => { if (user?.role === 'Master') { setShowAdd(true) } else { notify.warn('Apenas Master pode adicionar') } }}
+                disabled={!isMaster}
+                title={isMaster ? 'Adicionar' : 'Apenas Master'}
+                onClick={() => { if (isMaster) { setShowAdd(true) } else { notify.warn('Apenas Master pode adicionar') } }}
               >
                 <Fi.FiPlus className="me-1" />
                 <span className="d-none d-sm-inline">Adicionar</span>
@@ -457,7 +445,7 @@ export default function AdminControlePlanejamento() {
           </div>
         </div>
 
-        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuarios</div>
+        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuários</div>
 
         <div className="neo-card neo-lg p-0">
           {isLoading && (<div className="p-4 text-center opacity-75">Carregando...</div>)}
@@ -472,7 +460,7 @@ export default function AdminControlePlanejamento() {
                       className="btn btn-ghost btn-sm"
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      title="Pagina anterior"
+                      title="Página anterior"
                     >
                       <Fi.FiChevronLeft />
                     </button>
@@ -500,7 +488,7 @@ export default function AdminControlePlanejamento() {
                       className="btn btn-ghost btn-sm"
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      title="Proxima pagina"
+                      title="Próxima página"
                     >
                       <Fi.FiChevronRight />
                     </button>
@@ -537,10 +525,10 @@ export default function AdminControlePlanejamento() {
                       <td><Badge status={i.status} /></td>
                       <td>
                         <div className="d-flex gap-2">
-                          <button className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master' || renewingId === i.id} title={user?.role === 'Master' ? 'Renovar' : 'Apenas Master'} aria-label="Renovar" onClick={() => handleRenovar(i)}>
+                          <button className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center" disabled={!isMaster || renewingId === i.id} title={isMaster ? 'Renovar' : 'Apenas Master'} aria-label="Renovar" onClick={() => handleRenovar(i)}>
                             <Fi.FiRotateCcw />
                           </button>
-                          <button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={user?.role !== 'Master' || inactivatingId === i.id} title={user?.role === 'Master' ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
+                          <button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={!isMaster || inactivatingId === i.id} title={isMaster ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
                             <Fi.FiUserX />
                           </button>
                         </div>
@@ -553,7 +541,7 @@ export default function AdminControlePlanejamento() {
           )}
         </div>
       </main>
-      {user?.role === 'Master' && showAdd && (
+      {isMaster && showAdd && (
         <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
           <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
             <div className="d-flex align-items-center justify-content-between mb-2">
@@ -640,4 +628,6 @@ export default function AdminControlePlanejamento() {
     </div>
   )
 }
+
+
 

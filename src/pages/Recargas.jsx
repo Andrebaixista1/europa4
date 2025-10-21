@@ -5,7 +5,6 @@ import * as Fi from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import { notify } from '../utils/notify.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { Roles } from '../utils/roles.js'
 
 const endpoint = 'https://webhook.sistemavieira.com.br/webhook/get-saldos'
 
@@ -47,7 +46,7 @@ export default function Recargas() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const { user } = useAuth()
-  const isMaster = user?.role === Roles.Master
+  const isMaster = (user?.role || '').toLowerCase() === 'master'
 
   const addAmountValue = Number(addAmount)
   const showAboveRecommended = Number.isFinite(addAmountValue) && addAmountValue > 200
@@ -93,7 +92,7 @@ export default function Recargas() {
 
   const handleAddRecarga = () => {
     if (!isMaster) {
-      notify.error('Apenas usuarios Master podem adicionar recargas.')
+      notify.warn('Apenas Master pode adicionar recargas.')
       return
     }
     setSelectedTeamKey('')
@@ -113,7 +112,7 @@ export default function Recargas() {
   const handleSubmitAddRecarga = async (event) => {
     event?.preventDefault?.()
     if (!isMaster) {
-      notify.error('Apenas usuarios Master podem adicionar recargas.')
+      notify.error('Apenas Master pode adicionar recargas.')
       return
     }
     if (!selectedTeam) {
@@ -234,20 +233,19 @@ export default function Recargas() {
               <div className="opacity-75 small">Resumo financeiro das equipes</div>
             </div>
           </div>
-          {isMaster && (
-            <div className="d-flex align-items-center">
-              <button
-                type="button"
-                className="btn btn-primary d-flex align-items-center gap-2"
-                onClick={handleAddRecarga}
-                title="Adicionar nova recarga"
-              >
-                <Fi.FiPlus size={16} />
-                <span className="d-none d-sm-inline">Adicionar Recarga</span>
-                <span className="d-sm-none">Nova</span>
-              </button>
-            </div>
-          )}
+          <div className="d-flex align-items-center">
+            <button
+              type="button"
+              className="btn btn-primary d-flex align-items-center gap-2"
+              disabled={!isMaster}
+              title={isMaster ? 'Adicionar nova recarga' : 'Apenas Master'}
+              onClick={() => { if (isMaster) { handleAddRecarga() } else { notify.warn('Apenas Master pode adicionar recargas') } }}
+            >
+              <Fi.FiPlus size={16} />
+              <span className="d-none d-sm-inline">Adicionar Recarga</span>
+              <span className="d-sm-none">Nova</span>
+            </button>
+          </div>
         </div>
 
         <div className="row g-3 mb-4">
@@ -472,4 +470,3 @@ export default function Recargas() {
     </div>
   )
 }
-
