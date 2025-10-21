@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+﻿import { Routes, Route, Navigate } from 'react-router-dom'
 import Landing from './pages/Landing.jsx'
 import Login from './pages/Login2.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -9,6 +9,7 @@ import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
+import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -21,6 +22,14 @@ function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/status/whatsapp"
+        element={
+          <ProtectedRoute teamIds={[1014]}>
+            <StatusWhatsapp />
           </ProtectedRoute>
         }
       />

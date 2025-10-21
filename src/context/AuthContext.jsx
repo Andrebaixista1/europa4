@@ -58,7 +58,7 @@ const deriveRoleFromProfile = (rawRole, level, permissionsList = []) => {
 
   let resolved = normalizeRole(rawRole, level)
 
-  if (!resolved || resolved === Roles.Master) {
+  if (!resolved) {
     const hasManageCapabilities = normalizedPermissions.some(p => p.startsWith('manage:'))
     const hasAdminView = normalizedPermissions.includes('view:admin')
     const hasSupervisionView = normalizedPermissions.includes('view:supervision')

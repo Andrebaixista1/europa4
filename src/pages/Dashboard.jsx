@@ -46,19 +46,39 @@ function Card({ title, icon, children, accent = 'primary', muted = false, to, on
   }
 
   return (
-    <div className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}
-         onClick={onClick}
-         role={onClick ? 'button' : undefined}
-         style={onClick ? { cursor: 'pointer' } : undefined}>
+    <div
+      className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      style={onClick ? { cursor: 'pointer' } : undefined}
+    >
       {body}
     </div>
   )
+}
+
+const allowedCategories = new Set(['Consultas', 'Em Desenvolvimento'])
+
+const toNumberOrNull = (value) => {
+  const parsed = Number(value)
+  return Number.isNaN(parsed) ? null : parsed
 }
 
 export default function Dashboard() {
   const { user } = useAuth()
   const role = user?.role ?? 'Operador'
   const isMaster = role === 'Master'
+  const userTeamId = toNumberOrNull(user?.equipe_id)
+
+  const canSeeCard = (card) => {
+    if (Array.isArray(card?.teamIds) && card.teamIds.length > 0) {
+      const allowMaster = card.allowMaster !== false
+      if (allowMaster && isMaster) return true
+      if (userTeamId === null) return false
+      return card.teamIds.some((teamId) => toNumberOrNull(teamId) === userTeamId)
+    }
+    return true
+  }
 
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
@@ -76,7 +96,9 @@ export default function Dashboard() {
             <h5 className="section-title">Master</h5>
             <div className="row g-3">
               <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Gestão de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">Gerencie e acompanhe as recargas da equipe.</Card>
+                <Card title="Gestão de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">
+                  Gerencie e acompanhe as recargas da equipe.
+                </Card>
               </div>
             </div>
           </section>
@@ -91,6 +113,13 @@ export default function Dashboard() {
                   Vanguard - Sistema de controle de usuarios.
                 </Card>
               </div>
+              {canSeeCard({ teamIds: [1014], allowMaster: true }) && (
+                <div className="col-md-6 col-lg-4 col-xl-3">
+                  <Card title="Status WhatsApp" icon="FiSmartphone" accent="primary" to="/status/whatsapp">
+                    Centralize os textos combinados para manter o status oficial atualizado.
+                  </Card>
+                </div>
+              )}
             </div>
           </section>
         </Can>
@@ -100,10 +129,14 @@ export default function Dashboard() {
             <h5 className="section-title">Supervisão</h5>
             <div className="row g-3">
               <div className="col-md-6">
-                <Card title="Usuarios" icon="FiUserCheck" accent="primary" to="/usuarios">Supervisor ve apenas sua propria equipe.</Card>
+                <Card title="Usuarios" icon="FiUserCheck" accent="primary" to="/usuarios">
+                  Supervisor ve apenas sua propria equipe.
+                </Card>
               </div>
               <div className="col-md-6">
-                <Card title="Equipes" icon="FiGrid" accent="info" to="/equipes">Estruture e visualize sua equipe.</Card>
+                <Card title="Equipes" icon="FiGrid" accent="info" to="/equipes">
+                  Estruture e visualize sua equipe.
+                </Card>
               </div>
             </div>
           </section>
@@ -111,23 +144,31 @@ export default function Dashboard() {
 
         <Can permission="view:operation">
           {Object.entries(cardsData)
-            .filter(([categoria]) => categoria === 'Consultas' || categoria === 'Em Desenvolvimento')
-            .map(([categoria, itens]) => (
-              <section className="mb-4" key={categoria}>
-                <h5 className="section-title">{categoria}</h5>
-                <div className="row g-3">
-                  {itens.length === 0 ? (
-                    <div className="col-12">
-                      <div className="neo-card neo-lg p-4 text-center opacity-75">Sem Cards Cadastrados</div>
-                    </div>
-                  ) : (
-                    itens.map((c) => (
-                      <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
-                        {(() => {
-                          const isDev = (categoria === 'Em Desenvolvimento')
-                          const computedTo = isDev ? (isMaster ? c.route : undefined) : c.route
-                          const onClick = (!isMaster && isDev) ? () => notify.info('Em desenvolvimento') : undefined
-                          return (
+            .filter(([categoria]) => allowedCategories.has(categoria))
+            .map(([categoria, itens]) => {
+              const visibleItems = itens.filter((card) => canSeeCard(card))
+              const hasCatalog = itens.length > 0
+
+              return (
+                <section className="mb-4" key={categoria}>
+                  <h5 className="section-title">{categoria}</h5>
+                  <div className="row g-3">
+                    {!hasCatalog ? (
+                      <div className="col-12">
+                        <div className="neo-card neo-lg p-4 text-center opacity-75">Sem cards cadastrados.</div>
+                      </div>
+                    ) : visibleItems.length === 0 ? (
+                      <div className="col-12">
+                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponivel para sua equipe.</div>
+                      </div>
+                    ) : (
+                      visibleItems.map((c) => {
+                        const isDev = categoria === 'Em Desenvolvimento'
+                        const computedTo = isDev ? (isMaster ? c.route : undefined) : c.route
+                        const onClick = !isMaster && isDev ? () => notify.info('Em desenvolvimento') : undefined
+
+                        return (
+                          <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
                             <Card
                               title={c.title}
                               icon={c.icon}
@@ -138,17 +179,19 @@ export default function Dashboard() {
                             >
                               {c.description || null}
                             </Card>
-                          )
-                        })()}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </section>
-            ))}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                </section>
+              )
+            })}
         </Can>
       </main>
       <Footer />
     </div>
   )
 }
+
+
