@@ -12,9 +12,9 @@ export const novidadesList = [
   },
   {
     data: '23/10/2025',
-    titulo: 'Fim do Nova Europa 3.0',
+    titulo: 'Fim do Nova Europa 3.8',
     descricao:
-      'O Europa 3.0 será descontinuado. Todas as equipes devem migrar para o Europa 4.0 o quanto antes para continuar usufruindo dos benefícios do sistema. Essa migração será feita a partir de Janeiro de 2026.',
+      'O Europa 3.8 será descontinuado. Todas as equipes devem migrar para o Europa 4.0 o quanto antes para continuar usufruindo dos benefícios do sistema. Essa migração será feita a partir de Janeiro de 2026.',
   },
   {
     data: '21/10/2025',
