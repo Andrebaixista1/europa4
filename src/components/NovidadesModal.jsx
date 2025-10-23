@@ -6,6 +6,12 @@ import '../styles/novidades-modal.css'
 export const novidadesList = [
   {
     data: '23/10/2025',
+    titulo: 'Gestão de usuários expandida',
+    descricao:
+      'Supervisores e Administradores agora podem adicionar novos usuários diretamente em suas equipes, facilitando o gerenciamento de membros.',
+  },
+  {
+    data: '23/10/2025',
     titulo: 'Fim do Nova Europa 3.0',
     descricao:
       'O Europa 3.0 será descontinuado. Todas as equipes devem migrar para o Europa 4.0 o quanto antes para continuar usufruindo dos benefícios do sistema. Essa migração será feita a partir de Janeiro de 2026.',

@@ -21,12 +21,17 @@ export default function TopNav() {
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
 
-  // Abre o modal de novidades automaticamente ao entrar no dashboard
+  // Abre o modal de novidades automaticamente após o login (quando o user muda de null para objeto)
   useEffect(() => {
-    if (isDashboard) {
-      setIsNovidadesModalOpen(true)
+    if (user && isDashboard) {
+      const loginTime = user.loginTime
+      const now = new Date().toISOString()
+      // Se o login foi feito há menos de 2 segundos, mostra o modal
+      if (loginTime && (new Date(now) - new Date(loginTime)) < 2000) {
+        setIsNovidadesModalOpen(true)
+      }
     }
-  }, [isDashboard])
+  }, [user, isDashboard])
 
   const resetPasswordState = () => {
     setCurrentPassword('')
