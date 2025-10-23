@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
-
 export default function Usuarios() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -47,13 +46,11 @@ export default function Usuarios() {
   const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [transferUser, setTransferUser] = useState(null)
   const [transferNewEquipeId, setTransferNewEquipeId] = useState('')
-
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
     const num = Number(value)
     return Number.isNaN(num) ? null : num
   }
-
   useEffect(() => {
     let aborted = false
     async function load() {
@@ -67,7 +64,6 @@ export default function Usuarios() {
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-
         const unwrap = (d) => {
           if (Array.isArray(d) && d.length > 0 && d[0] && typeof d[0] === 'object') {
             const key = Object.keys(d[0]).find(k => k.toUpperCase().startsWith('JSON_'))
@@ -77,7 +73,6 @@ export default function Usuarios() {
           }
           return d
         }
-
         const payload = unwrap(data)
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? null,
@@ -88,13 +83,11 @@ export default function Usuarios() {
           login: u?.login ?? u?.username ?? '',
           ativo: (u?.ativo ?? u?.active ?? true) ? true : false,
         })
-
         let arr = []
         if (Array.isArray(payload?.usuarios)) arr = payload.usuarios.map(mapUser)
         else if (Array.isArray(payload?.users)) arr = payload.users.map(mapUser)
         else if (Array.isArray(payload?.equipes)) arr = payload.equipes.flatMap(eq => (eq.membros || [])).map(mapUser)
         else if (Array.isArray(payload)) arr = payload.map(mapUser)
-
         if (!arr.length) throw new Error('Resposta vazia da API')
         if (!aborted) {
           setUsuarios(arr)
@@ -132,7 +125,6 @@ export default function Usuarios() {
     load()
     return () => { aborted = true }
   }, [user?.id])
-
   const baseUsuarios = useMemo(() => {
     const isAdminRole = ['master', 'administrador'].includes((user?.role || '').toLowerCase())
     const isMasterTeam = (user?.equipe_nome || '').toLowerCase() === 'master'
@@ -140,7 +132,6 @@ export default function Usuarios() {
     if (user?.equipe_id != null) return usuarios.filter(u => u.equipe_id === user.equipe_id)
     return usuarios
   }, [usuarios, user])
-
   const filtered = useMemo(() => {
     let list = baseUsuarios
     
@@ -181,13 +172,10 @@ export default function Usuarios() {
     
     return list
   }, [baseUsuarios, search, filterTipo, filterNome, filterEquipeId, filterStatus])
-
   const selected = useMemo(() => filtered.find(u => u.id === selectedId) || null, [filtered, selectedId])
-
   useEffect(() => {
     if (!filtered.some(u => u.id === selectedId)) setSelectedId(filtered[0]?.id ?? null)
   }, [filtered, selectedId])
-
   const isSuperUser = (user?.role === 'Master') || ((user?.equipe_nome || '').toLowerCase() === 'master')
   const isSupervisor = user?.role === 'Supervisor'
   const isAdminRole = (user?.role || '').toLowerCase() === 'administrador'
@@ -205,12 +193,10 @@ export default function Usuarios() {
   const canDeleteUser = (target) => canManageAll && (target?.id !== user?.id)
   const canToggleUser = (target) => canEditUser(target) && (target?.id !== user?.id)
   const canChangePasswordFor = (target) => canEditUser(target)
-
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
     return found ? found.nome : (id != null ? `Equipe ${id}` : 'â€”')
   }
-
   function toLoginFromName(nome) {
     const s = (nome || '')
       .normalize('NFD')
@@ -220,7 +206,6 @@ export default function Usuarios() {
       .toLowerCase()
     return s.replace(/\s+/g, '')
   }
-
   // Atualizar login automaticamente baseado no nome
   const handleNomeChange = (nome) => {
     const upper = (nome || '').toUpperCase()
@@ -230,7 +215,6 @@ export default function Usuarios() {
       setFormLogin(toLoginFromName(upper))
     }
   }
-
   // FunÃ§Ã£o para abrir modal de adicionar UsuÃ¡rio
   const handleOpenAddModal = () => {
     if (!canAdd) return
@@ -238,7 +222,10 @@ export default function Usuarios() {
     setFormNome('')
     setFormLogin('')
     setFormSenha('')
-    setFormTipo('Operador')
+    // Definir tipo padrão conforme papel de quem está criando
+    if (isSupervisor) setFormTipo('Operador')
+    else if (isAdminRole) setFormTipo('Administrador')
+    else setFormTipo('Operador')
     
     // Para supervisores/administradores, definir automaticamente a equipe
     if ((isSupervisor || isAdminRole) && user?.equipe_id) {
@@ -249,7 +236,6 @@ export default function Usuarios() {
     
     setIsAddOpen(true)
   }
-
   const openPasswordModal = (targetUser) => {
     if (!canChangePasswordFor(targetUser)) return
     if (!targetUser) return
@@ -261,7 +247,6 @@ export default function Usuarios() {
     setShowCurrentPassword(false)
     setIsPasswordModalOpen(true)
   }
-
   const openTransferModal = (targetUser) => {
     if (!canTransferUser(targetUser)) return
     if (!targetUser) return
@@ -271,13 +256,11 @@ export default function Usuarios() {
     setTransferNewEquipeId(firstDifferent !== undefined ? String(firstDifferent) : '')
     setIsTransferOpen(true)
   }
-
   const closeTransferModal = () => {
     setIsTransferOpen(false)
     setTransferUser(null)
     setTransferNewEquipeId('')
   }
-
   const handleConfirmTransfer = async (e) => {
     e?.preventDefault?.()
     if (!canTransferUser(transferUser)) return
@@ -312,7 +295,6 @@ export default function Usuarios() {
       notify.error(`Erro ao transferir: ${err.message}`)
     }
   }
-
   const closePasswordModal = () => {
     setIsPasswordModalOpen(false)
     setPasswordUser(null)
@@ -323,7 +305,6 @@ export default function Usuarios() {
     setShowCurrentPassword(false)
     setIsChangingPassword(false)
   }
-
   const handleGeneratePassword = () => {
     const length = Math.floor(Math.random() * 3) + 6
     let generated = ''
@@ -334,37 +315,30 @@ export default function Usuarios() {
     setPasswordConfirm(generated)
     setShowNewPassword(true)
   }
-
   const handlePasswordSubmit = async (event) => {
     event.preventDefault()
     if (!canChangePasswordFor(passwordUser)) return
     const senhaAtual = passwordCurrent.trim()
     const senha = passwordValue.trim()
     const confirmacao = passwordConfirm.trim()
-
     if (!senhaAtual || !senha || !confirmacao) {
       notify.warn('Preencha todos os campos obrigatÃ³rios')
       return
     }
-
     if (senha.length < 4) {
       notify.warn('A senha deve ter pelo menos 4 caracteres')
       return
     }
-
     if (senha !== confirmacao) {
       notify.warn('As senhas nÃ£o coincidem')
       return
     }
-
     const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
     if (userId == null) {
       notify.error('Selecione um usuÃ¡rio vÃ¡lido')
       return
     }
-
     setIsChangingPassword(true)
-
     try {
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-pass', {
         method: 'POST',
@@ -378,13 +352,11 @@ export default function Usuarios() {
           confirmacao
         })
       })
-
       const rawBody = await response.text()
       if (!response.ok) {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-
       const trimmedBody = (rawBody || '').trim()
       const normalizedBody = trimmedBody.toLowerCase()
       if (!trimmedBody || trimmedBody === '{}' || trimmedBody === '[]' || normalizedBody === 'null' || normalizedBody === 'undefined') {
@@ -393,7 +365,6 @@ export default function Usuarios() {
         notify.error(message)
         return
       }
-
       let successMessage = 'Senha atualizada com sucesso.'
       try {
         const parsed = JSON.parse(trimmedBody)
@@ -410,7 +381,6 @@ export default function Usuarios() {
         console.log('Senha alterada via API (texto):', trimmedBody)
         successMessage = trimmedBody
       }
-
       notify.success(successMessage)
       closePasswordModal()
     } catch (error) {
@@ -420,7 +390,6 @@ export default function Usuarios() {
       setIsChangingPassword(false)
     }
   }
-
   const roleToOption = (role) => {
     switch ((role || '').toLowerCase()) {
       case 'master':
@@ -435,7 +404,6 @@ export default function Usuarios() {
         return 'Operador'
     }
   }
-
   const optionToRole = (option) => {
     const value = (option || '').toLowerCase()
     switch (value) {
@@ -451,7 +419,6 @@ export default function Usuarios() {
         return option || 'Operador'
     }
   }
-
   const openEditModal = (targetUser) => {
     if (!canEditUser(targetUser)) return
     if (!targetUser) return
@@ -462,7 +429,6 @@ export default function Usuarios() {
     setEditStatusAtivo(targetUser.ativo !== false)
     setIsEditModalOpen(true)
   }
-
   const closeEditModal = () => {
     setIsEditModalOpen(false)
     setEditUser(null)
@@ -472,7 +438,6 @@ export default function Usuarios() {
     setEditStatusAtivo(true)
     setIsSavingEdit(false)
   }
-
   const handleEditSubmit = async (event) => {
     if (!canEditUser(editUser)) { notify.warn('Você só pode alterar usuários da sua equipe.'); return }
     event.preventDefault()
@@ -480,19 +445,15 @@ export default function Usuarios() {
     const login = editLogin.trim()
     const roleOption = optionToRole(editTipo)
     const userId = normalizeId(editUser?.id ?? null) ?? editUser?.id ?? null
-
     if (!userId) {
       notify.error('Selecione um usuÃ¡rio vÃ¡lido')
       return
     }
-
     if (!nome || !login) {
       notify.warn('Preencha todos os campos obrigatÃ³rios')
       return
     }
-
     setIsSavingEdit(true)
-
     try {
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-user', {
         method: 'POST',
@@ -508,13 +469,11 @@ export default function Usuarios() {
           status: editStatusAtivo ? 'Ativo' : 'Inativo'
         })
       })
-
       const rawBody = await response.text()
       if (!response.ok) {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-
       let successMessage = 'UsuÃ¡rio atualizado com sucesso.'
       if (rawBody) {
         try {
@@ -527,7 +486,6 @@ export default function Usuarios() {
           if (rawBody.trim()) successMessage = rawBody.trim()
         }
       }
-
       const nomeUpper = nome.toUpperCase()
       const loginLower = login.toLowerCase()
       setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, nome: nomeUpper, login: loginLower, role: roleOption, ativo: editStatusAtivo } : u))
@@ -541,7 +499,6 @@ export default function Usuarios() {
       setIsSavingEdit(false)
     }
   }
-
   async function handleAddSubmit(e) {
     if (!canAdd) return
     e.preventDefault()
@@ -557,14 +514,13 @@ export default function Usuarios() {
       notify.warn('Preencha todos os campos obrigatÃ³rios')
       return
     }
-
     if (senha.length < 4) {
       notify.warn('A senha deve ter pelo menos 4 caracteres')
       return
     }
     
     const tipoSel = (formTipo || 'Operador').trim()
-    const roleOut = tipoSel
+    const roleOut = isAdminRole ? 'Administrador' : tipoSel
     const equipeId = (isSupervisor || isAdminRole) ? (user?.equipe_id ?? formEquipeId) : formEquipeId
     
     console.log('Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
@@ -573,7 +529,6 @@ export default function Usuarios() {
       notify.warn('Selecione uma equipe')
       return
     }
-
     setIsSaving(true)
     
     try {
@@ -595,15 +550,12 @@ export default function Usuarios() {
           criado_por: user?.id || 1
         })
       })
-
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(`Erro ${response.status}: ${errorText}`)
       }
-
       const result = await response.json()
       console.log('UsuÃ¡rio criado via API:', result)
-
       // Criar objeto local para atualizar a lista
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
       const novo = {
@@ -635,15 +587,12 @@ export default function Usuarios() {
       setIsSaving(false)
     }
   }
-
   async function handleDeleteUser(targetId) {
     const targetUser = usuarios.find(u => u.id === targetId)
     if (!canDeleteUser(targetUser)) return
     if (targetId === user?.id) return
-
     setDeletingId(targetId)
     setPendingDelete(null)
-
     try {
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/delete-user', {
         method: 'POST',
@@ -652,13 +601,11 @@ export default function Usuarios() {
         },
         body: JSON.stringify({ id: targetId })
       })
-
       const rawBody = await response.text()
       if (!response.ok) {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-
       if (rawBody) {
         try {
           console.log('UsuÃ¡rio removido via API:', JSON.parse(rawBody))
@@ -666,20 +613,17 @@ export default function Usuarios() {
           console.log('UsuÃ¡rio removido via API (texto):', rawBody)
         }
       }
-
       const removedUser = usuarios.find(u => u.id === targetId)
       setUsuarios(prev => {
         const next = prev.filter(u => u.id !== targetId)
         setSelectedId(current => (current === targetId ? next[0]?.id ?? null : current))
         return next
       })
-
       if (removedUser?.nome) {
         notify.success(`UsuÃ¡rio "${removedUser.nome}" excluÃ­do.`)
       } else {
         notify.success('UsuÃ¡rio excluÃ­do.')
       }
-
     } catch (error) {
       console.error('Erro ao excluir UsuÃ¡rio:', error)
       notify.error(`Erro ao excluir UsuÃ¡rio: ${error.message}`)
@@ -687,25 +631,20 @@ export default function Usuarios() {
       setDeletingId(null)
     }
   }
-
   const handleToggleStatus = async (targetUser) => {
     if (!canToggleUser(targetUser)) return
     if (!targetUser) return
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
-
     if (targetId == null) {
       notify.error('NÃ£o foi possÃ­vel identificar o UsuÃ¡rio.')
       return
     }
-
     if (targetId === user?.id) {
       notify.warn('VocÃª nÃ£o pode alterar o seu prÃ³prio status.')
       return
     }
-
     const nextActive = !targetUser.ativo
     setTogglingId(targetId)
-
     try {
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-status', {
         method: 'POST',
@@ -718,13 +657,11 @@ export default function Usuarios() {
           status: nextActive ? 'Ativo' : 'Inativo'
         })
       })
-
       const rawBody = await response.text()
       if (!response.ok) {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-
       let successMessage = nextActive ? 'usuÃ¡rio ativado.' : 'usuÃ¡rio desativado.'
       if (rawBody) {
         try {
@@ -737,7 +674,6 @@ export default function Usuarios() {
           if (rawBody.trim()) successMessage = rawBody.trim()
         }
       }
-
       setUsuarios(prev => prev.map(u => (
         u.id === targetId ? { ...u, ativo: nextActive } : u
       )))
@@ -749,7 +685,6 @@ export default function Usuarios() {
       setTogglingId(null)
     }
   }
-
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column">
       <TopNav />
@@ -766,7 +701,6 @@ export default function Usuarios() {
             </div>
           </div>
         </div>
-
         <div className="row g-3">
           <div className="col-12 col-lg-5">
             <div className="neo-card neo-lg p-4 h-100">
@@ -842,7 +776,6 @@ export default function Usuarios() {
               {!error && (<div className="small mt-3 opacity-50">Dados carregados da API.</div>)}
             </div>
           </div>
-
           <div className="col-12 col-lg-7">
             <div className="neo-card neo-lg p-4 h-100">
               {!selected ? (
@@ -870,7 +803,6 @@ export default function Usuarios() {
                       </button>
                     </div>
                   </div>
-
                   <div className="row g-3">
                     <div className="col-md-6">
                       <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
@@ -901,7 +833,6 @@ export default function Usuarios() {
                       </div>
                     </div>
                   </div>
-
                 </>
               )}
               {/* <div className="small mt-3 opacity-75">IntegraAAo com: https://webhook.sistemavieira.com.br/webhook/add-user</div> */}
@@ -910,7 +841,6 @@ export default function Usuarios() {
         </div>
       </main>
       <Footer />
-
       {isTransferOpen && transferUser && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
@@ -955,7 +885,6 @@ export default function Usuarios() {
           </div>
         </div>
       )}
-
       {isAddOpen && (
   <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
     <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
@@ -978,13 +907,14 @@ export default function Usuarios() {
           </div>
           <div className="col-12">
             <label className="form-label">Tipo</label>
-            <select className="form-select" value={formTipo} onChange={(e) => setFormTipo(e.target.value)} disabled={isSupervisor || isSaving}>
+            <select className="form-select" value={formTipo} onChange={(e) => setFormTipo(e.target.value)} disabled={(isSupervisor || isAdminRole) || isSaving}>
               <option>Master</option>
               <option>Administrador</option>
               <option>Supervisor</option>
               <option>Operador</option>
             </select>
-            {isSupervisor && <div className="form-text">Como supervisor(a), vocÃª sÃ³ pode criar operadores</div>}
+            {isSupervisor && <div className="form-text">Como supervisor(a), você só pode criar operadores</div>}
+            {isAdminRole && <div className="form-text">Como administrador(a), você só pode criar usuários Administradores</div>}
           </div>
           <div className="col-12">
             <label className="form-label">Senha *</label>
@@ -996,7 +926,6 @@ export default function Usuarios() {
               <option value="" disabled>Selecione uma equipe...</option>
               {(equipesLista || []).map(eq => (<option key={eq.id} value={eq.id}>{eq.nome}</option>))}
             </select>
-            {(isSupervisor || isAdminRole) && <div className="form-text">Como supervisor(a) ou administrador(a), você só pode criar usuários na sua equipe</div>}
           </div>
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4">
@@ -1062,7 +991,6 @@ export default function Usuarios() {
           </div>
         </div>
       )}
-
       {isPasswordModalOpen && passwordUser && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
@@ -1152,7 +1080,6 @@ export default function Usuarios() {
           </div>
         </div>
       )}
-
       {pendingDelete && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
@@ -1182,12 +1109,6 @@ export default function Usuarios() {
           </div>
         </div>
       )}
-
     </div>
   )
 }
-
-
-
-
-
