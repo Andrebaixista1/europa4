@@ -352,7 +352,7 @@ export default function ConsultaIN100() {
         try { setBancoInfo(await fetchBanco(mappedOff.banco_desembolso)) } catch { setBancoInfo(null) }
       }
       loader.end()
-      notify.success('Consulta concluída', { autoClose: 15000 }); if (document.hidden) playNotifyBeep(1200)
+      notify.success('Consulta concluída', { autoClose: 15000 })
       return
     } catch (err) {
       loader.end()

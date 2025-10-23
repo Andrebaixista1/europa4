@@ -121,6 +121,17 @@
   text-align: center;
 }
 
+/* Espaçamento e alinhamento para ícones na área do rodapé */
+.novidades-footer svg {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* Cor do foguete no rodapé */
+.novidades-footer .icon-rocket {
+  color: #2563eb; /* azul do tema */
+}
+
 @media (max-width: 480px) {
   .novidades-modal {
     border-radius: 16px;

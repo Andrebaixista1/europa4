@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "ask": [
+      "Read(!C:\\Users\\andrb\\OneDrive\\Documentos\\NovaEuropa4/**)",
+      "Edit(!C:\\Users\\andrb\\OneDrive\\Documentos\\NovaEuropa4/**)"
+    ],
+    "allow": [
+      "Read(C:\\Users\\andrb\\OneDrive\\Documentos\\NovaEuropa4/**)",
+      "Edit(C:\\Users\\andrb\\OneDrive\\Documentos\\NovaEuropa4/**)"
+    ]
+  },
+  "memoryImport": {},
+  "monitoring": {}
+}

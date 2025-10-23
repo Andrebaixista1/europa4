@@ -1,11 +1,11 @@
 ﻿﻿import { Link, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
 import NovidadesModal from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
-import { FiStar, FiKey, FiEye, FiEyeOff } from 'react-icons/fi'
+import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2 } from 'react-icons/fi'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -20,6 +20,13 @@ export default function TopNav() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+
+  // Abre o modal de novidades automaticamente ao entrar no dashboard
+  useEffect(() => {
+    if (isDashboard) {
+      setIsNovidadesModalOpen(true)
+    }
+  }, [isDashboard])
 
   const resetPasswordState = () => {
     setCurrentPassword('')

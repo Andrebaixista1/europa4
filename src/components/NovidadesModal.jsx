@@ -1,38 +1,49 @@
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Sparkles, X, Calendar } from 'lucide-react'
+import { Sparkles, X, Calendar, Rocket } from 'lucide-react'
 import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '23/10/2025',
+    titulo: 'Fim do Nova Europa 3.0',
+    descricao:
+      'O Europa 3.0 será descontinuado. Todas as equipes devem migrar para o Europa 4.0 o quanto antes para continuar usufruindo dos benefícios do sistema. Essa migração será feita a partir de Janeiro de 2026.',
+  },
+  {
+    data: '21/10/2025',
+    titulo: 'Correção no acompanhamento de disparos',
+    descricao: 'Removido erro que aparecia quando não havia campanhas disponíveis.',
+  },
+  {
     data: '14/10/2025',
-    titulo: 'Gestao de saldos e recargas',
-    descricao: 'Adicionado novo card para gestao de saldos e recargas.',
+    titulo: 'Gestão de saldos e recargas',
+    descricao: 'Adicionado novo card para gestão de saldos e recargas.',
   },
   {
     data: '14/10/2025',
     titulo: 'Cards inteligentes',
-    descricao: 'Cards alinhados com a sua hierarquia para exibir apenas o que e relevante.',
+    descricao: 'Cards alinhados com a sua hierarquia para exibir apenas o que é relevante.',
   },
   {
     data: '14/10/2025',
     titulo: 'Sistema de hierarquias',
-    descricao: 'Cada usuario conta com niveis de acesso personalizados.',
+    descricao: 'Cada usuário conta com níveis de acesso personalizados.',
   },
   {
     data: '06/10/2025',
-    titulo: 'Estrutura de autenticacao renovada',
-    descricao: 'Login redesenhado com foco em seguranca e performance.',
+    titulo: 'Estrutura de autenticação renovada',
+    descricao: 'Login redesenhado com foco em segurança e performance.',
   },
   {
     data: '06/10/2025',
     titulo: 'Dashboard Master atualizado',
-    descricao: 'Interface aprimorada com novos controles e funcoes.',
+    descricao: 'Interface aprimorada com novos controles e funções.',
   },
   {
     data: '06/10/2025',
-    titulo: 'Correcoes de bugs',
-    descricao: 'Diversos ajustes para manter o sistema estavel.',
+    titulo: 'Correções de bugs',
+    descricao: 'Diversos ajustes para manter o sistema estável.',
   },
 ]
 
@@ -66,7 +77,7 @@ function NovidadesModal({ isOpen, onClose }) {
                 <Sparkles size={24} />
               </div>
               <h2>Novidades</h2>
-              <p>Fique por dentro das ultimas atualizacoes da plataforma.</p>
+              <p>Fique por dentro das últimas atualizações da plataforma.</p>
               <button
                 type="button"
                 className="novidades-close"
@@ -99,7 +110,7 @@ function NovidadesModal({ isOpen, onClose }) {
             </div>
 
             <footer className="novidades-footer">
-              Mais novidades em breve! [rocket]
+              Mais novidades em breve! <Rocket size={14} className="icon-rocket" />
             </footer>
           </motion.div>
         </motion.div>

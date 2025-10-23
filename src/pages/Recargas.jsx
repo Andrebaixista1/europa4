@@ -24,7 +24,7 @@ const parseRow = (raw) => {
   return {
     id: raw?.saldo_id ?? raw?.id ?? null,
     equipeId: raw?.equipe_id ?? null,
-    equipeNome: raw?.equipe_nome || 'Equipe Excluida',
+    equipeNome: raw?.equipe_nome || 'Equipe Excluída',
     total,
     limite,
     consultas,
@@ -58,7 +58,7 @@ export default function Recargas() {
       const res = await fetch(endpoint, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      if (!Array.isArray(data)) throw new Error('Resposta invalida da API')
+      if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
       setRows(data.map(parseRow).filter(r => r.id != null))
     } catch (err) {
       setError(err)
@@ -120,7 +120,7 @@ export default function Recargas() {
       return
     }
     if (!Number.isFinite(addAmountValue) || addAmountValue <= 0) {
-      notify.error('Informe uma quantidade valida para a recarga')
+      notify.error('Informe uma quantidade válida para a recarga')
       return
     }
     try {
@@ -260,7 +260,7 @@ export default function Recargas() {
           </div>
           <div className="col-lg-3 col-md-6">
             <div className="neo-card neo-lg p-4 h-100">
-              <div className="small opacity-75 mb-1">Limite Disponivel</div>
+              <div className="small opacity-75 mb-1">Limite Disponível</div>
               <div className="d-flex align-items-center gap-2">
                 <Fi.FiTrendingUp className="opacity-50" />
                 <div className="display-6 fw-bold">{integer(stats.limiteDisponivel)}</div>
@@ -323,7 +323,7 @@ export default function Recargas() {
                       className="btn btn-ghost btn-sm"
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      title="Pagina anterior"
+                      title="Página anterior"
                     >
                       <Fi.FiChevronLeft />
                     </button>
@@ -351,7 +351,7 @@ export default function Recargas() {
                       className="btn btn-ghost btn-sm"
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      title="Proxima pagina"
+                      title="Próxima página"
                     >
                       <Fi.FiChevronRight />
                     </button>
@@ -365,7 +365,7 @@ export default function Recargas() {
                     <th style={{ width: 120 }}>Equipe ID</th>
                     <th>Equipe</th>
                     <th>Total Carregado</th>
-                    <th>Limite Disponivel</th>
+                    <th>Limite Disponível</th>
                     <th>Consultas Realizadas</th>
                     <th style={{ width: 180 }}>Data da Recarga</th>
                   </tr>
@@ -447,7 +447,7 @@ export default function Recargas() {
                     value={addAmount}
                     onChange={event => setAddAmount(event.target.value)}
                   />
-                  <div className="form-text">Quantidade padrao 200.</div>
+                  <div className="form-text">Quantidade padrão 200.</div>
                   {showAboveRecommended && (
                     <div className="form-text text-primary">Para manter o controle, prefira quantidades abaixo de 200.</div>
                   )}

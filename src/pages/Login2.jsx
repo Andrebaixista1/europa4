@@ -70,8 +70,8 @@ export default function Login() {
     }
     return [
       'Estabilidade e performance melhoradas.',
-      'Aprimoramentos no fluxo de autenticacao.',
-      'Atualizacoes visuais e de usabilidade.',
+      'Aprimoramentos no fluxo de autenticação.',
+      'Atualizações visuais e de usabilidade.',
     ]
   }, [pool])
 
