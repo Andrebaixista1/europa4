@@ -188,11 +188,13 @@ export default function Usuarios() {
     if (te == null || ue == null) return false
     return Number(te) === Number(ue)
   }
-  const canEditUser = (target) => canManageAll || (isScopedManager && sameTeam(target))
+  // Somente Master pode editar dados do usuário (nome/login/tipo/status via modal)
+  const canEditUser = (target) => canManageAll
   const canTransferUser = () => canManageAll
   const canDeleteUser = (target) => canManageAll && (target?.id !== user?.id)
-  const canToggleUser = (target) => canEditUser(target) && (target?.id !== user?.id)
-  const canChangePasswordFor = (target) => canEditUser(target)
+  // Admin/Supervisor podem alterar status e senha apenas da própria equipe
+  const canToggleUser = (target) => (canManageAll || (isScopedManager && sameTeam(target))) && (target?.id !== user?.id)
+  const canChangePasswordFor = (target) => canManageAll || (isScopedManager && sameTeam(target))
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
     return found ? found.nome : (id != null ? `Equipe ${id}` : 'â€”')
@@ -787,9 +789,11 @@ export default function Usuarios() {
                       <h5 className="mb-1">{selected.nome}</h5>
                     </div>
                     <div className="d-flex gap-2">
-                      <button className="btn btn-ghost btn-ghost-primary btn-icon" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)} disabled={!canEditUser(selected)}>
-                        <Fi.FiEdit />
-                      </button>
+                      {canEditUser(selected) && (
+                        <button className="btn btn-ghost btn-ghost-primary btn-icon" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)}>
+                          <Fi.FiEdit />
+                        </button>
+                      )}
                       <button className="btn btn-ghost btn-icon" title="Transferir" aria-label="Transferir" onClick={() => openTransferModal(selected)} disabled={!canTransferUser(selected)}>
                         <Fi.FiArrowRight />
                       </button>
