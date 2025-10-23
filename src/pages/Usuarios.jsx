@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -81,7 +81,7 @@ export default function Usuarios() {
         const payload = unwrap(data)
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? null,
-          nome: u?.nome ?? u?.name ?? 'Usuários',
+          nome: u?.nome ?? u?.name ?? 'UsuÃ¡rios',
           email: u?.email ?? '',
           role: u?.role ?? u?.papel ?? 'Operador',
           equipe_id: u?.equipe_id ?? u?.team_id ?? null,
@@ -110,7 +110,7 @@ export default function Usuarios() {
             
             setEquipesLista(eq)
           } else {
-            // Fallback: criar equipes baseado nos Usuárioss
+            // Fallback: criar equipes baseado nos UsuÃ¡rioss
             const uniq = Array.from(new Set(arr.map(u => u.equipe_id).filter(Boolean)))
             setEquipesLista(uniq.map(id => ({ id, nome: `Equipe ${id}` })))
           }
@@ -123,7 +123,7 @@ export default function Usuarios() {
           }
         }
       } catch (e) {
-        console.error('Falha API Usuárioss:', e)
+        console.error('Falha API UsuÃ¡rioss:', e)
         if (!aborted) { setError(e); setUsuarios([]); setSelectedId(null) }
       } finally {
         if (!aborted) setIsLoading(false)
@@ -191,12 +191,24 @@ export default function Usuarios() {
   const isSuperUser = (user?.role === 'Master') || ((user?.equipe_nome || '').toLowerCase() === 'master')
   const isSupervisor = user?.role === 'Supervisor'
   const isAdminRole = (user?.role || '').toLowerCase() === 'administrador'
-  const canManage = isSuperUser
-  const canChangePassword = isSuperUser || isSupervisor || isAdminRole
+  const isScopedManager = isSupervisor || isAdminRole
+  const canManageAll = isSuperUser
+  const canAdd = canManageAll || isScopedManager
+  const sameTeam = (target) => {
+    const te = target?.equipe_id
+    const ue = user?.equipe_id
+    if (te == null || ue == null) return false
+    return Number(te) === Number(ue)
+  }
+  const canEditUser = (target) => canManageAll || (isScopedManager && sameTeam(target))
+  const canTransferUser = () => canManageAll
+  const canDeleteUser = (target) => canManageAll && (target?.id !== user?.id)
+  const canToggleUser = (target) => canEditUser(target) && (target?.id !== user?.id)
+  const canChangePasswordFor = (target) => canEditUser(target)
 
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
-    return found ? found.nome : (id != null ? `Equipe ${id}` : '—')
+    return found ? found.nome : (id != null ? `Equipe ${id}` : 'â€”')
   }
 
   function toLoginFromName(nome) {
@@ -213,23 +225,23 @@ export default function Usuarios() {
   const handleNomeChange = (nome) => {
     const upper = (nome || '').toUpperCase()
     setFormNome(upper)
-    // se login estiver vazio ou era derivado do nome anterior, atualiza sugestão em minúsculas
+    // se login estiver vazio ou era derivado do nome anterior, atualiza sugestÃ£o em minÃºsculas
     if (!formLogin || formLogin === toLoginFromName(formNome)) {
       setFormLogin(toLoginFromName(upper))
     }
   }
 
-  // Função para abrir modal de adicionar Usuário
+  // FunÃ§Ã£o para abrir modal de adicionar UsuÃ¡rio
   const handleOpenAddModal = () => {
-    if (!canManage) return
-    // Limpar formulário
+    if (!canAdd) return
+    // Limpar formulÃ¡rio
     setFormNome('')
     setFormLogin('')
     setFormSenha('')
     setFormTipo('Operador')
     
-    // Para supervisores, definir automaticamente a equipe
-    if (isSupervisor && user?.equipe_id) {
+    // Para supervisores/administradores, definir automaticamente a equipe
+    if ((isSupervisor || isAdminRole) && user?.equipe_id) {
       setFormEquipeId(user.equipe_id)
     } else {
       setFormEquipeId(equipesLista[0]?.id || null)
@@ -239,7 +251,7 @@ export default function Usuarios() {
   }
 
   const openPasswordModal = (targetUser) => {
-    if (!canChangePassword) return
+    if (!canChangePasswordFor(targetUser)) return
     if (!targetUser) return
     setPasswordUser(targetUser)
     setPasswordValue('')
@@ -251,7 +263,7 @@ export default function Usuarios() {
   }
 
   const openTransferModal = (targetUser) => {
-    if (!canManage) return
+    if (!canTransferUser(targetUser)) return
     if (!targetUser) return
     setTransferUser(targetUser)
     // preseleciona diferente da atual se houver
@@ -268,7 +280,7 @@ export default function Usuarios() {
 
   const handleConfirmTransfer = async (e) => {
     e?.preventDefault?.()
-    if (!canManage) return
+    if (!canTransferUser(transferUser)) return
     if (!transferUser) return
     const newIdNum = transferNewEquipeId ? Number(transferNewEquipeId) : null
     if (!newIdNum || newIdNum === transferUser.equipe_id) {
@@ -294,7 +306,7 @@ export default function Usuarios() {
       setUsuarios(prev => prev.map(u => (
         u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
       )))
-      notify.success('Usuário transferido de equipe.')
+      notify.success('UsuÃ¡rio transferido de equipe.')
       closeTransferModal()
     } catch (err) {
       notify.error(`Erro ao transferir: ${err.message}`)
@@ -325,13 +337,13 @@ export default function Usuarios() {
 
   const handlePasswordSubmit = async (event) => {
     event.preventDefault()
-    if (!canChangePassword) return
+    if (!canChangePasswordFor(passwordUser)) return
     const senhaAtual = passwordCurrent.trim()
     const senha = passwordValue.trim()
     const confirmacao = passwordConfirm.trim()
 
     if (!senhaAtual || !senha || !confirmacao) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigatÃ³rios')
       return
     }
 
@@ -341,13 +353,13 @@ export default function Usuarios() {
     }
 
     if (senha !== confirmacao) {
-      notify.warn('As senhas não coincidem')
+      notify.warn('As senhas nÃ£o coincidem')
       return
     }
 
     const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
     if (userId == null) {
-      notify.error('Selecione um usuário válido')
+      notify.error('Selecione um usuÃ¡rio vÃ¡lido')
       return
     }
 
@@ -376,8 +388,8 @@ export default function Usuarios() {
       const trimmedBody = (rawBody || '').trim()
       const normalizedBody = trimmedBody.toLowerCase()
       if (!trimmedBody || trimmedBody === '{}' || trimmedBody === '[]' || normalizedBody === 'null' || normalizedBody === 'undefined') {
-        const message = 'Senha não alterada: usuário não encontrado.'
-        console.warn(`API alter-pass retornou payload vazio para o usuário ${userId}`, trimmedBody)
+        const message = 'Senha nÃ£o alterada: usuÃ¡rio nÃ£o encontrado.'
+        console.warn(`API alter-pass retornou payload vazio para o usuÃ¡rio ${userId}`, trimmedBody)
         notify.error(message)
         return
       }
@@ -387,8 +399,8 @@ export default function Usuarios() {
         const parsed = JSON.parse(trimmedBody)
         console.log('Senha alterada via API:', parsed)
         if (parsed == null || (Array.isArray(parsed) && parsed.length === 0) || (typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length === 0)) {
-          const message = 'Senha não alterada: usuário não encontrado.'
-          console.warn(`API alter-pass retornou objeto vazio para o usuário ${userId}`, parsed)
+          const message = 'Senha nÃ£o alterada: usuÃ¡rio nÃ£o encontrado.'
+          console.warn(`API alter-pass retornou objeto vazio para o usuÃ¡rio ${userId}`, parsed)
           notify.error(message)
           return
         }
@@ -441,7 +453,7 @@ export default function Usuarios() {
   }
 
   const openEditModal = (targetUser) => {
-    if (!canManage) return
+    if (!canEditUser(targetUser)) return
     if (!targetUser) return
     setEditUser(targetUser)
     setEditNome((targetUser.nome || '').toUpperCase())
@@ -462,7 +474,7 @@ export default function Usuarios() {
   }
 
   const handleEditSubmit = async (event) => {
-    if (!canManage) return
+    if (!canEditUser(editUser)) { notify.warn('Você só pode alterar usuários da sua equipe.'); return }
     event.preventDefault()
     const nome = editNome.trim()
     const login = editLogin.trim()
@@ -470,12 +482,12 @@ export default function Usuarios() {
     const userId = normalizeId(editUser?.id ?? null) ?? editUser?.id ?? null
 
     if (!userId) {
-      notify.error('Selecione um usuário válido')
+      notify.error('Selecione um usuÃ¡rio vÃ¡lido')
       return
     }
 
     if (!nome || !login) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigatÃ³rios')
       return
     }
 
@@ -503,15 +515,15 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
-      let successMessage = 'Usuário atualizado com sucesso.'
+      let successMessage = 'UsuÃ¡rio atualizado com sucesso.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
-          console.log('Usuário alterado via API:', parsed)
+          console.log('UsuÃ¡rio alterado via API:', parsed)
           const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
           if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
         } catch (_) {
-          console.log('Usuário alterado via API (texto):', rawBody)
+          console.log('UsuÃ¡rio alterado via API (texto):', rawBody)
           if (rawBody.trim()) successMessage = rawBody.trim()
         }
       }
@@ -523,26 +535,26 @@ export default function Usuarios() {
       notify.success(successMessage)
       closeEditModal()
     } catch (error) {
-      console.error('Erro ao atualizar Usuário:', error)
-      notify.error(`Erro ao atualizar Usuário: ${error.message}`)
+      console.error('Erro ao atualizar UsuÃ¡rio:', error)
+      notify.error(`Erro ao atualizar UsuÃ¡rio: ${error.message}`)
     } finally {
       setIsSavingEdit(false)
     }
   }
 
   async function handleAddSubmit(e) {
-    if (!canManage) return
+    if (!canAdd) return
     e.preventDefault()
-    console.log('✅ Iniciando handleAddSubmit...')
+    console.log('âœ… Iniciando handleAddSubmit...')
     
     const nome = formNome.trim()
     const login = formLogin.trim()
     const senha = formSenha.trim()
     
-    console.log('Y Dados do formulário:', { nome, login, senha, formEquipeId, formTipo })
+    console.log('Y Dados do formulÃ¡rio:', { nome, login, senha, formEquipeId, formTipo })
     
     if (!nome || !login || !senha) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigatÃ³rios')
       return
     }
 
@@ -553,7 +565,7 @@ export default function Usuarios() {
     
     const tipoSel = (formTipo || 'Operador').trim()
     const roleOut = tipoSel
-    const equipeId = isSupervisor ? (user?.equipe_id ?? formEquipeId) : formEquipeId
+    const equipeId = (isSupervisor || isAdminRole) ? (user?.equipe_id ?? formEquipeId) : formEquipeId
     
     console.log('Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
     
@@ -565,9 +577,9 @@ export default function Usuarios() {
     setIsSaving(true)
     
     try {
-      console.log('Criando usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
+      console.log('Criando usuÃ¡rio via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
-      // Chamada para a API de adicionar Usuário
+      // Chamada para a API de adicionar UsuÃ¡rio
       const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
         method: 'POST',
         headers: {
@@ -590,7 +602,7 @@ export default function Usuarios() {
       }
 
       const result = await response.json()
-      console.log('Usuário criado via API:', result)
+      console.log('UsuÃ¡rio criado via API:', result)
 
       // Criar objeto local para atualizar a lista
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
@@ -608,24 +620,25 @@ export default function Usuarios() {
       setSelectedId(nextId)
       setIsAddOpen(false)
       
-      // Limpar formulário
+      // Limpar formulÃ¡rio
       setFormNome('')
       setFormLogin('')
       setFormSenha('')
       if (!isSupervisor) setFormTipo('Operador')
       
-      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      notify.success(`UsuÃ¡rio "${nome}" criado com sucesso!`)
       
     } catch (error) {
-      console.error('a Erro ao criar Usuário:', error)
-      notify.error(`Erro ao criar Usuário: ${error.message}`)
+      console.error('a Erro ao criar UsuÃ¡rio:', error)
+      notify.error(`Erro ao criar UsuÃ¡rio: ${error.message}`)
     } finally {
       setIsSaving(false)
     }
   }
 
   async function handleDeleteUser(targetId) {
-    if (!canManage) return
+    const targetUser = usuarios.find(u => u.id === targetId)
+    if (!canDeleteUser(targetUser)) return
     if (targetId === user?.id) return
 
     setDeletingId(targetId)
@@ -648,9 +661,9 @@ export default function Usuarios() {
 
       if (rawBody) {
         try {
-          console.log('Usuário removido via API:', JSON.parse(rawBody))
+          console.log('UsuÃ¡rio removido via API:', JSON.parse(rawBody))
         } catch (_) {
-          console.log('Usuário removido via API (texto):', rawBody)
+          console.log('UsuÃ¡rio removido via API (texto):', rawBody)
         }
       }
 
@@ -662,31 +675,31 @@ export default function Usuarios() {
       })
 
       if (removedUser?.nome) {
-        notify.success(`Usuário "${removedUser.nome}" excluído.`)
+        notify.success(`UsuÃ¡rio "${removedUser.nome}" excluÃ­do.`)
       } else {
-        notify.success('Usuário excluído.')
+        notify.success('UsuÃ¡rio excluÃ­do.')
       }
 
     } catch (error) {
-      console.error('Erro ao excluir Usuário:', error)
-      notify.error(`Erro ao excluir Usuário: ${error.message}`)
+      console.error('Erro ao excluir UsuÃ¡rio:', error)
+      notify.error(`Erro ao excluir UsuÃ¡rio: ${error.message}`)
     } finally {
       setDeletingId(null)
     }
   }
 
   const handleToggleStatus = async (targetUser) => {
-    if (!canManage) return
+    if (!canToggleUser(targetUser)) return
     if (!targetUser) return
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
 
     if (targetId == null) {
-      notify.error('Não foi possível identificar o Usuário.')
+      notify.error('NÃ£o foi possÃ­vel identificar o UsuÃ¡rio.')
       return
     }
 
     if (targetId === user?.id) {
-      notify.warn('Você não pode alterar o seu próprio status.')
+      notify.warn('VocÃª nÃ£o pode alterar o seu prÃ³prio status.')
       return
     }
 
@@ -712,7 +725,7 @@ export default function Usuarios() {
         throw new Error(message)
       }
 
-      let successMessage = nextActive ? 'usuário ativado.' : 'usuário desativado.'
+      let successMessage = nextActive ? 'usuÃ¡rio ativado.' : 'usuÃ¡rio desativado.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
@@ -748,7 +761,7 @@ export default function Usuarios() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Usuários</h2>
+              <h2 className="fw-bold mb-1">UsuÃ¡rios</h2>
               <div className="opacity-75 small">Gerencie contas, perfis e acessos</div>
             </div>
           </div>
@@ -759,15 +772,15 @@ export default function Usuarios() {
             <div className="neo-card neo-lg p-4 h-100">
                             <div className="d-flex align-items-center gap-2 mb-3">
                 
-                {canManage && (
-              <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canManage}>
+                {canAdd && (
+              <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usuÃ¡rio" aria-label="Adicionar usuÃ¡rio" onClick={handleOpenAddModal} disabled={!canAdd}>
                     <Fi.FiPlus />
                   </button>
                 )}
                 <button type="button" className="btn btn-ghost btn-sm" title="Filtrar" aria-label="Filtrar" onClick={() => setIsFilterOpen(v => !v)}>
                   <Fi.FiFilter />
                 </button>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar Usuário..." />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar UsuÃ¡rio..." />
                 <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')} aria-label="Limpar busca" title="Limpar">
                   <Fi.FiX />
                 </button>
@@ -815,7 +828,7 @@ export default function Usuarios() {
               {error && (<div className="alert alert-danger py-2">{String(error)}</div>)}
               {!isLoading && !error && (
                 <ul className="list-group">
-                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum usuário encontrado</li>)}
+                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum usuÃ¡rio encontrado</li>)}
                   {filtered.map((u) => (
                     <li key={u.id} className={`list-group-item d-flex justify-content-between align-items-center ${selectedId === u.id ? 'active' : ''}`} role="button" onClick={() => setSelectedId(u.id)}>
                       <div className="me-3">
@@ -833,7 +846,7 @@ export default function Usuarios() {
           <div className="col-12 col-lg-7">
             <div className="neo-card neo-lg p-4 h-100">
               {!selected ? (
-                <div className="opacity-75">Selecione um usuário para ver os detalhes.</div>
+                <div className="opacity-75">Selecione um usuÃ¡rio para ver os detalhes.</div>
               ) : (
                 <>
                   <div className="d-flex align-items-start justify-content-between mb-3">
@@ -841,13 +854,13 @@ export default function Usuarios() {
                       <h5 className="mb-1">{selected.nome}</h5>
                     </div>
                     <div className="d-flex gap-2">
-                      <button className="btn btn-ghost btn-ghost-primary btn-icon" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)} disabled={!canManage}>
+                      <button className="btn btn-ghost btn-ghost-primary btn-icon" title="Editar" aria-label="Editar" onClick={() => openEditModal(selected)} disabled={!canEditUser(selected)}>
                         <Fi.FiEdit />
                       </button>
-                      <button className="btn btn-ghost btn-icon" title="Transferir" aria-label="Transferir" onClick={() => openTransferModal(selected)} disabled={!canManage}>
+                      <button className="btn btn-ghost btn-icon" title="Transferir" aria-label="Transferir" onClick={() => openTransferModal(selected)} disabled={!canTransferUser(selected)}>
                         <Fi.FiArrowRight />
                       </button>
-                      <button className="btn btn-ghost btn-ghost-danger btn-icon" title="Excluir" aria-label="Excluir" disabled={!canManage || selected.id === user?.id || deletingId === selected.id}
+                      <button className="btn btn-ghost btn-ghost-danger btn-icon" title="Excluir" aria-label="Excluir" disabled={!canDeleteUser(selected) || deletingId === selected.id}
                         onClick={() => setPendingDelete(selected)}>
                         {deletingId === selected.id ? (
                           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -869,14 +882,14 @@ export default function Usuarios() {
                     </div>
                     <div className="col-md-6">
                       <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                        <div className="small text-uppercase opacity-75 mb-2">SEGURANÇA</div>
+                        <div className="small text-uppercase opacity-75 mb-2">SEGURANÃ‡A</div>
                         <div className="mb-2"><span className="opacity-75">Status: </span>{selected.ativo ? 'Ativo' : 'Inativo'}</div>
                         <div className="d-flex gap-2">
-                          <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha" disabled={!canChangePassword}
+                          <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha" disabled={!canChangePasswordFor(selected)}
                             onClick={() => openPasswordModal(selected)}>
                             <Fi.FiKey />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar Usuário' : 'Ativar Usuário'} aria-label={selected.ativo ? 'Desativar Usuário' : 'Ativar Usuário'} disabled={!canManage || selected.id === user?.id || togglingId === selected.id}
+                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar UsuÃ¡rio' : 'Ativar UsuÃ¡rio'} aria-label={selected.ativo ? 'Desativar UsuÃ¡rio' : 'Ativar UsuÃ¡rio'} disabled={!canToggleUser(selected) || togglingId === selected.id}
                             onClick={() => handleToggleStatus(selected)}>
                             {togglingId === selected.id ? (
                               <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -903,13 +916,13 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Transferir Usuário</h5>
+                <h5 className="modal-title">Transferir UsuÃ¡rio</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferModal}></button>
               </div>
               <form onSubmit={handleConfirmTransfer}>
                 <div className="modal-body">
                   <div className="mb-3">
-                    <div className="small text-uppercase opacity-75 mb-2">Usuário</div>
+                    <div className="small text-uppercase opacity-75 mb-2">UsuÃ¡rio</div>
                     <div className="fw-semibold">{transferUser?.nome}</div>
                   </div>
                   <div className="d-flex align-items-center justify-content-between gap-3">
@@ -947,7 +960,7 @@ export default function Usuarios() {
   <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
     <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
       <div className="d-flex align-items-center justify-content-between mb-2">
-        <h5 className="mb-0">Adicionar Usuário</h5>
+        <h5 className="mb-0">Adicionar UsuÃ¡rio</h5>
         <button type="button" className="btn btn-ghost btn-icon" aria-label="Fechar" onClick={() => setIsAddOpen(false)} disabled={isSaving}>
           <Fi.FiX />
         </button>
@@ -961,7 +974,7 @@ export default function Usuarios() {
           <div className="col-12">
             <label className="form-label">Login *</label>
             <input className="form-control" value={formLogin} onChange={(e) => setFormLogin((e.target.value || '').toLowerCase())} disabled={isSaving} placeholder="Ex: joaosilva" required />
-            <div className="form-text">Login será usado para acessar o sistema</div>
+            <div className="form-text">Login serÃ¡ usado para acessar o sistema</div>
           </div>
           <div className="col-12">
             <label className="form-label">Tipo</label>
@@ -971,7 +984,7 @@ export default function Usuarios() {
               <option>Supervisor</option>
               <option>Operador</option>
             </select>
-            {isSupervisor && <div className="form-text">Como supervisor(a), você só pode criar operadores</div>}
+            {isSupervisor && <div className="form-text">Como supervisor(a), vocÃª sÃ³ pode criar operadores</div>}
           </div>
           <div className="col-12">
             <label className="form-label">Senha *</label>
@@ -979,11 +992,11 @@ export default function Usuarios() {
           </div>
           <div className="col-12">
             <label className="form-label">Equipe *</label>
-            <select className="form-select" value={formEquipeId ?? ''} onChange={(e) => setFormEquipeId(e.target.value ? parseInt(e.target.value, 10) : null)} disabled={isSupervisor || isSaving} required>
+            <select className="form-select" value={formEquipeId ?? ''} onChange={(e) => setFormEquipeId(e.target.value ? parseInt(e.target.value, 10) : null)} disabled={(isSupervisor || isAdminRole) || isSaving} required>
               <option value="" disabled>Selecione uma equipe...</option>
               {(equipesLista || []).map(eq => (<option key={eq.id} value={eq.id}>{eq.nome}</option>))}
             </select>
-            {isSupervisor && <div className="form-text">Como supervisor(a), você só pode criar usuários na sua equipe</div>}
+            {(isSupervisor || isAdminRole) && <div className="form-text">Como supervisor(a) ou administrador(a), você só pode criar usuários na sua equipe</div>}
           </div>
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4">
@@ -1145,12 +1158,12 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Confirmar exclusão</h5>
+                <h5 className="modal-title">Confirmar exclusÃ£o</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setPendingDelete(null)} disabled={deletingId != null}></button>
               </div>
               <div className="modal-body">
                 <p>Tem certeza que deseja excluir <strong>{pendingDelete.nome}</strong>?</p>
-                <p className="mb-0 small opacity-75">Esta ação não pode ser desfeita.</p>
+                <p className="mb-0 small opacity-75">Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deletingId != null}>Cancelar</button>
