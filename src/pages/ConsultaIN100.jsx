@@ -1,7 +1,8 @@
 ﻿import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { FiSearch, FiArrowLeft } from 'react-icons/fi'
+import { FiSearch, FiArrowLeft, FiCheck } from 'react-icons/fi'
+import { Tooltip as BsTooltip } from 'bootstrap'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { notify } from '../utils/notify.js'
 import { useEffect } from 'react'
@@ -18,6 +19,23 @@ export default function ConsultaIN100() {
   const [resultado, setResultado] = useState(null)
   const [bancoInfo, setBancoInfo] = useState(null)
   const resultRef = useRef(null)
+  const formRef = useRef(null)
+
+  // Modal de busca (CPF ou NB)
+  const [lookupOpen, setLookupOpen] = useState(false)
+  const [lookup, setLookup] = useState({
+    type: null,            // 'cpf' | 'nb'
+    digits: '',            // número enviado
+    loading: false,
+    error: null,
+    response: null,        // texto cru (pretty)
+    responseObj: null,     // JSON parseado quando possível
+    pairs: [],             // pares chave/valor para tabela (fallback)
+    curatedList: [],       // lista de linhas curadas para tabela principal
+    continueTarget: null,  // 'cpf' | 'nb' que será preenchido ao continuar
+    continueDigits: null,  // legado (não utilizado nas linhas)
+    notFound: false,       // quando nenhuma informação útil for retornada
+  })
 
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
 
@@ -68,6 +86,19 @@ export default function ConsultaIN100() {
     fetchSaldoUsuario()
   }, [user])
 
+  // Inicializa tooltips Bootstrap nos elementos que tiverem data-bs-toggle="tooltip"
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    const instances = nodes.map((el) => {
+      try {
+        return new BsTooltip(el, { placement: 'top', trigger: 'hover focus', delay: { show: 500, hide: 100 }, container: 'body', animation: true })
+      } catch {
+        return null
+      }
+    })
+    return () => { instances.forEach((t) => t && t.dispose && t.dispose()) }
+  }, [])
+
   const formatCpf = (value) => {
     const v = value.replace(/\D/g, '').slice(0, 11)
     const parts = []
@@ -93,11 +124,27 @@ export default function ConsultaIN100() {
     return out
   }
 
-  const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '-')
+  // Formatação de data: usa parsing estrito do componente YYYY-MM-DD (sem efeito de timezone)
+  const parseISODateParts = (value) => {
+    const m = String(value || '').match(/(\d{4})-(\d{2})-(\d{2})/)
+    return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null
+  }
+  const partsToBR = (p) => `${String(p.d).padStart(2,'0')}/${String(p.m).padStart(2,'0')}/${String(p.y)}`
+  const formatDate = (iso) => {
+    if (!iso) return '-'
+    const p = parseISODateParts(iso)
+    if (p) return partsToBR(p)
+    const d = new Date(iso)
+    if (isNaN(d)) return '-'
+    return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+  }
   const formatTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }) : '--:--')
   const idadeFrom = (iso) => {
     if (!iso) return '-'
-    const b = new Date(iso), t = new Date()
+    const parts = parseISODateParts(iso)
+    const b = parts ? new Date(parts.y, parts.m - 1, parts.d) : new Date(iso)
+    if (isNaN(b)) return '-'
+    const t = new Date()
     let age = t.getFullYear() - b.getFullYear()
     const m = t.getMonth() - b.getMonth()
     if (m < 0 || (m === 0 && t.getDate() < b.getDate())) age--
@@ -131,6 +178,134 @@ export default function ConsultaIN100() {
       return { code: data.code || code, name: data.name || data.fullName || String(code) }
     } catch (_) {
       return { code, name: String(code) }
+    }
+  }
+
+  // Abre modal e envia POST para consulta por CPF/NB
+  const openLookupModal = async (kind) => {
+    const isCpf = kind === 'cpf'
+    const raw = isCpf ? cpf : beneficio
+    const digits = (raw || '').replace(/\D/g, '')
+    if (isCpf && digits.length !== 11) return notify.warn('Informe um CPF válido (11 dígitos).')
+    // Para busca por NB na lupa, permitimos menos de 10 dígitos (até parcial)
+    if (!isCpf && digits.length === 0) return notify.warn('Informe ao menos 1 dígito do Benefício para pesquisar.')
+
+    setLookup({
+      type: kind,
+      digits,
+      loading: true,
+      error: null,
+      response: null,
+      responseObj: null,
+      pairs: [],
+      curatedList: [],
+      continueTarget: kind === 'nb' ? 'cpf' : 'nb',
+      continueDigits: null,
+      notFound: false,
+    })
+    setLookupOpen(true)
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 60000)
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/consulta-nbcpf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: isCpf ? 'cpf' : 'nb', numero: digits }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      const text = await res.text().catch(() => '')
+      let display = text
+      let json = null
+      try { json = JSON.parse(text); display = JSON.stringify(json, null, 2) } catch { /* texto simples */ }
+
+      const extractDigitsFromObj = (o, keys) => {
+        if (!o) return null
+        const lower = keys.map(k => k.toLowerCase())
+        const visit = (val) => {
+          if (val == null) return null
+          if (Array.isArray(val)) { for (const it of val) { const r = visit(it); if (r) return r } return null }
+          if (typeof val === 'object') {
+            for (const [k, v] of Object.entries(val)) {
+              if (lower.includes(String(k).toLowerCase())) {
+                const d = String(v ?? '').replace(/\D/g, '')
+                if (d) return d
+              }
+              const nested = visit(v); if (nested) return nested
+            }
+            return null
+          }
+          return null
+        }
+        return visit(o)
+      }
+
+      const findDigitsInText = (t, len) => {
+        if (!t) return null
+        const hint = len === 11 ? /(cpf)[^\d]{0,20}(\d{11})/i : /(benef[ií]cio|nb)[^\d]{0,20}(\d{10})/i
+        const hintMatch = t.match(hint)
+        if (hintMatch) return hintMatch[2]
+        const re = new RegExp(`\\b\\d{${len}}\\b`)
+        const m = t.match(re)
+        return m ? m[0] : null
+      }
+
+      // Curadoria: extrai campos principais e monta lista organizada (suporta array)
+      const toCuratedList = (obj) => {
+        if (!obj) return []
+        // função para buscar valor por chaves comuns
+        const extractAny = function walk(o, keys) {
+          const lower = keys.map(k => k.toLowerCase())
+          const visit = (val) => {
+            if (val == null) return null
+            if (Array.isArray(val)) { for (const it of val) { const r = visit(it); if (r != null) return r } return null }
+            if (typeof val === 'object') {
+              for (const [k, v] of Object.entries(val)) {
+                if (lower.includes(String(k).toLowerCase())) return v
+                const nested = visit(v); if (nested != null) return nested
+              }
+              return null
+            }
+            return null
+          }
+          return visit(o)
+        }
+        const makeRow = (source) => {
+          const findVal = (keys) => extractAny(source, keys)
+          const nbDigits = String(findVal(['nb', 'numero_beneficio', 'beneficio', 'nr_beneficio', 'num_beneficio']) ?? '').replace(/\D/g,'')
+          const cpfDigits = String(findVal(['nu_cpf', 'cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) ?? '').replace(/\D/g,'')
+          const nome = findVal(['nome_segurado', 'nome', 'nome_beneficiario', 'nome_cliente']) || ''
+          const nascimentoRaw = findVal(['dt_nascimento', 'data_nascimento', 'nascimento']) || null
+          const parts = parseISODateParts(nascimentoRaw)
+          const nascStr = parts ? partsToBR(parts) : (nascimentoRaw ? formatDate(nascimentoRaw) : '')
+          const idadeCalc = parts ? idadeFrom(`${parts.y}-${String(parts.m).padStart(2,'0')}-${String(parts.d).padStart(2,'0')}`) : (nascimentoRaw ? idadeFrom(nascimentoRaw) : '')
+          return { nbDigits, cpfDigits, nome: String(nome || ''), nascStr, idade: idadeCalc }
+        }
+        const list = Array.isArray(obj) ? obj.map(makeRow) : [makeRow(obj)]
+        return list
+      }
+
+      const continueTarget = kind === 'nb' ? 'cpf' : 'nb'
+      let curatedList = []
+      if (json) curatedList = toCuratedList(json)
+      // Fallback: tenta extrair um único dígito quando a estrutura não está clara
+      let continueDigits = null
+      if (!curatedList.length) {
+        if (continueTarget === 'cpf') continueDigits = extractDigitsFromObj(json, ['cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) || findDigitsInText(text, 11)
+        else continueDigits = extractDigitsFromObj(json, ['nb', 'numero_beneficio', 'beneficio', 'nr_beneficio', 'num_beneficio']) || findDigitsInText(text, 10)
+      }
+      const likelyEmpty = (!json) || (Array.isArray(json) && json.length === 0) || (typeof json === 'object' && !Array.isArray(json) && Object.keys(json || {}).length === 0)
+      const hasData = curatedList.some(r => r.nbDigits || r.cpfDigits || r.nome || r.nascStr)
+      const notFound = !hasData && (likelyEmpty || (!continueDigits && String(text || '').trim().length > 0))
+
+      if (!res.ok) {
+        setLookup((s) => ({ ...s, loading: false, error: `Erro ${res.status}: ${res.statusText || 'Falha ao consultar'}`, response: display, responseObj: json, pairs: (curatedList[0] ? [] : []), curatedList, continueTarget, continueDigits, notFound }))
+        return
+      }
+      setLookup((s) => ({ ...s, loading: false, error: null, response: display, responseObj: json, pairs: [], curatedList, continueTarget, continueDigits, notFound }))
+    } catch (err) {
+      const msg = err?.name === 'AbortError' ? 'Tempo esgotado aguardando a resposta.' : (err?.message || 'Erro ao consultar')
+      setLookup((s) => ({ ...s, loading: false, error: msg }))
     }
   }
 
@@ -439,7 +614,7 @@ export default function ConsultaIN100() {
           </div>
 
           <div className="col-12 col-lg-7">
-            <form className="neo-card neo-lg p-4 h-100" onSubmit={onSubmit}>
+            <form className="neo-card neo-lg p-4 h-100" onSubmit={onSubmit} ref={formRef}>
               <div className="mb-3">
                 <label className="form-label">CPF</label>
                 <div className="input-group align-items-stretch">
@@ -452,6 +627,17 @@ export default function ConsultaIN100() {
                     onChange={(e) => setCpf(formatCpf(e.target.value))}
                     required
                   />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary d-flex align-items-center"
+                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
+                    aria-label="Buscar NB/CPF no nosso banco de dados"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="top"
+                    onClick={() => openLookupModal('cpf')}
+                  >
+                    <FiSearch />
+                  </button>
                 </div>
               </div>
 
@@ -467,6 +653,17 @@ export default function ConsultaIN100() {
                     onChange={(e) => setBeneficio(formatBeneficio(e.target.value))}
                     required
                   />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary d-flex align-items-center"
+                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
+                    aria-label="Buscar NB/CPF no nosso banco de dados"
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="top"
+                    onClick={() => openLookupModal('nb')}
+                  >
+                    <FiSearch />
+                  </button>
                 </div>
               </div>
 
@@ -481,6 +678,142 @@ export default function ConsultaIN100() {
             </form>
           </div>
           </div>
+
+        {/* Modal de Acompanhamento da Busca CPF/NB */}
+        {lookupOpen && (
+          <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-dialog-centered modal-xl" style={{ maxWidth: 'min(95vw, 1100px)' }}>
+              <div className="modal-content modal-dark">
+                <div className="modal-header">
+                  <h5 className="modal-title">Busca por {lookup.type === 'cpf' ? 'CPF' : 'Benefício'}</h5>
+                  <button type="button" className="btn-close" aria-label="Close" disabled={lookup.loading} onClick={() => setLookupOpen(false)}></button>
+                </div>
+                <div className="modal-body">
+                  <div className="mb-2">
+                    <div className="form-label mb-0">Número informado</div>
+                    <div className="fw-semibold">{lookup.digits}</div>
+                  </div>
+                  {lookup.loading && (
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
+                      <span>Aguardando resposta do serviço...</span>
+                    </div>
+                  )}
+                  {lookup.error && (
+                    <div className="text-danger small mt-2">{lookup.error}</div>
+                  )}
+                  {lookup.response && (
+                    <div className="mt-3">
+                      <div className="form-label mb-2">Resposta</div>
+                      {lookup.notFound ? (
+                        <div className="alert alert-warning mb-2" role="alert">
+                          Cliente não encontrado para o {lookup.type === 'cpf' ? 'CPF' : 'NB'} informado.
+                        </div>
+                      ) : (
+                        <div className="table-responsive">
+                          <table className="table table-sm table-lookup align-middle mb-2">
+                            <thead>
+                              <tr>
+                                <th>NB</th>
+                                <th>Nome</th>
+                                <th>Nascimento</th>
+                                <th>CPF</th>
+                                <th>Idade</th>
+                                <th>Ação</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(lookup.curatedList && lookup.curatedList.length > 0 ? lookup.curatedList : [{ nbDigits: null, nome: null, nascStr: null, cpfDigits: null, idade: null }]).map((row, idx) => (
+                                <tr key={idx}>
+                                  <td className="small">{row.nbDigits ? formatBeneficio(row.nbDigits) : '—'}</td>
+                                  <td className="small" style={{maxWidth: '28ch', overflow: 'hidden', textOverflow: 'ellipsis'}} title={row.nome || ''}>{row.nome || '—'}</td>
+                                  <td className="small">{row.nascStr || '—'}</td>
+                                  <td className="small">{row.cpfDigits ? formatCpf(row.cpfDigits) : '—'}</td>
+                                  <td className="small">{row.idade !== '' && row.idade != null ? String(row.idade) : '—'}</td>
+                                  <td className="small">
+                                    <button
+                                      type="button"
+                                      className="btn btn-success btn-sm d-inline-flex align-items-center"
+                                      title="Adicionar"
+                                      aria-label="Adicionar"
+                                      onClick={() => {
+                                        if (lookup.continueTarget === 'cpf') {
+                                          const cpfNorm = String(row.cpfDigits || '').replace(/\D/g, '')
+                                          if (cpfNorm.length !== 11) { notify.warn('CPF inválido para continuar'); return }
+                                          const current = cpf.replace(/\D/g, '')
+                                          if (current === cpfNorm) { notify.info('CPF já presente na pesquisa') }
+                                          else { setCpf(formatCpf(cpfNorm)); notify.success('CPF adicionado à pesquisa') }
+                                        } else {
+                                          const nbNorm = String(row.nbDigits || '').replace(/\D/g, '')
+                                          if (nbNorm.length !== 10) { notify.warn('NB inválido para continuar'); return }
+                                          const current = beneficio.replace(/\D/g, '')
+                                          if (current === nbNorm) { notify.info('NB já presente na pesquisa') }
+                                          else { setBeneficio(formatBeneficio(nbNorm)); notify.success('NB adicionado à pesquisa') }
+                                        }
+                                        setLookupOpen(false)
+                                        setLookup({ type: null, digits: '', loading: false, error: null, response: null, responseObj: null, pairs: [], curatedList: [], continueTarget: null, continueDigits: null, notFound: false })
+                                      }}
+                                    >
+                                      <FiCheck />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {/* Detalhes brutos em fallback quando necessário */}
+                      {(lookup.pairs?.length ?? 0) > 0 && (
+                        <details>
+                          <summary className="small mb-1">Ver detalhes brutos</summary>
+                          {lookup.pairs && lookup.pairs.length > 0 ? (
+                            <div className="table-responsive">
+                              <table className="table table-sm table-lookup align-middle mb-0">
+                                <thead>
+                                  <tr>
+                                    <th style={{width:'40%'}}>Campo</th>
+                                    <th>Valor</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {lookup.pairs.slice(0, 25).map(([k, v], idx) => (
+                                    <tr key={idx}>
+                                      <td className="text-muted small">{k}</td>
+                                      <td className="small" style={{wordBreak:'break-word'}}>{String(v)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <pre className="small" style={{ whiteSpace: 'pre-wrap' }}>{lookup.response}</pre>
+                          )}
+                        </details>
+                      )}
+                      <div className="form-text mt-1">
+                        {lookup.continueTarget === 'cpf' ? 'Ao continuar, o CPF será preenchido se identificado.' : 'Ao continuar, o Benefício será preenchido se identificado.'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={lookup.loading}
+                    onClick={() => {
+                      setLookupOpen(false)
+                      setLookup({ type: null, digits: '', loading: false, error: null, response: null, responseObj: null, pairs: [], curatedList: [], continueTarget: null, continueDigits: null })
+                    }}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {resultado && (
           <section className="mt-4 result-section" ref={resultRef} id="result-print">
