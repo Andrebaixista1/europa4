@@ -5,6 +5,12 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '27/10/2025',
+    titulo: 'Usuários Vanguard Real-Time',
+    descricao:
+      'Agora o controle de usuários no Vanguard é real-time conectado e 100% atualizado.',
+  },
+  {
     data: '23/10/2025',
     titulo: 'Gestão de usuários expandida',
     descricao:
