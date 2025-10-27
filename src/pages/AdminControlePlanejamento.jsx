@@ -525,12 +525,18 @@ export default function AdminControlePlanejamento() {
                       <td><Badge status={i.status} /></td>
                       <td>
                         <div className="d-flex gap-2">
-                          <button className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center" disabled={!isMaster || renewingId === i.id} title={isMaster ? 'Renovar' : 'Apenas Master'} aria-label="Renovar" onClick={() => handleRenovar(i)}>
+                          <button
+                            className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center"
+                            disabled={!isMaster || renewingId === i.id || String(i.status || '').toLowerCase() !== 'inativo'}
+                            title={isMaster ? (String(i.status || '').toLowerCase() === 'inativo' ? 'Renovar' : 'Disponível apenas para Inativo') : 'Apenas Master'}
+                            aria-label="Renovar"
+                            onClick={() => handleRenovar(i)}
+                          >
                             <Fi.FiRotateCcw />
                           </button>
-                          <button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={!isMaster || inactivatingId === i.id} title={isMaster ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
+                          {/*<button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={!isMaster || inactivatingId === i.id} title={isMaster ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
                             <Fi.FiUserX />
-                          </button>
+                          </button>*/}
                         </div>
                       </td>
                     </tr>
