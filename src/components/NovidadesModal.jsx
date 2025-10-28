@@ -6,6 +6,12 @@ import '../styles/novidades-modal.css'
 export const novidadesList = [
   {
     data: '27/10/2025',
+    titulo: 'Consulta clientes IN100',
+    descricao:
+      'Em consulta IN100 você consegue descobrir o CPF e ou NB do cliente, não precisa saber as 2 informações agora.',
+  },
+  {
+    data: '27/10/2025',
     titulo: 'Usuários Vanguard Real-Time',
     descricao:
       'Agora o controle de usuários no Vanguard é real-time conectado e 100% atualizado.',
