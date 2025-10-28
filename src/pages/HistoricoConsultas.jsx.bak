@@ -1,0 +1,385 @@
+import { useMemo, useState, useEffect, useRef } from 'react'
+import TopNav from '../components/TopNav.jsx'
+import Footer from '../components/Footer.jsx'
+import { FiSearch, FiDownload, FiRefreshCw, FiChevronLeft, FiChevronRight, FiArrowLeft, FiChevronDown } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
+import '../styles/historico.css'
+import { useAuth } from '../context/AuthContext.jsx'
+import { Roles } from '../utils/roles.js'
+
+function formatDateTime(iso) {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  if (isNaN(d)) return '-'
+  const date = d.toLocaleDateString('pt-BR')
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return `${date} ${time}`
+}
+
+const NF = 'N√ÉO ENCONTRADO'
+const displayOrNF = (v) => {
+  if (v === null || v === undefined) return NF
+  const s = String(v).trim()
+  return s ? s : NF
+}
+const DASH = '-'
+const displayOrDash = (v) => {
+  if (v === null || v === undefined) return DASH
+  const s = String(v).trim()
+  return s ? s : DASH
+}
+const formatDateOrDash = (iso) => {
+  if (!iso) return DASH
+  const d = new Date(iso)
+  if (isNaN(d)) return DASH
+  return d.toLocaleDateString('pt-BR')
+}
+
+export default function HistoricoConsultas() {
+  const { user } = useAuth()
+
+  const [q, setQ] = useState('')
+  const [status, setStatus] = useState('Todos')
+  const [page, setPage] = useState(1)
+  const [openStatus, setOpenStatus] = useState(false)
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [fetchError, setFetchError] = useState(null)
+  const mountedRef = useRef(true)
+
+  const pageSize = 50\n  // Fallback demonstrativo caso a API falhe\n  const DEMO_ROWS = [\n    { id_usuario: 1, usuario_nome: 'joao', data_hora_registro: '2025-10-26T06:12:00Z', status_api: 'Sucesso', resposta_api: 'Concluido', numero_beneficio: '2349375042', numero_documento: '12345678909', nome: 'Maria Silva', estado: 'SP', data_nascimento: '1988-05-12T00:00:00Z' },\n    { id_usuario: 2, usuario_nome: 'ana',  data_hora_registro: '2025-10-26T07:33:00Z', status_api: 'Falha',   resposta_api: 'Timeout',   numero_beneficio: '9988776655', numero_documento: '98765432100', nome: 'JosÈ Santos', estado: 'RJ', data_nascimento: '1979-02-28T00:00:00Z' },\n    { id_usuario: 3, usuario_nome: 'maria',data_hora_registro: '2025-10-26T08:15:00Z', status_api: 'Sucesso', resposta_api: 'Concluido', numero_beneficio: '1112223334', numero_documento: '11122233344', nome: 'Pedro Souza', estado: 'SP', data_nascimento: '1990-11-03T00:00:00Z' },\n    { id_usuario: 4, usuario_nome: 'carlos',data_hora_registro: '2025-10-26T09:01:00Z', status_api: 'Falha',  resposta_api: 'Dados insuficientes', numero_beneficio: '5556667778', numero_documento: '55566677788', nome: 'Carla Dias', estado: 'MG', data_nascimento: '1982-09-18T00:00:00Z' },\n    { id_usuario: 5, usuario_nome: 'maria',data_hora_registro: '2025-10-26T10:47:00Z', status_api: 'Sucesso', resposta_api: 'Concluido', numero_beneficio: '2223334445', numero_documento: '22233344455', nome: 'Jo„o Pedro', estado: 'PR', data_nascimento: '1985-03-22T00:00:00Z' },\n    { id_usuario: 6, usuario_nome: 'carlos',data_hora_registro: '2025-10-26T11:22:00Z', status_api: 'Sucesso', resposta_api: 'Concluido', numero_beneficio: '0001112223', numero_documento: '00011122233', nome: 'Aline Moraes', estado: 'SC', data_nascimento: '1993-07-07T00:00:00Z' },\n    { id_usuario: 7, usuario_nome: 'carlos',data_hora_registro: '2025-10-26T12:03:00Z', status_api: 'Falha',   resposta_api: 'Timeout', numero_beneficio: '9998887776', numero_documento: '99988877766', nome: 'Rafael Lima', estado: 'BA', data_nascimento: '1975-01-14T00:00:00Z' },\n    { id_usuario: 8, usuario_nome: 'ana',  data_hora_registro: '2025-10-26T13:55:00Z', status_api: 'Sucesso', resposta_api: 'Concluido', numero_beneficio: '4445556667', numero_documento: '44455566677', nome: 'Beatriz N.', estado: 'SP', data_nascimento: '1999-12-30T00:00:00Z' }\n  ]
+
+  // Buscar dados da API (com timeout e fallback)
+  const fetchLogs = async () => {
+    const equipeId = user?.equipe_id
+    const loginId = user?.id
+    if (!equipeId || !loginId) return
+    const role = user?.role
+    const nivel = role === Roles.Master ? 'master' : role === Roles.Administrador ? 'adm' : role === Roles.Supervisor ? 'super' : 'operador'
+    const url = 'https://webhook.sistemavieira.com.br/webhook/consulta-logs-in100'
+    const payload = { equipe_id: equipeId, id: loginId, nivel }
+    setLoading(true)
+    setFetchError(null)
+    try {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 15000)
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      })
+      clearTimeout(timer)
+      const text = await res.text()
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`)
+      let data
+      try { data = JSON.parse(text) } catch { data = [] }
+      let arr = []
+      if (Array.isArray(data)) arr = data
+      else if (Array.isArray(data?.data)) arr = data.data
+      else if (Array.isArray(data?.rows)) arr = data.rows
+      else if (data && typeof data === 'object') arr = [data]
+      if (mountedRef.current) setRows(arr)
+    } catch (err) {
+      // Fallback no-cors para garantir envio mesmo sem CORS
+      try {
+        await fetch(url, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          body: JSON.stringify(payload),
+          keepalive: true,
+        })
+      } catch (_) { /* ignore */ }
+      if (mountedRef.current) { setRows([]); setFetchError((err?.name === 'AbortError') ? 'Tempo esgotado' : (err?.message || 'Erro ao carregar')) }
+    } finally {
+      if (mountedRef.current) setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchLogs() }, [user?.id, user?.equipe_id, user?.role])
+  useEffect(() => () => { mountedRef.current = false }, [])
+
+  // Watchdog para n√£o travar em Carregando
+  useEffect(() => {
+    if (!loading) return
+    const watchdog = setTimeout(() => {
+      if (mountedRef.current) {
+        setLoading(false)
+        setFetchError((prev) => prev || 'Tempo esgotado')
+      }
+    }, 20000)
+    return () => clearTimeout(watchdog)
+  }, [loading])
+
+  // Filtragem
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return (rows || []).filter((r) => {
+      const isPending = String(r?.resposta_api || '').toLowerCase() === 'pendente'
+      const s = isPending ? 'consultando' : String(r?.status_api || '').toLowerCase()
+      const matchStatus =
+        status === 'Todos' ||
+        (status === 'Sucesso' && s === 'sucesso') ||
+        (status === 'Falha' && s !== 'sucesso' && !isPending) ||
+        (status === 'Pendente' && isPending)
+      if (!matchStatus) return false
+      if (!term) return true
+      const blob = [
+        r?.usuario_nome,
+        r?.numero_documento,
+        r?.numero_beneficio,
+        r?.estado,
+        r?.resposta_api,
+        r?.status_api,
+        r?.nome,
+      ].map(v => (v === null || v === undefined) ? '' : String(v)).join(' ').toLowerCase()
+      return blob.includes(term)
+    })
+  }, [q, status, rows])
+
+  const total = filtered.length
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  const currentPage = Math.min(page, pages)
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filtered.slice(start, start + pageSize)
+  }, [filtered, currentPage])
+
+  const paginationItems = useMemo(() => {
+    if (pages <= 1) return []
+    const candidates = new Set([1, pages, currentPage])
+    for (let i = currentPage - 2; i <= currentPage + 2; i += 1) {
+      if (i > 1 && i < pages) candidates.add(i)
+    }
+    const arr = Array.from(candidates).sort((a, b) => a - b)
+    const res = []
+    for (let i = 0; i < arr.length; i++) {
+      const p = arr[i]
+      if (i > 0) {
+        const prev = arr[i - 1]
+        if (p - prev > 1) res.push({ type: 'ellipsis', key: `ellipsis-${prev}-${p}` })
+      }
+      res.push({ type: 'page', key: `page-${p}`, page: p })
+    }
+    return res
+  }, [pages, currentPage])
+
+  const resumo = useMemo(() => {
+    let sucesso = 0
+    for (const r of filtered) {
+      if ((r?.status_api || '') === 'Sucesso') sucesso++
+    }
+    const falha = Math.max(0, filtered.length - sucesso)
+    return { total, sucesso, falha }
+  }, [filtered, total])
+
+  const exportCSV = () => {
+    const headers = ['Data/Hora','Status','Pesquisa','Nome','CPF','NB','Data Nascimento','UF','Usuario']
+    const rowsOut = filtered.map((r) => [
+      formatDateTime(r?.data_hora_registro),
+      (String(r?.resposta_api || '').toLowerCase() === 'pendente' ? 'Consultando' : (r?.status_api ?? '')),
+      r?.resposta_api ?? '',
+      displayOrNF(r?.nome),
+      r?.numero_documento ?? '',
+      r?.numero_beneficio ?? '',
+      formatDateOrDash(r?.data_nascimento),
+      displayOrDash(r?.estado),
+      r?.usuario_nome ?? '',
+    ])
+    const csv = [headers, ...rowsOut].map((row) => row.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'historico_consultas.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const startIndex = (currentPage - 1) * pageSize + 1
+  const endIndex = Math.min(currentPage * pageSize, total)
+
+  return (
+    <div className="hc-page bg-deep text-light min-vh-100 d-flex flex-column">
+      <TopNav />
+      <main className="container-xxl py-4 flex-grow-1">
+        <div className="mb-2">
+          <Link to="/dashboard" className="btn btn-outline-light d-inline-flex align-items-center gap-2" title="Voltar ao Dashboard">
+            <FiArrowLeft size={16} />
+            <span className="d-none d-sm-inline">Voltar</span>
+          </Link>
+        </div>
+        <div className="d-flex align-items-baseline justify-content-between mb-3">
+          <div>
+            <h2 className="fw-bold mb-1">Hist√≥rico de Consultas</h2>
+            <div className="opacity-75 small">Visualize e filtre consultas realizadas. Dados demonstrativos.</div>
+          </div>
+          <div className="d-flex gap-2">
+            <button type="button" className="btn btn-outline-light d-inline-flex align-items-center gap-2" onClick={exportCSV}>
+              <FiDownload />
+              <span>Exportar CSV</span>
+            </button>
+            <button type="button" className="btn btn-outline-light" onClick={() => { setPage(1); fetchLogs() }}>Recarregar</button>
+          </div>
+        </div>
+
+        <section className="mb-4">
+          <div className="row g-3">
+            <div className="col-12 col-md-4">
+              <div className="neo-card neo-lg p-4 text-center hc-stat-card">
+                <div className="opacity-75 small mb-1">Total</div>
+                <div className="display-6 fw-bold mb-0">{resumo.total}</div>
+              </div>
+            </div>
+            <div className="col-12 col-md-4">
+              <div className="neo-card neo-lg p-4 text-center hc-stat-card">
+                <div className="opacity-75 small mb-1">Sucesso</div>
+                <div className="display-6 fw-bold mb-0">{resumo.sucesso}</div>
+              </div>
+            </div>
+            <div className="col-12 col-md-4">
+              <div className="neo-card neo-lg p-4 text-center hc-stat-card">
+                <div className="opacity-75 small mb-1">Falhas</div>
+                <div className="display-6 fw-bold mb-0">{resumo.falha}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-3">
+          <div className="neo-card neo-lg p-3 hc-search-card">
+            <div className="d-flex gap-3 align-items-center">
+              <div className="input-group" style={{flex: '1 1 auto'}}>
+                <span className="input-group-text bg-dark text-light border-0"><FiSearch /></span>
+                <input
+                  type="text"
+                  className="form-control bg-dark text-light border-0"
+                  placeholder="Buscar..."
+                  value={q}
+                  onChange={(e) => { setQ(e.target.value); setPage(1) }}
+                />
+              </div>
+              <div className="dropdown" style={{flex: '0 0 auto', position: 'relative'}}>
+                <button
+                  type="button"
+                  className="btn btn-outline-light d-flex align-items-center gap-2"
+                  onClick={() => setOpenStatus((v) => !v)}
+                  aria-expanded={openStatus ? 'true' : 'false'}
+                >
+                  <span>{status}</span>
+                  <FiChevronDown />
+                </button>
+                <ul className={`dropdown-menu dropdown-menu-end ${openStatus ? 'show' : ''}`}>
+                  {['Todos','Sucesso','Falha','Pendente'].map((opt) => (
+                    <li key={opt}>
+                      <button className={`dropdown-item ${status === opt ? 'active' : ''}`} onClick={() => { setStatus(opt); setPage(1); setOpenStatus(false) }}>{opt}</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <button type="button" className="btn btn-outline-light" onClick={() => { setQ(''); setStatus('Todos'); setPage(1) }} title="Limpar filtros">
+                <FiRefreshCw size={18} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-5">
+          <div className="neo-card neo-lg p-0">
+            {pages > 1 && (
+              <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
+                <div className="small opacity-75">
+                  Exibindo {startIndex}-{endIndex} de {total}
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    <FiChevronLeft />
+                  </button>
+                  {paginationItems.map((item) => (
+                    item.type === 'ellipsis' ? (
+                      <span key={item.key} className="opacity-50">...</span>
+                    ) : (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`btn btn-sm ${item.page === currentPage ? 'btn-primary' : 'btn-outline-light'}`}
+                        onClick={() => setPage(item.page)}
+                      >
+                        {item.page}
+                      </button>
+                    )
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                    disabled={currentPage === pages}
+                  >
+                    <FiChevronRight />
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th style={{minWidth: '150px'}}>Data/Hora</th>
+                    <th style={{minWidth: '110px'}}>Status</th>
+                    <th style={{minWidth: '160px'}}>Pesquisa</th>
+                    <th style={{minWidth: '200px'}}>Nome</th>
+                    <th style={{minWidth: '140px'}}>CPF</th>
+                    <th style={{minWidth: '140px'}}>NB</th>
+                    <th style={{minWidth: '140px'}}>Data Nasc.</th>
+                    <th style={{minWidth: '80px'}}>UF</th>
+                    <th style={{minWidth: '160px'}}>Usuario</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="text-center opacity-75 py-4">
+                        {loading ? 'Carregando...' : (fetchError ? `Erro ao carregar: ${fetchError}` : 'Nenhuma consulta encontrada.')}
+                      </td>
+                    </tr>
+                  ) : (
+                    paginated.map((r, idx) => (
+                      <tr key={`${r?.id_usuario ?? idx}-${r?.numero_beneficio ?? ''}-${idx}`}>
+                        <td style={{whiteSpace: 'nowrap'}}>{formatDateTime(r?.data_hora_registro)}</td>
+                        <td>
+                          {(() => {
+                            const pending = String(r?.resposta_api || '').toLowerCase() === 'pendente'
+                            const cls = pending ? 'text-bg-warning' : (r?.status_api === 'Sucesso' ? 'text-bg-success' : 'text-bg-danger')
+                            const titleTxt = pending ? 'Consultando' : (r?.status_api || '')
+                            return (
+                              <span className={`badge rounded-pill px-2 status-badge ${cls}`} title={titleTxt} aria-label={titleTxt}>i</span>
+                            )
+                          })()}
+                        </td>
+                        <td>{r?.resposta_api}</td>
+                        <td className="text-nowrap">{displayOrNF(r?.nome)}</td>
+                        <td>{r?.numero_documento}</td>
+                        <td>{r?.numero_beneficio}</td>
+                        <td>{formatDateOrDash(r?.data_nascimento)}</td>
+                        <td>{displayOrDash(r?.estado)}</td>
+                        <td className="text-nowrap">{r?.usuario_nome}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+      <Footer />
+    </div>
+  )
+}
+

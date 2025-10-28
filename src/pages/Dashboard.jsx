@@ -144,7 +144,7 @@ export default function Dashboard() {
             <div className="row g-3">
               <div className="col-md-6">
                 <Card title="Usuários" icon="FiUserCheck" accent="primary" to="/usuarios">
-                  Supervisor vê apenas sua própria equipe.
+                  Supervisor vê apenas a própria equipe.
                 </Card>
               </div>
               <div className="col-md-6">
@@ -173,7 +173,7 @@ export default function Dashboard() {
                       </div>
                     ) : visibleItems.length === 0 ? (
                       <div className="col-12">
-                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponível para sua equipe.</div>
+                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponível para a sua equipe.</div>
                       </div>
                     ) : (
                       visibleItems.map((c) => {

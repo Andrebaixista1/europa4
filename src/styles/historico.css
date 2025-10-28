@@ -1,0 +1,38 @@
+/* Estilo escopado para Histórico de Consultas */
+.hc-page .neo-lg.hc-stat-card { min-height: 130px; }
+.hc-page .hc-stat-card .display-6 { line-height: 1; }
+
+/* Barra de busca e filtros */
+.hc-page .hc-search-card { min-height: 92px; overflow: visible; position: relative; z-index: 20; }
+.hc-page .hc-search { border-radius: 12px; overflow: hidden; }
+.hc-page .hc-search-ico { background: rgba(255,255,255,0.06); color: #cbd5e1; border: 1px solid rgba(255,255,255,0.12); border-right: 0; }
+.hc-page .hc-search-input { background: rgba(255,255,255,0.04); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); border-left: 0; height: 44px; }
+.hc-page .hc-search-input::placeholder { color: #94a3b8; }
+
+.hc-page .btn-icon { width: 40px; height: 40px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; }
+.hc-page .btn-outline-light { border-color: rgba(255,255,255,0.22); }
+
+/* Garante que o dropdown apareça sobre o card */
+.hc-page .dropdown-menu { z-index: 2000; background: rgba(16, 23, 42, 0.96); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(8px) saturate(120%); }
+.hc-page .dropdown-item { color: #e5e7eb; }
+.hc-page .dropdown-item:hover, .hc-page .dropdown-item.active { background: rgba(59,130,246,0.28); color: #fff; }
+
+/* Altura do botão do dropdown de status */
+.hc-page .dropdown > .btn { height: 44px; border-radius: 10px; }
+
+/* Aparência da tabela para ficar mais próxima do mock */
+.hc-page table.table-dark thead th { border-color: rgba(255,255,255,0.12); color: #e9eef7; }
+.hc-page table.table-dark tbody td { border-color: rgba(255,255,255,0.08); }
+.hc-page .badge.rounded-pill { font-weight: 600; letter-spacing: .02em; }
+
+/* Paginação compacta */
+.hc-page .btn.btn-sm { height: 32px; padding: 4px 10px; border-radius: 10px; }
+.hc-page .btn-outline-light.btn-sm { border-color: rgba(255,255,255,0.25); }
+.hc-page .status-badge { cursor: help; font-weight: 700; min-width: 22px; display: inline-flex; align-items: center; justify-content: center; }
+.hc-page .hc-table-wrap { overflow-x: auto; }
+
+/* Não quebrar linha em nenhuma coluna da tabela do Histórico */
+.hc-page table.table-dark thead th,
+.hc-page table.table-dark tbody td {
+  white-space: nowrap;
+}

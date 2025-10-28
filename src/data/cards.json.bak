@@ -2,21 +2,21 @@
   "Consultas": [
     {
       "title": "Consulta Individual (IN100)",
-      "description": "Pesquise informaÃ§Ãµes especÃ­ficas com precisÃ£o e resultados detalhados.",
+      "description": "Pesquise informações específicas com precisão e resultados detalhados.",
       "icon": "FiSearch",
       "route": "/consultas/in100"
     },
     {
-      "title": "HistÃ³rico de Consultas",
-      "description": "Acesse o histÃ³rico de consultas realizadas.",
+      "title": "Histórico de Consultas",
+      "description": "Acesse o histórico de consultas realizadas.",
       "icon": "FiClock",
       "route": "/consultas/historico"
     }
   ],
   "Disparos": [
     {
-      "title": "MÃºltiplos Disparos",
-      "description": "Configure e agende mÃºltiplos disparos em massa para diferentes canais.",
+      "title": "Múltiplos Disparos",
+      "description": "Configure e agende múltiplos disparos em massa para diferentes canais.",
       "icon": "FiSend",
       "route": "/disparos/multiplos"
     },
@@ -29,22 +29,23 @@
   ],
   "Em Desenvolvimento": [
     {
-      "title": "Consulta Individual (MaciÃ§a)",
+      "title": "Consulta Individual (Maciça)",
       "status": "development",
-      "description": "VocÃª jÃ¡ pode consultar nossa base interna da MaciÃ§a, especialmente dedicada a clientes para portabilidade.",
+      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
       "icon": "FiDatabase"
     },
     {
-      "title": "ExtraÃ§Ã£o (MaciÃ§a)",
+      "title": "Extração (Maciça)",
       "status": "development",
-      "description": "VocÃª jÃ¡ pode consultar nossa base interna da MaciÃ§a, especialmente dedicada a clientes para portabilidade.",
+      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
       "icon": "FiDownload"
     },
     {
       "title": "Consulta em Lote (IN100)",
       "status": "development",
-      "description": "FaÃ§a consultas em lote para mÃºltiplos cadastros de uma sÃ³ vez.",
+      "description": "Faça consultas em lote para múltiplos cadastros de uma só vez.",
       "icon": "FiLayers"
     }
   ]
 }
+

@@ -12,6 +12,7 @@ import Recargas from './pages/Recargas.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
+import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -96,6 +97,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master","Administrador","Supervisor","Operador"]}>
             <ConsultaIN100 />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/consultas/historico"
+        element={
+          <ProtectedRoute roles={["Master","Administrador","Supervisor","Operador"]}>
+            <HistoricoConsultas />
           </ProtectedRoute>
         }
       />

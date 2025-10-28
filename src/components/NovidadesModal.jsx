@@ -5,6 +5,12 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '28/10/2025',
+    titulo: 'Histórico de Consultas (IN100)',
+    descricao:
+      'Novo card para visualizar o histórico de consultas IN100 da equipe, com paginação, status (badge com tooltip), máscaras em CPF/NB e exportação CSV.',
+  },
+  {
     data: '27/10/2025',
     titulo: 'Consulta clientes IN100',
     descricao:
