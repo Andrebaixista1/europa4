@@ -71,6 +71,8 @@ export default function Status() {
     return { normal, lenta, erros };
   }, [checks]);
 
+  const inactiveRows = useMemo(() => (checks || []).filter(c => c.active === false), [checks]);
+
   // Chama o endpoint do n8n ao abrir a página e no botão Atualizar
   const runN8nStatus = async () => {
     if (running) return
@@ -248,7 +250,47 @@ export default function Status() {
             </table>
           </div>
         </div>
-      </main>
+
+        <div className="neo-card p-0 mt-3">
+          <div className="section-bar px-4 py-3 d-flex align-items-center gap-2">
+            <FiXCircle />
+            <div className="fw-semibold">APIs N8N — Inativos</div>
+          </div>
+          <div className="table-responsive">
+            <table className="table table-dark table-striped table-hover mb-0 align-middle">
+              <thead>
+                <tr>
+                  <th style={{minWidth: '220px'}}>Serviço</th>
+                  <th style={{minWidth: '120px'}}>Status</th>
+                  <th style={{minWidth: '120px'}}>Latência</th>
+                  <th style={{minWidth: '220px'}}>Última Execução</th>
+                  <th style={{minWidth: '110px'}}>Ativo</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inactiveRows.length ? inactiveRows.map((c) => (
+                  <tr key={c.key}>
+                    <td>{c.name}</td>
+                    <td>{statusBadge(c.state)}</td>
+                    <td>{c.latencyText ? c.latencyText : formatMs(c.ms)}</td>
+                    <td>{c.at ? formatDateDDMMYYYYHHMM(c.at) : '-'}</td>
+                    <td><span className="text-danger d-inline-flex align-items-center gap-1"><FiXCircle /> Inativo</span></td>
+                    <td>
+                      {c.workflowId
+                        ? <a className="btn btn-outline-light btn-sm" title="Somente o administrador do VPS tem acesso" href={'https://n8n.sistemavieira.com.br/workflow/' + encodeURIComponent(c.workflowId) + '/executions'} target="_blank" rel="noopener noreferrer">Abrir</a>
+                        : '-'}
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={6} className="text-center text-muted small py-3">Nenhum workflow inativo</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>      </main>
       <Footer />
     </div>
   )
