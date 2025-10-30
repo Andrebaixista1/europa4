@@ -5,6 +5,11 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '30/10/2025',
+    titulo: 'Status das APIs N8N',
+    descricao:
+      'Página Status atualizada: mapeamento automático do n8n (workflow_name, latency, stoppedAt), classificação Normal/Lenta/Falha por latência, última execução e botão "Abrir" para execuções, além de contadores por categoria.',
+  },  {
     data: '28/10/2025',
     titulo: 'Histórico de Consultas (IN100)',
     descricao:
