@@ -185,6 +185,54 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .result-section .opacity-75 { opacity: 0.95 !important; }
 .result-section .small { opacity: 0.9; }
 
+/* IN100 redesigned result blocks */
+.result-hero {
+  background: linear-gradient(180deg, #0f6ea3, #0c5a86);
+  color: #fff;
+  border-color: rgba(255,255,255,0.18);
+}
+.result-hero .label { font-size: 0.85rem; opacity: 0.95; }
+.result-hero .value { font-size: 1rem; }
+
+.section-bar { border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.03); }
+[data-theme="dark"] .section-bar { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); }
+
+.kv-list { gap: 10px; }
+.kv-line { display: grid; grid-template-columns: 180px 1fr; row-gap: 6px; column-gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--border); }
+.kv-line:last-child { border-bottom: 0; }
+.kv-label { opacity: 0.85; font-size: 0.9rem; }
+.kv-value { font-weight: 600; }
+@media (min-width: 992px) {
+  .kv-line { grid-template-columns: 180px 1fr 180px 1fr; }
+}
+
+.stat-card { display: flex; flex-direction: column; justify-content: space-between; }
+.stat-title { opacity: 0.9; font-weight: 600; }
+.stat-value { font-size: 1.4rem; font-weight: 800; }
+.stat-footer { border-top: 1px solid var(--border); opacity: 0.9; }
+
+/* BMG orange cards */
+.bmg-card { border-color: rgba(255, 176, 32, 0.45); background: linear-gradient(180deg, rgba(255,176,32,0.08), transparent); }
+[data-theme="dark"] .bmg-card { border-color: rgba(255, 176, 32, 0.35); background: linear-gradient(180deg, rgba(255,176,32,0.12), rgba(255,255,255,0.02)); }
+.bmg-title { color: #ffb020; font-weight: 800; letter-spacing: 0.2px; }
+.bmg-kv .label { font-size: 0.9rem; opacity: 0.92; }
+.bmg-kv .value { font-weight: 700; }
+
+/* BMG panel (same layout as Dados Bancários, with orange accent) */
+.bmg-panel { border-color: rgba(255,176,32,0.45); }
+[data-theme="dark"] .bmg-panel { border-color: rgba(255,176,32,0.35); }
+.bmg-section { background: linear-gradient(180deg, rgba(255,176,32,0.18), rgba(255,176,32,0.12)); border-bottom: 1px solid rgba(255,176,32,0.35); }
+[data-theme="dark"] .bmg-section { background: linear-gradient(180deg, rgba(255,176,32,0.22), rgba(255,176,32,0.12)); border-color: rgba(255,176,32,0.35); }
+.bmg-panel .kv-list {
+  background: linear-gradient(180deg, rgba(255,176,32,0.10), rgba(255,176,32,0.05));
+  border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;
+}
+[data-theme="dark"] .bmg-panel .kv-list {
+  background: linear-gradient(180deg, rgba(255,176,32,0.16), rgba(255,176,32,0.08));
+}
+.bmg-panel .kv-line { border-bottom-color: rgba(255,176,32,0.35); }
+[data-theme="dark"] .bmg-panel .kv-line { border-bottom-color: rgba(255,176,32,0.28); }
+
 /* Fixed tooltip for Maciça search: black bg, white text regardless of theme */
 .macica-tooltip {
   background: #000 !important;
@@ -235,6 +283,8 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
   -webkit-backdrop-filter: blur(4px);
   display: grid; place-items: center; }
 [data-theme="dark"] .global-loader-overlay { background: rgba(0,0,0,0.18);   display: grid; place-items: center; }
+/* Ensure toasts show above loader overlay */
+.Toastify__toast-container { z-index: 11000 !important; }
 /* Minimal single-icon theme toggle */
 .theme-icon-btn { background: transparent; border: 0; padding: 6px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .theme-icon-only { font-size: 18px; color: var(--text); opacity: 0.9; }

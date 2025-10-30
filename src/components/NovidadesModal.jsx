@@ -6,9 +6,9 @@ import '../styles/novidades-modal.css'
 export const novidadesList = [
   {
     data: '30/10/2025',
-    titulo: 'Status das APIs N8N',
+    titulo: 'Status Ferramentas',
     descricao:
-      'Página Status atualizada: mapeamento automático do n8n (workflow_name, latency, stoppedAt), classificação Normal/Lenta/Falha por latência, última execução e botão "Abrir" para execuções, além de contadores por categoria.',
+      'Agora você pode verificar o status das ferramentas diretamente no dashboard, garantindo que tudo esteja funcionando perfeitamente.',
   },  {
     data: '28/10/2025',
     titulo: 'Histórico de Consultas (IN100)',

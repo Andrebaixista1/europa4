@@ -10,6 +10,7 @@ import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
+import Status from './pages/Status.jsx'
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
@@ -36,6 +37,7 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route path="/status" element={<Status />} />
       <Route
         path="/multiplos-disparos"
         element={
