@@ -273,7 +273,7 @@ export default function Status() {
         <div className="neo-card p-0 mt-3">
           <div className="section-bar px-4 py-3 d-flex align-items-center gap-2">
             <FiXCircle />
-            <div className="fw-semibold">APIs N8N — Inativos</div>
+            <div className="fw-semibold">Inativos</div>
           </div>
           <div className="table-responsive">
             <table className="table table-dark table-striped table-hover mb-0 align-middle">
