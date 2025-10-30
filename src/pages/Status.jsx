@@ -9,7 +9,7 @@ const SLOW_THRESHOLD_MS = 500
 
 function formatMs(ms) {
   if (ms == null || !isFinite(ms)) return '-'
-  return `${Math.round(ms)} ms`
+  return `${Number(ms).toFixed(1)}ms`
 }
 
 function formatMMSS(totalSeconds) {
@@ -156,7 +156,7 @@ export default function Status() {
       <main className="container-xxl py-4 flex-grow-1">
         <div className="d-flex align-items-center justify-content-between mb-3">
           <div className="d-flex align-items-center gap-3">
-            <Link to="/dashboard" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
+            <Link to="/dashboard" className="btn btn-ghost btn-sm d-flex align-items-center gap-2" title="Voltar ao Dashboard">
               <FiArrowLeft size={16} />
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
@@ -164,7 +164,7 @@ export default function Status() {
           </div>
           <div className="d-flex align-items-center gap-3">
             <div className="small opacity-85">Próxima atualização em {formatMMSS(remaining)}</div>
-            <div className="progress" style={{ width: '160px', height: '6px' }}>
+            <div className="progress" style={{ width: '220px', height: '6px' }}>
               <div className="progress-bar bg-info" role="progressbar" style={{ width: `${(TOTAL_SEC - remaining) / TOTAL_SEC * 100}%` }} aria-valuemin="0" aria-valuemax="100"></div>
             </div>
             <button
@@ -186,7 +186,7 @@ export default function Status() {
             <div className="neo-card neo-lg p-4 text-center">
               <div className="small opacity-75 mb-1">Normal</div>
               <div className="display-6 fw-bold text-success d-inline-flex align-items-center gap-2">
-                <FiCheckCircle /> {totals.normal}
+                <FiCheckCircle size={28} /> {totals.normal}
               </div>
             </div>
           </div>
@@ -194,7 +194,7 @@ export default function Status() {
             <div className="neo-card neo-lg p-4 text-center">
               <div className="small opacity-75 mb-1">Lenta</div>
               <div className="display-6 fw-bold text-warning d-inline-flex align-items-center gap-2">
-                <FiAlertTriangle /> {totals.lenta}
+                <FiAlertTriangle size={28} /> {totals.lenta}
               </div>
             </div>
           </div>
@@ -202,7 +202,7 @@ export default function Status() {
             <div className="neo-card neo-lg p-4 text-center">
               <div className="small opacity-75 mb-1">Erros</div>
               <div className="display-6 fw-bold text-danger d-inline-flex align-items-center gap-2">
-                <FiXCircle /> {totals.erros}
+                <FiXCircle size={28} /> {totals.erros}
               </div>
             </div>
           </div>
