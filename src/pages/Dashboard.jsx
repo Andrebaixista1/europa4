@@ -46,7 +46,7 @@ function Card({ title, icon, children, accent = 'primary', muted = false, to, on
   return (
     <div
       className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}
-      onClick={onClick}\n                            badge={c.badge}\n                            badgeVariant={c.badgeVariant}
+      onClick={onClick}
       role={onClick ? 'button' : undefined}
       style={onClick ? { cursor: 'pointer' } : undefined}
     >
@@ -186,8 +186,10 @@ export default function Dashboard() {
                               icon={c.icon}
                               accent={isDev ? 'info' : 'primary'}
                               muted={isDev && !isMaster}
+                              badge={c.badge}
+                              badgeVariant={c.badgeVariant}
                               to={computedTo}
-                              onClick={onClick}\n                            badge={c.badge}\n                            badgeVariant={c.badgeVariant}
+                              onClick={onClick}
                             >
                               {c.description || null}
                             </Card>
