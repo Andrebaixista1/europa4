@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 nul
+
+mod_active.js
+mod_active.mjs
+src/pages/Status.jsx.bak
+zz_patch.txt
