@@ -183,24 +183,24 @@ export default function Status() {
         
         <div className="row g-3 mb-3">
           <div className="col-12 col-md-4">
-            <div className="neo-card neo-lg p-4 text-center">
-              <div className="small opacity-75 mb-1">Normal</div>
+            <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
+              <div className="label" style={{ fontSize: "25px" }}>Normal</div>
               <div className="display-6 fw-bold text-success d-inline-flex align-items-center gap-2">
                 <FiCheckCircle size={28} /> {totals.normal}
               </div>
             </div>
           </div>
           <div className="col-12 col-md-4">
-            <div className="neo-card neo-lg p-4 text-center">
-              <div className="small opacity-75 mb-1">Lenta</div>
+            <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
+              <div className="label" style={{ fontSize: "25px" }}>Lenta</div>
               <div className="display-6 fw-bold text-warning d-inline-flex align-items-center gap-2">
                 <FiAlertTriangle size={28} /> {totals.lenta}
               </div>
             </div>
           </div>
           <div className="col-12 col-md-4">
-            <div className="neo-card neo-lg p-4 text-center">
-              <div className="small opacity-75 mb-1">Erros</div>
+            <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
+              <div className="label" style={{ fontSize: "25px" }}>Erros</div>
               <div className="display-6 fw-bold text-danger d-inline-flex align-items-center gap-2">
                 <FiXCircle size={28} /> {totals.erros}
               </div>
