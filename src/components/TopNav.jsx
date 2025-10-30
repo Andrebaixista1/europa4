@@ -1,11 +1,11 @@
-﻿﻿import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
 import NovidadesModal from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
-import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2 } from 'react-icons/fi'
+import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiBarChart2, FiActivity } from 'react-icons/fi'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -20,13 +20,61 @@ export default function TopNav() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  // Indicador de saÃºde do Status (maioria)
+  const [statusMajor, setStatusMajor] = useState(null) // 'ok' | 'lenta' | 'falha' | null
+  useEffect(() => {
+    let abort = false
+    const parseLatencyMs = (item) => {
+      if (typeof item?.latencyMs === 'number') return item.latencyMs
+      if (typeof item?.latency === 'string') {
+        const n = parseFloat(String(item.latency).replace(',', '.'))
+        return isFinite(n) ? n : null
+      }
+      if (typeof item?.ms === 'number') return item.ms
+      if (typeof item?.timeMs === 'number') return item.timeMs
+      return null
+    }
+    const classifyLatency = (ms) => {
+      if (ms == null || !isFinite(ms) || ms === Infinity) return 'falha'
+      return ms > 500 ? 'lenta' : 'ok'
+    }
+    const load = async () => {
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 10000)
+        const res = await fetch('https://webhook.sistemavieira.com.br/webhook/status-workflows', { method: 'GET', signal: controller.signal })
+        clearTimeout(timeout)
+        let data = null
+        try { data = await res.json() } catch {}
+        let normal = 0, lenta = 0, falha = 0
+        if (Array.isArray(data)) {
+          for (const it of data) {
+            const ms = parseLatencyMs(it)
+            const s = classifyLatency(ms)
+            if (s === 'ok') normal++
+            else if (s === 'lenta') lenta++
+            else falha++
+          }
+        }
+        // desempate por severidade: falha > lenta > ok
+        let m = 'ok', mv = normal
+        if (lenta >= mv) { m = 'lenta'; mv = lenta }
+        if (falha >= mv) { m = 'falha'; mv = falha }
+        if (!abort) setStatusMajor(m)
+      } catch (_) { if (!abort) setStatusMajor(null) }
+    }
+    load()
+    const id = setInterval(load, 180000)
+    return () => { abort = true; clearInterval(id) }
+  }, [])
 
-  // Abre o modal de novidades automaticamente após o login (quando o user muda de null para objeto)
+
+  // Abre o modal de novidades automaticamente apÃ³s o login (quando o user muda de null para objeto)
   useEffect(() => {
     if (user && isDashboard) {
       const loginTime = user.loginTime
       const now = new Date().toISOString()
-      // Se o login foi feito há menos de 2 segundos, mostra o modal
+      // Se o login foi feito hÃ¡ menos de 2 segundos, mostra o modal
       if (loginTime && (new Date(now) - new Date(loginTime)) < 2000) {
         setIsNovidadesModalOpen(true)
       }
@@ -55,7 +103,7 @@ export default function TopNav() {
   const handlePasswordSubmit = async (event) => {
     event.preventDefault()
     if (!user?.id) {
-      notify.error('Usuário inválido para atualização de senha.')
+      notify.error('UsuÃ¡rio invÃ¡lido para atualizaÃ§Ã£o de senha.')
       return
     }
 
@@ -64,7 +112,7 @@ export default function TopNav() {
     const confirmacao = confirmPassword.trim()
 
     if (!senhaAtual || !senhaNova || !confirmacao) {
-      notify.warn('Preencha todos os campos obrigatórios.')
+      notify.warn('Preencha todos os campos obrigatÃ³rios.')
       return
     }
 
@@ -74,7 +122,7 @@ export default function TopNav() {
     }
 
     if (senhaNova !== confirmacao) {
-      notify.warn('As senhas não coincidem.')
+      notify.warn('As senhas nÃ£o coincidem.')
       return
     }
 
@@ -131,7 +179,7 @@ export default function TopNav() {
             </span>
           </Link>
           
-          {/* Botão Novidades ao lado da logo */}
+          {/* BotÃ£o Novidades ao lado da logo */}
           <button 
             onClick={() => setIsNovidadesModalOpen(true)}
             className="btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2"
@@ -173,7 +221,19 @@ export default function TopNav() {
             {isAuthenticated && (
               <>
                 <li className="nav-item">
-                  <Link to="/dashboard" className="nav-link">Dashboard</Link>
+                  <Link to="/dashboard" className="nav-link d-inline-flex align-items-center gap-2">
+                    <FiBarChart2 />
+                    <span>Dashboard</span>
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link to="/status" className="nav-link d-inline-flex align-items-center gap-2">
+                    <span className="position-relative d-inline-flex" style={{ width: 18, height: 18 }}>
+                      <FiActivity />
+                      <span className="status-dot" aria-hidden="true" style={{ position: "absolute", right: -2, top: -2, width: 8, height: 8, borderRadius: 999, border: "1px solid rgba(0,0,0,0.35)", background: (statusMajor === "falha" ? "var(--danger)" : statusMajor === "lenta" ? "var(--warning)" : statusMajor === "ok" ? "var(--success)" : "rgba(255,255,255,0.35)") }}></span>
+                    </span>
+                    <span>Status</span>
+                  </Link>
                 </li>
               </>
             )}
@@ -198,7 +258,7 @@ export default function TopNav() {
                   onClick={() => {
                     loader.showFor(400)
                     logout()
-                    notify.info('Sessão encerrada')
+                    notify.info('SessÃ£o encerrada')
                   }}
                 >
                   Sair
