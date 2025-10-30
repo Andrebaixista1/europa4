@@ -230,7 +230,7 @@ export default function TopNav() {
                   <Link to="/status" className="nav-link d-inline-flex align-items-center gap-2">
                     <span className="position-relative d-inline-flex" style={{ width: 18, height: 18 }}>
                       <FiActivity />
-                      <span className="status-dot" aria-hidden="true" style={{ position: "absolute", right: -2, top: -2, width: 8, height: 8, borderRadius: 999, border: "1px solid rgba(0,0,0,0.35)", background: (statusMajor === "falha" ? "var(--danger)" : statusMajor === "lenta" ? "var(--warning)" : statusMajor === "ok" ? "var(--success)" : "rgba(255,255,255,0.35)") }}></span>
+                      <span className=\"status-dot status-dot-anim\" aria-hidden="true" style={{ position: "absolute", right: -2, top: -2, width: 8, height: 8, borderRadius: 999, border: "1px solid rgba(0,0,0,0.35)", background: (statusMajor === "falha" ? "var(--danger)" : statusMajor === "lenta" ? "var(--warning)" : statusMajor === "ok" ? "var(--success)" : "rgba(255,255,255,0.35)") }}></span>
                     </span>
                     <span>Status</span>
                   </Link>
@@ -359,4 +359,15 @@ export default function TopNav() {
       )}
     </>
   )
+}
+
+// suave animação da bolinha do Status no topo
+if (typeof document !== 'undefined') {
+  const __navDotStyleId = 'nav-status-dot-anim'
+  if (!document.getElementById(__navDotStyleId)) {
+    const __s = document.createElement('style')
+    __s.id = __navDotStyleId
+    __s.innerHTML = .status-dot-anim{animation:statusDotPulse 2.8s ease-in-out infinite;will-change:transform,opacity}@keyframes statusDotPulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.1);opacity:1}}
+    document.head && document.head.appendChild(__s)
+  }
 }
