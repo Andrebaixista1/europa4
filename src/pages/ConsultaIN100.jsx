@@ -1,7 +1,7 @@
-﻿import { useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { FiSearch, FiArrowLeft, FiCheck } from 'react-icons/fi'
+import { FiSearch, FiArrowLeft, FiCheck, FiUser, FiHash, FiCalendar, FiInfo, FiDollarSign, FiCopy } from 'react-icons/fi'
 import { Tooltip as BsTooltip } from 'bootstrap'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { notify } from '../utils/notify.js'
@@ -151,10 +151,30 @@ export default function ConsultaIN100() {
     return age
   }
   const brCurrency = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n || 0))
-  const mapPensao = (v) => (v === 'not_payer' ? 'Não pensionista' : v || '-')
-  const mapBloqueio = (v) => (v === 'not_blocked' ? 'Não bloqueado' : v || '-')
+  const mapPensao = (v) => (v === 'not_payer' ? 'não pensionista' : v || '-')
+  const mapBloqueio = (v) => (v === 'not_blocked' ? 'não bloqueado' : v || '-')
   const mapTipoCredito = (v) => (v === 'magnetic_card' ? 'Cartão magnético' : v || '-')
   const mapSituacao = (v) => (v === 'elegible' ? 'Elegível' : v || '-')
+
+  const copyToClipboard = async (text, successMsg = 'Copiado!') => {
+    try {
+      await navigator.clipboard.writeText(String(text ?? ''))
+      notify.success(successMsg, { autoClose: 2000 })
+    } catch (_) {
+      try {
+        const el = document.createElement('textarea')
+        el.value = String(text ?? '')
+        el.setAttribute('readonly', '')
+        el.style.position = 'absolute'
+        el.style.left = '-9999px'
+        document.body.appendChild(el)
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+        notify.success(successMsg, { autoClose: 2000 })
+      } catch { /* ignore */ }
+    }
+  }
 
   const normalizeStatus = (value) => (value || '')
     .toString()
@@ -186,8 +206,9 @@ export default function ConsultaIN100() {
     const isCpf = kind === 'cpf'
     const raw = isCpf ? cpf : beneficio
     const digits = (raw || '').replace(/\D/g, '')
-    if (isCpf && digits.length !== 11) return notify.warn('Informe um CPF válido (11 dígitos).')
-    // Para busca por NB na lupa, permitimos menos de 10 dígitos (até parcial)
+    // Na lupa, permitir busca parcial para CPF e NB (mínimo 1 dígito)
+    if (isCpf && digits.length === 0) return notify.warn('Informe ao menos 1 dígito do CPF para pesquisar.')
+    // Para NB na lupa, também permitir menos de 10 dígitos (busca parcial)
     if (!isCpf && digits.length === 0) return notify.warn('Informe ao menos 1 dígito do Benefício para pesquisar.')
 
     setLookup({
@@ -242,7 +263,7 @@ export default function ConsultaIN100() {
 
       const findDigitsInText = (t, len) => {
         if (!t) return null
-        const hint = len === 11 ? /(cpf)[^\d]{0,20}(\d{11})/i : /(benef[ií]cio|nb)[^\d]{0,20}(\d{10})/i
+        const hint = len === 11 ? /(cpf)[^\d]{0,20}(\d{11})/i : /(benef[íi]cio|nb)[^\d]{0,20}(\d{10})/i
         const hintMatch = t.match(hint)
         if (hintMatch) return hintMatch[2]
         const re = new RegExp(`\\b\\d{${len}}\\b`)
@@ -321,7 +342,7 @@ export default function ConsultaIN100() {
       setBeneficio(formatBeneficio(MOCK_BEN))
       notify.success('Benefício localizado na Maciça e preenchido automaticamente.')
     } else {
-      notify.info('Nenhum benefício localizado na Maciça para este CPF (mock).')
+      notify.info('Nenhum Benefício localizado na Maciça para este CPF (mock).')
     }
   }
 
@@ -330,7 +351,7 @@ export default function ConsultaIN100() {
     loader.begin()
     try {
     if (Number(metrics.disponivel) <= 0) {
-      notify.warn('Sem saldo dispon\u00edvel para realizar consultas.')
+      notify.warn('Sem saldo disponível para realizar consultas.')
       return
     }
     const digits = cpf.replace(/\D/g, '')
@@ -377,7 +398,9 @@ export default function ConsultaIN100() {
           )
         }
         let arr = null
+        let respostaTries = 0
         while (true) {
+          respostaTries++
           const resResposta = await fetch(urlResposta, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -396,6 +419,12 @@ export default function ConsultaIN100() {
               }
               if (isValidResposta(dataTry)) { arr = dataTry; break }
             }
+          }
+          if (respostaTries >= 5 && (respostaTries % 5) === 0) {
+            notify.warn(
+              'Devido a instabilidade na AWS o tempo de consultas pode levar mais de 5min para trazer o resultado. Qualibanking API',
+              { autoClose: 15000, toastId: 'aws-qualibanking-delay' }
+            )
           }
           await new Promise(r => setTimeout(r, 30000))
         }
@@ -602,7 +631,7 @@ export default function ConsultaIN100() {
                   <div className="display-6 fw-bold">{metrics.totalCarregado}</div>
                 </div>
                 <div>
-                  <div className="small text-uppercase opacity-75">{'Dispon\u00edvel'}</div>
+                  <div className="small text-uppercase opacity-75">{'Disponível'}</div>
                   <div className="display-6 fw-bold">{metrics.disponivel}</div>
                 </div>
                 <div>
@@ -630,7 +659,7 @@ export default function ConsultaIN100() {
                   <button
                     type="button"
                     className="btn btn-outline-secondary d-flex align-items-center"
-                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
+                    title="não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
                     aria-label="Buscar NB/CPF no nosso banco de dados"
                     data-bs-toggle="tooltip"
                     data-bs-placement="top"
@@ -638,6 +667,7 @@ export default function ConsultaIN100() {
                   >
                     <FiSearch />
                   </button>
+                  {/* botão de copiar CPF removido conforme solicitação */}
                 </div>
               </div>
 
@@ -656,7 +686,7 @@ export default function ConsultaIN100() {
                   <button
                     type="button"
                     className="btn btn-outline-secondary d-flex align-items-center"
-                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
+                    title="não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
                     aria-label="Buscar NB/CPF no nosso banco de dados"
                     data-bs-toggle="tooltip"
                     data-bs-placement="top"
@@ -664,6 +694,7 @@ export default function ConsultaIN100() {
                   >
                     <FiSearch />
                   </button>
+                  {/* botão de copiar NB removido conforme solicitação */}
                 </div>
               </div>
 
@@ -690,7 +721,7 @@ export default function ConsultaIN100() {
                 </div>
                 <div className="modal-body">
                   <div className="mb-2">
-                    <div className="form-label mb-0">Número informado</div>
+                    <div className="form-label mb-0">número informado</div>
                     <div className="fw-semibold">{lookup.digits}</div>
                   </div>
                   {lookup.loading && (
@@ -816,8 +847,9 @@ export default function ConsultaIN100() {
         )}
 
         {resultado && (
+          <>
           <section className="mt-4 result-section" ref={resultRef} id="result-print">
-            <div className="neo-card neo-lg p-4">
+            <div className="neo-card neo-lg p-4 d-none">
               <div className="d-flex align-items-center justify-content-between mb-3">
                 <h5 className="mb-0">Resultados da Consulta</h5>
                 <div className="small opacity-75">Última Atualização: {formatDate(resultado.data_retorno_consulta)} às {formatTime(resultado.data_retorno_consulta)}</div>
@@ -826,7 +858,7 @@ export default function ConsultaIN100() {
               <div className="row g-3">
                 <div className="col-12 col-md-6">
                   <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informações Básicas</div>
+                    <div className="fw-semibold mb-2">informações Básicas</div>
                     <div className="small opacity-75">Benefício:</div>
                     <div className="mb-2">{resultado.numero_beneficio}</div>
                     <div className="small opacity-75">CPF:</div>
@@ -840,7 +872,7 @@ export default function ConsultaIN100() {
 
                 <div className="col-12 col-md-6">
                   <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informações Pessoais</div>
+                    <div className="fw-semibold mb-2">informações Pessoais</div>
                     <div className="small opacity-75">Pensão:</div>
                     <div className="mb-2">{mapPensao(resultado.pensao)}</div>
                     <div className="small opacity-75">Data de Nascimento:</div>
@@ -868,12 +900,12 @@ export default function ConsultaIN100() {
 
                 <div className="col-12 col-md-6">
                   <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informações Financeiras</div>
+                    <div className="fw-semibold mb-2">informações Financeiras</div>
                     <div className="small opacity-75">Saldo Cartão Benefício:</div>
                     <div className="mb-2">{brCurrency(resultado.saldo_cartao_beneficio)}</div>
                     <div className="small opacity-75">Saldo Cartão Consignado:</div>
                     <div className="mb-2">{brCurrency(resultado.saldo_cartao_consignado)}</div>
-                    <div className="small opacity-75">{'Margem Dispon\u00edvel'}:</div>
+                    <div className="small opacity-75">{'Margem Disponível'}:</div>
                     <div className="mb-2">{brCurrency(resultado.saldo_total_disponivel)}</div>
                     <div className="small opacity-75">Empréstimos Ativos:</div>
                     <div>{resultado.numero_portabilidades}</div>
@@ -882,7 +914,7 @@ export default function ConsultaIN100() {
 
                 <div className="col-12 col-md-6">
                   <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informações Bancárias</div>
+                    <div className="fw-semibold mb-2">informações Bancárias</div>
                     <div className="small opacity-75">Banco de Desembolso:</div>
                     <div className="mb-2">{resultado.banco_desembolso}</div>
                     <div className="small opacity-75">Nome do Banco:</div>
@@ -891,7 +923,7 @@ export default function ConsultaIN100() {
                     <div className="mb-2">{resultado.agencia_desembolso || '-'}</div>
                     <div className="small opacity-75">Conta:</div>
                     <div className="mb-2">{resultado.conta_desembolso || '-'}</div>
-                    <div className="small opacity-75">Dígito:</div>
+                    <div className="small opacity-75">dígito:</div>
                     <div>{resultado.digito_desembolso || '-'}</div>
                   </div>
                 </div>
@@ -906,10 +938,182 @@ export default function ConsultaIN100() {
               </div>
             </div>
           </section>
+          {/* Novo layout de resposta */}
+          <div className="neo-card result-hero p-4 mb-3">
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h5 className="mb-0 d-flex align-items-center gap-2"><FiUser /> Dados Pessoais</h5>
+              <div className="small opacity-75">Atualizado: {formatDate(resultado.data_retorno_consulta)} às {formatTime(resultado.data_retorno_consulta)}</div>
+            </div>
+            <div className="row g-3">
+              <div className="col-12 col-lg-4">
+                <div className="label">Nome</div>
+                <div className="value fw-semibold">{resultado.nome || '-'}</div>
+              </div>
+                <div className="col-6 col-lg-2">
+                  <div className="label d-flex align-items-center gap-1"><FiHash /> CPF</div>
+                  <div className="value d-flex align-items-center gap-2">
+                    <span>{resultado.numero_documento ? formatCpf(String(resultado.numero_documento)) : '-'}</span>
+                    {resultado.numero_documento && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        title="Copiar CPF"
+                        onClick={() => copyToClipboard(String(resultado.numero_documento).replace(/\D/g, ''), 'CPF copiado!')}
+                      >
+                        <FiCopy />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              <div className="col-6 col-lg-2">
+                <div className="label d-flex align-items-center gap-1"><FiCalendar /> Idade</div>
+                <div className="value">{resultado.data_nascimento ? `${formatDate(resultado.data_nascimento)} (${idadeFrom(resultado.data_nascimento)} anos)` : '-'}</div>
+              </div>
+              <div className="col-6 col-lg-2">
+                <div className="label">Sexo</div>
+                <div className="value">-</div>
+              </div>
+              <div className="col-6 col-lg-2">
+                <div className="label">UF</div>
+                <div className="value">{resultado.estado || '-'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="neo-card p-0 mb-3">
+            <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+              <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> informações da Matrícula</h6>
+            </div>
+            <div className="kv-list p-3 p-md-4">
+              <div className="kv-line">
+                <div className="kv-label">NB:</div>
+                  <div className="kv-value d-flex align-items-center gap-2">
+                    <span>{resultado.numero_beneficio ? formatBeneficio(String(resultado.numero_beneficio)) : '-'}</span>
+                    {resultado.numero_beneficio && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-icon"
+                        title="Copiar NB"
+                        onClick={() => copyToClipboard(String(resultado.numero_beneficio).replace(/\D/g, ''), 'NB copiado!')}
+                      >
+                        <FiCopy />
+                      </button>
+                    )}
+                  </div>
+              </div>
+              <div className="kv-line">
+                <div className="kv-label">Espécie:</div>
+                <div className="kv-value">-</div>
+                <div className="kv-label">Situação:</div>
+                <div className="kv-value">{resultado.situacao_beneficio ? mapSituacao(resultado.situacao_beneficio) : '-'}</div>
+              </div>
+              <div className="kv-line">
+                <div className="kv-label">Data de Concessão:</div>
+                <div className="kv-value">{resultado.data_concessao ? formatDate(resultado.data_concessao) : '-'}</div>
+                <div className="kv-label">UF:</div>
+                <div className="kv-value">{resultado.estado || '-'}</div>
+              </div>
+                <div className="kv-line">
+                  <div className="kv-label">Data Despacho Benefício:</div>
+                  <div className="kv-value">-</div>
+                  <div className="kv-label">Representante / Procurador:</div>
+                  <div className="kv-value">{resultado.nome_representante_legal || '-'}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Portabilidades:</div>
+                  <div className="kv-value">{resultado?.numero_portabilidades != null ? String(resultado.numero_portabilidades) : '-'}</div>
+                </div>
+              </div>
+            </div>
+
+          <div className="row g-3 mb-3">
+            <div className="col-12 col-lg-4">
+              <div className="neo-card stat-card h-100">
+                <div className="p-4">
+                  <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartão Benefício:</div>
+                  <div className="stat-value">{resultado.saldo_cartao_beneficio != null ? brCurrency(resultado.saldo_cartao_beneficio) : '-'}</div>
+                </div>
+                <div className="stat-footer p-3">{Number(resultado.limite_cartao_beneficio ?? 0) > 0 || Number(resultado.saldo_cartao_beneficio ?? 0) > 0 ? 'Em cartão' : 'Cliente sem cartão'}</div>
+              </div>
+            </div>
+            <div className="col-12 col-lg-4">
+              <div className="neo-card stat-card h-100">
+                <div className="p-4">
+                  <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartão Consignado:</div>
+                  <div className="stat-value">{resultado.saldo_cartao_consignado != null ? brCurrency(resultado.saldo_cartao_consignado) : '-'}</div>
+                </div>
+                <div className="stat-footer p-3">{Number(resultado.limite_cartao_consignado ?? 0) > 0 || Number(resultado.saldo_cartao_consignado ?? 0) > 0 ? 'Em cartão' : 'Cliente sem cartão'}</div>
+              </div>
+            </div>
+            <div className="col-12 col-lg-4">
+              <div className="neo-card stat-card h-100">
+                <div className="p-4">
+                  <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem Disponível:</div>
+                  <div className="stat-value">{resultado.saldo_total_disponivel != null ? brCurrency(resultado.saldo_total_disponivel) : '-'}</div>
+                </div>
+                <div className="stat-footer p-3">Renda: - / MR: -</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="neo-card p-0 mb-4">
+            <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+              <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados Bancários</h6>
+            </div>
+              <div className="kv-list p-3 p-md-4">
+                <div className="kv-line">
+                  <div className="kv-label">Banco:</div>
+                  <div className="kv-value">{resultado.banco_desembolso || '-'}</div>
+                  <div className="kv-label">Nome do Banco:</div>
+                  <div className="kv-value">{bancoInfo?.name || '-'}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Agência:</div>
+                  <div className="kv-value">{resultado.agencia_desembolso || '-'}</div>
+                  <div className="kv-label">Conta:</div>
+                  <div className="kv-value">{resultado.conta_desembolso || '-'}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">dígito:</div>
+                  <div className="kv-value">{resultado.digito_desembolso || '-'}</div>
+                  <div className="kv-label">Tipo de Crédito:</div>
+                  <div className="kv-value">{resultado.tipo_credito ? mapTipoCredito(resultado.tipo_credito) : '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Consulta BMG - tabela no mesmo design de Dados Bancários (mock) */}
+            <div className="neo-card p-0 mb-4 bmg-panel">
+              <div className="section-bar bmg-section px-4 py-3 d-flex align-items-center justify-content-between">
+                <h6 className="mb-0 d-flex align-items-center gap-2 bmg-title"><FiInfo /> Consulta BMG</h6>
+              </div>
+              <div className="kv-list p-3 p-md-4">
+                <div className="kv-line">
+                  <div className="kv-label">Liberado:</div>
+                  <div className="kv-value">0</div>
+                  <div className="kv-label">Limite Cartão:</div>
+                  <div className="kv-value">{brCurrency(0)}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Limite Disponível:</div>
+                  <div className="kv-value">{brCurrency(0)}</div>
+                  <div className="kv-label">Valor Saque Máximo:</div>
+                  <div className="kv-value">{brCurrency(0)}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Data/Hora Consulta:</div>
+                  <div className="kv-value">{formatDate(new Date().toISOString())} {formatTime(new Date().toISOString())}</div>
+                  <div className="kv-label"></div>
+                  <div className="kv-value"></div>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </main>
       <Footer />
     </div>
   )
 }
+
 
