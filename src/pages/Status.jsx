@@ -72,6 +72,16 @@ export default function Status() {
   }, [checks]);
 
   const inactiveRows = useMemo(() => (checks || []).filter(c => c.active === false), [checks]);
+  const activeRows = useMemo(() => (checks || []).filter(c => c.active !== false), [checks]);
+
+  const activeCounts = useMemo(() => {
+    let ativos = 0, inativos = 0;
+    for (const c of (checks || [])) {
+      if (c?.active === true) ativos += 1;
+      else if (c?.active === false) inativos += 1;
+    }
+    return { ativos, inativos };
+  }, [checks]);
 
   // Chama o endpoint do n8n ao abrir a página e no botão Atualizar
   const runN8nStatus = async () => {
@@ -186,7 +196,7 @@ export default function Status() {
 
         
         <div className="row g-3 mb-3">
-          <div className="col-12 col-md-4">
+          <div className="col-12 col-md-3">
             <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
               <div className="label" style={{ fontSize: "25px" }}>Normal</div>
               <div className="display-6 fw-bold text-success d-inline-flex align-items-center gap-2">
@@ -194,7 +204,7 @@ export default function Status() {
               </div>
             </div>
           </div>
-          <div className="col-12 col-md-4">
+          <div className="col-12 col-md-3">
             <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
               <div className="label" style={{ fontSize: "25px" }}>Lenta</div>
               <div className="display-6 fw-bold text-warning d-inline-flex align-items-center gap-2">
@@ -202,7 +212,7 @@ export default function Status() {
               </div>
             </div>
           </div>
-          <div className="col-12 col-md-4">
+          <div className="col-12 col-md-3">
             <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
               <div className="label" style={{ fontSize: "25px" }}>Erros</div>
               <div className="display-6 fw-bold text-danger d-inline-flex align-items-center gap-2">
@@ -210,7 +220,16 @@ export default function Status() {
               </div>
             </div>
           </div>
-        </div>        <div className="neo-card p-0">
+          <div className="col-12 col-md-3">
+            <div className="neo-card neo-lg p-3 text-center" style={{ minHeight: "110px" }}>
+              <div className="label" style={{ fontSize: "25px" }}>Ativos/Inativos</div>
+              <div className="display-6 fw-bold d-inline-flex align-items-center gap-4">
+                <span className="text-success d-inline-flex align-items-center gap-1"><FiCheckCircle size={24} /> {activeCounts.ativos}</span>
+                <span className="text-danger d-inline-flex align-items-center gap-1"><FiXCircle size={24} /> {activeCounts.inativos}</span>
+              </div>
+            </div>
+          </div>        </div>
+<div className="neo-card p-0">
           <div className="section-bar px-4 py-3 d-flex align-items-center gap-2">
             <FiAlertTriangle />
             <div className="fw-semibold">APIs N8N</div>
@@ -228,7 +247,7 @@ export default function Status() {
                 </tr>
               </thead>
               <tbody>
-                {(checks.length ? checks : [{ key: 'n8n', name: 'N8N status-workflows' }]).map((c) => (
+                {(activeRows.length ? activeRows : [{ key: 'n8n', name: 'N8N status-workflows' }]).map((c) => (
                   <tr key={c.key}>
                     <td>{c.name}</td>
                     <td>{statusBadge(c.state)}</td>
