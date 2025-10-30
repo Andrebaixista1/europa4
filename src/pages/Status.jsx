@@ -99,6 +99,7 @@ export default function Status() {
               key: item.workflow_uid || item.workflowId || item.id || `wf-${idx}`,
               workflowId: item.workflowId ?? item.workflow_id ?? item.workflow_uid ?? item.workflowUid ?? null,
               name: item.workflow_name || item.name || item.workflow || item.service || 'Workflow',
+              active: item.active === true,
               state,
               statusText: item.status || item.detail || '',
               ms,
@@ -113,6 +114,7 @@ export default function Status() {
               key: k || `wf-${idx}`,
               workflowId: v?.workflowId ?? v?.workflow_id ?? v?.workflow_uid ?? v?.workflowUid ?? k,
               name: v?.workflow_name || k || 'Workflow',
+              active: v?.active === true,
               state: classifyLatency(ms),
               statusText: typeof v === 'string' ? v : (v?.status || JSON.stringify(v)),
               ms,
@@ -128,7 +130,7 @@ export default function Status() {
     }
     const ended = performance.now()
     if (!rows.length) {
-      rows = [{ key: 'n8n', name: 'N8N status-workflows', state: ok ? 'ok' : 'falha', statusText, ms: ended - started, latencyText: null, at: new Date(), workflowId: null }]
+      rows = [{ key: 'n8n', name: 'N8N status-workflows', state: ok ? 'ok' : 'falha', statusText, ms: ended - started, latencyText: null, at: new Date(), workflowId: null, active: null }]
     }
     setChecks(rows)
     setRunning(false)
@@ -219,6 +221,7 @@ export default function Status() {
                   <th style={{minWidth: '120px'}}>Status</th>
                   <th style={{minWidth: '120px'}}>Latência</th>
                   <th style={{minWidth: '220px'}}>Última Execução</th>
+                  <th style={{minWidth: '110px'}}>Ativo</th>
                   <th>Ações</th>
                 </tr>
               </thead>
@@ -229,6 +232,11 @@ export default function Status() {
                     <td>{statusBadge(c.state)}</td>
                     <td>{c.latencyText ? c.latencyText : formatMs(c.ms)}</td>
                     <td>{c.at ? formatDateDDMMYYYYHHMM(c.at) : '-'}</td>
+                    <td>{c.active === true ? (
+                      <span className="text-success d-inline-flex align-items-center gap-1"><FiCheckCircle /> Ativo</span>
+                    ) : (c.active === false ? (
+                      <span className="text-danger d-inline-flex align-items-center gap-1"><FiXCircle /> Inativo</span>
+                    ) : '-' )}</td>
                     <td>
                       {c.workflowId
                         ? <a className="btn btn-outline-light btn-sm" title="Somente o administrador do VPS tem acesso" href={'https://n8n.sistemavieira.com.br/workflow/' + encodeURIComponent(c.workflowId) + '/executions'} target="_blank" rel="noopener noreferrer">Abrir</a>
