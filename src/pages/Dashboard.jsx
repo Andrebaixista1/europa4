@@ -176,8 +176,9 @@ export default function Dashboard() {
                     ) : (
                       visibleItems.map((c) => {
                         const isDev = categoria === 'Em Desenvolvimento'
-                        const computedTo = isDev ? (isMaster ? c.route : undefined) : c.route
-                        const onClick = !isMaster && isDev ? () => notify.info('Em desenvolvimento') : undefined
+                        const isBlocked = (c?.blocked === true) || String(c?.badge || '').toLowerCase().includes('bloqueado')
+                        const computedTo = (isDev || isBlocked) ? (isMaster ? c.route : undefined) : c.route
+                        const onClick = !isMaster && (isDev || isBlocked) ? () => notify.info(isBlocked ? 'Bloqueado indeterminadamente' : 'Em desenvolvimento') : undefined
 
                         return (
                           <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
@@ -185,7 +186,7 @@ export default function Dashboard() {
                               title={c.title}
                               icon={c.icon}
                               accent={isDev ? 'info' : 'primary'}
-                              muted={isDev && !isMaster}
+                              muted={(isDev && !isMaster) || (c?.blocked === true && !isMaster)}
                               badge={c.badge}
                               badgeVariant={c.badgeVariant}
                               to={computedTo}

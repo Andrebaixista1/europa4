@@ -6,7 +6,8 @@
                           "icon":  "FiSearch",
                           "route":  "/consultas/in100",
                           "badge":  "Bloqueado Indeterminadamente",
-                          "badgeVariant":  "danger"
+                          "badgeVariant":  "danger",
+                          "blocked":  true
                       },
                       {
                           "title":  "Histórico de Consultas",
@@ -14,7 +15,8 @@
                           "icon":  "FiClock",
                           "route":  "/consultas/historico",
                           "badge":  "Bloqueado Indeterminadamente",
-                          "badgeVariant":  "danger"
+                          "badgeVariant":  "danger",
+                          "blocked":  true
                       }
                   ],
     "Disparos":  [
