@@ -20,7 +20,7 @@ export default function TopNav() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
-  // Indicador de saÃºde do Status (maioria)
+  // Indicador de saÃƒÂºde do Status (maioria)
   const [statusMajor, setStatusMajor] = useState(null) // 'ok' | 'lenta' | 'falha' | null
   useEffect(() => {
     let abort = false
@@ -69,12 +69,12 @@ export default function TopNav() {
   }, [])
 
 
-  // Abre o modal de novidades automaticamente apÃ³s o login (quando o user muda de null para objeto)
+  // Abre o modal de novidades automaticamente apÃƒÂ³s o login (quando o user muda de null para objeto)
   useEffect(() => {
     if (user && isDashboard) {
       const loginTime = user.loginTime
       const now = new Date().toISOString()
-      // Se o login foi feito hÃ¡ menos de 2 segundos, mostra o modal
+      // Se o login foi feito hÃƒÂ¡ menos de 2 segundos, mostra o modal
       if (loginTime && (new Date(now) - new Date(loginTime)) < 2000) {
         setIsNovidadesModalOpen(true)
       }
@@ -103,7 +103,7 @@ export default function TopNav() {
   const handlePasswordSubmit = async (event) => {
     event.preventDefault()
     if (!user?.id) {
-      notify.error('UsuÃ¡rio invÃ¡lido para atualizaÃ§Ã£o de senha.')
+      notify.error('UsuÃƒÂ¡rio invÃƒÂ¡lido para atualizaÃƒÂ§ÃƒÂ£o de senha.')
       return
     }
 
@@ -112,7 +112,7 @@ export default function TopNav() {
     const confirmacao = confirmPassword.trim()
 
     if (!senhaAtual || !senhaNova || !confirmacao) {
-      notify.warn('Preencha todos os campos obrigatÃ³rios.')
+      notify.warn('Preencha todos os campos obrigatÃƒÂ³rios.')
       return
     }
 
@@ -122,7 +122,7 @@ export default function TopNav() {
     }
 
     if (senhaNova !== confirmacao) {
-      notify.warn('As senhas nÃ£o coincidem.')
+      notify.warn('As senhas nÃƒÂ£o coincidem.')
       return
     }
 
@@ -179,7 +179,7 @@ export default function TopNav() {
             </span>
           </Link>
           
-          {/* BotÃ£o Novidades ao lado da logo */}
+          {/* BotÃƒÂ£o Novidades ao lado da logo */}
           <button 
             onClick={() => setIsNovidadesModalOpen(true)}
             className="btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2"
@@ -230,7 +230,7 @@ export default function TopNav() {
                   <Link to="/status" className="nav-link d-inline-flex align-items-center gap-2">
                     <span className="position-relative d-inline-flex" style={{ width: 18, height: 18 }}>
                       <FiActivity />
-                      <span className=\"status-dot status-dot-anim\" aria-hidden="true" style={{ position: "absolute", right: -2, top: -2, width: 8, height: 8, borderRadius: 999, border: "1px solid rgba(0,0,0,0.35)", background: (statusMajor === "falha" ? "var(--danger)" : statusMajor === "lenta" ? "var(--warning)" : statusMajor === "ok" ? "var(--success)" : "rgba(255,255,255,0.35)") }}></span>
+                      <span className='status-dot status-dot-anim' aria-hidden='true' style={{ position: 'absolute', right: -2, top: -2, width: 8, height: 8, borderRadius: 999, border: '1px solid rgba(0,0,0,0.35)', background: (statusMajor === 'falha' ? 'var(--danger)' : statusMajor === 'lenta' ? 'var(--warning)' : statusMajor === 'ok' ? 'var(--success)' : 'rgba(255,255,255,0.35)') }}></span>
                     </span>
                     <span>Status</span>
                   </Link>
@@ -258,7 +258,7 @@ export default function TopNav() {
                   onClick={() => {
                     loader.showFor(400)
                     logout()
-                    notify.info('SessÃ£o encerrada')
+                    notify.info('SessÃƒÂ£o encerrada')
                   }}
                 >
                   Sair
@@ -361,13 +361,13 @@ export default function TopNav() {
   )
 }
 
-// suave animação da bolinha do Status no topo
+// suave animaÃ§Ã£o da bolinha do Status no topo
 if (typeof document !== 'undefined') {
   const __navDotStyleId = 'nav-status-dot-anim'
   if (!document.getElementById(__navDotStyleId)) {
     const __s = document.createElement('style')
     __s.id = __navDotStyleId
-    __s.innerHTML = .status-dot-anim{animation:statusDotPulse 2.8s ease-in-out infinite;will-change:transform,opacity}@keyframes statusDotPulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.1);opacity:1}}
+    __s.innerHTML = '.status-dot-anim{animation:statusDotPulse 2.8s ease-in-out infinite;will-change:transform,opacity}@keyframes statusDotPulse{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.1);opacity:1}}'
     document.head && document.head.appendChild(__s)
   }
 }
