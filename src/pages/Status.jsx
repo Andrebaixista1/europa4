@@ -250,7 +250,7 @@ export default function Status() {
                 {(activeRows.length ? activeRows : [{ key: 'n8n', name: 'N8N status-workflows' }]).map((c) => (
                   <tr key={c.key}>
                     <td>{c.name}</td>
-                    <td>{(String(c.statusText || "").toLowerCase() === "error") ? (<span className="text-danger d-inline-flex align-items-center gap-1"><FiXCircle /> Erro</span>) : statusBadge(c.state)}</td>
+                    <td>{statusBadge(c.state)}</td>
                     <td>{c.latencyText ? c.latencyText : formatMs(c.ms)}</td>
                     <td>{c.at ? formatDateDDMMYYYYHHMM(c.at) : '-'}</td>
                     <td>{c.active === true ? (
