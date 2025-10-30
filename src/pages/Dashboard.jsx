@@ -12,13 +12,11 @@ function Icon({ name, size = 24 }) {
   return <Comp size={size} />
 }
 
-function Card({ title, icon, children, accent = 'primary', muted = false, to, onClick }) {
+function Card({ title, icon, children, accent = 'primary', muted = false, to, onClick, badge, badgeVariant = 'secondary' }) {
   const body = (
     <>
-      {muted && (
-        <span className="badge text-bg-secondary position-absolute" style={{ top: 12, right: 12 }}>
-          Em Desenvolvimento
-        </span>
+      {(muted || badge) && (
+        <span className={"badge text-bg-" + (badge ? badgeVariant : "secondary") + " position-absolute"} style={{ top: 12, right: 12 }}>{badge || "Em Desenvolvimento"}</span>
       )}
       <div className="d-flex align-items-center gap-3 mb-2">
         {icon && (
@@ -48,7 +46,7 @@ function Card({ title, icon, children, accent = 'primary', muted = false, to, on
   return (
     <div
       className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}
-      onClick={onClick}
+      onClick={onClick}\n                            badge={c.badge}\n                            badgeVariant={c.badgeVariant}
       role={onClick ? 'button' : undefined}
       style={onClick ? { cursor: 'pointer' } : undefined}
     >
@@ -189,7 +187,7 @@ export default function Dashboard() {
                               accent={isDev ? 'info' : 'primary'}
                               muted={isDev && !isMaster}
                               to={computedTo}
-                              onClick={onClick}
+                              onClick={onClick}\n                            badge={c.badge}\n                            badgeVariant={c.badgeVariant}
                             >
                               {c.description || null}
                             </Card>
@@ -207,5 +205,6 @@ export default function Dashboard() {
     </div>
   )
 }
+
 
 
