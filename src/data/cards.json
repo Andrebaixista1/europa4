@@ -1,56 +1,50 @@
-﻿{
-    "Consultas":  [
-                      {
-                          "title":  "Consulta Individual (IN100)",
-                          "description":  "Pesquise informações específicas com precisão e resultados detalhados.",
-                          "icon":  "FiSearch",
-                          "route":  "/consultas/in100",
-                          "badge":  "Bloqueado Indeterminadamente",
-                          "badgeVariant":  "danger",
-                          "blocked":  true
-                      },
-                      {
-                          "title":  "Histórico de Consultas",
-                          "description":  "Acesse o histórico de consultas realizadas.",
-                          "icon":  "FiClock",
-                          "route":  "/consultas/historico",
-                          "badge":  "Bloqueado Indeterminadamente",
-                          "badgeVariant":  "danger",
-                          "blocked":  true
-                      }
-                  ],
-    "Disparos":  [
-                     {
-                         "title":  "Múltiplos Disparos",
-                         "description":  "Configure e agende múltiplos disparos em massa para diferentes canais.",
-                         "icon":  "FiSend",
-                         "route":  "/disparos/multiplos"
-                     },
-                     {
-                         "title":  "Acompanhamento de Disparos",
-                         "description":  "Monitore e acompanhe o status de todos os seus disparos agendados.",
-                         "icon":  "FiActivity",
-                         "route":  "/disparos/acompanhamento"
-                     }
-                 ],
-    "Em Desenvolvimento":  [
-                               {
-                                   "title":  "Consulta Individual (Maciça)",
-                                   "status":  "development",
-                                   "description":  "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
-                                   "icon":  "FiDatabase"
-                               },
-                               {
-                                   "title":  "Extração (Maciça)",
-                                   "status":  "development",
-                                   "description":  "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
-                                   "icon":  "FiDownload"
-                               },
-                               {
-                                   "title":  "Consulta em Lote (IN100)",
-                                   "status":  "development",
-                                   "description":  "Faça consultas em lote para múltiplos cadastros de uma só vez.",
-                                   "icon":  "FiLayers"
-                               }
-                           ]
+{
+  "Consultas": [
+    {
+      "title": "Consulta Individual (IN100)",
+      "description": "Pesquise informações específicas com precisão e resultados detalhados.",
+      "icon": "FiSearch",
+      "route": "/consultas/in100"
+    },
+    {
+      "title": "Histórico de Consultas",
+      "description": "Acesse o histórico de consultas realizadas.",
+      "icon": "FiClock",
+      "route": "/consultas/historico"
+    }
+  ],
+  "Disparos": [
+    {
+      "title": "Múltiplos Disparos",
+      "description": "Configure e agende múltiplos disparos em massa para diferentes canais.",
+      "icon": "FiSend",
+      "route": "/disparos/multiplos"
+    },
+    {
+      "title": "Acompanhamento de Disparos",
+      "description": "Monitore e acompanhe o status de todos os seus disparos agendados.",
+      "icon": "FiActivity",
+      "route": "/disparos/acompanhamento"
+    }
+  ],
+  "Em Desenvolvimento": [
+    {
+      "title": "Consulta Individual (Maciça)",
+      "status": "development",
+      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+      "icon": "FiDatabase"
+    },
+    {
+      "title": "Extração (Maciça)",
+      "status": "development",
+      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+      "icon": "FiDownload"
+    },
+    {
+      "title": "Consulta em Lote (IN100)",
+      "status": "development",
+      "description": "Faça consultas em lote para múltiplos cadastros de uma só vez.",
+      "icon": "FiLayers"
+    }
+  ]
 }

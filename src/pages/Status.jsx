@@ -291,7 +291,7 @@ export default function Status() {
                 {inactiveRows.length ? inactiveRows.map((c) => (
                   <tr key={c.key}>
                     <td>{c.name}</td>
-                    <td><span className="text-warning d-inline-flex align-items-center gap-1"><FiAlertTriangle /> Manutenção/Desenvolvimento</span></td>
+                    <td>{statusBadge(c.state)}</td>
                     <td>{c.latencyText ? c.latencyText : formatMs(c.ms)}</td>
                     <td>{c.at ? formatDateDDMMYYYYHHMM(c.at) : '-'}</td>
                     <td><span className="text-danger d-inline-flex align-items-center gap-1"><FiXCircle /> Inativo</span></td>

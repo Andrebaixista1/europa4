@@ -12,11 +12,13 @@ function Icon({ name, size = 24 }) {
   return <Comp size={size} />
 }
 
-function Card({ title, icon, children, accent = 'primary', muted = false, to, onClick, badge, badgeVariant = 'secondary' }) {
+function Card({ title, icon, children, accent = 'primary', muted = false, to, onClick }) {
   const body = (
     <>
-      {(muted || badge) && (
-        <span className={"badge text-bg-" + (badge ? badgeVariant : "secondary") + " position-absolute"} style={{ top: 12, right: 12 }}>{badge || "Em Desenvolvimento"}</span>
+      {muted && (
+        <span className="badge text-bg-secondary position-absolute" style={{ top: 12, right: 12 }}>
+          Em Desenvolvimento
+        </span>
       )}
       <div className="d-flex align-items-center gap-3 mb-2">
         {icon && (
@@ -176,9 +178,8 @@ export default function Dashboard() {
                     ) : (
                       visibleItems.map((c) => {
                         const isDev = categoria === 'Em Desenvolvimento'
-                        const isBlocked = (c?.blocked === true) || String(c?.badge || '').toLowerCase().includes('bloqueado')
-                        const computedTo = (isDev || isBlocked) ? (isMaster ? c.route : undefined) : c.route
-                        const onClick = !isMaster && (isDev || isBlocked) ? () => notify.info(isBlocked ? 'Bloqueado indeterminadamente' : 'Em desenvolvimento') : undefined
+                        const computedTo = isDev ? (isMaster ? c.route : undefined) : c.route
+                        const onClick = !isMaster && isDev ? () => notify.info('Em desenvolvimento') : undefined
 
                         return (
                           <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
@@ -186,9 +187,7 @@ export default function Dashboard() {
                               title={c.title}
                               icon={c.icon}
                               accent={isDev ? 'info' : 'primary'}
-                              muted={(isDev && !isMaster) || (c?.blocked === true && !isMaster)}
-                              badge={c.badge}
-                              badgeVariant={c.badgeVariant}
+                              muted={isDev && !isMaster}
                               to={computedTo}
                               onClick={onClick}
                             >
@@ -208,6 +207,5 @@ export default function Dashboard() {
     </div>
   )
 }
-
 
 
