@@ -258,7 +258,7 @@ export default function TopNav() {
                   onClick={() => {
                     loader.showFor(400)
                     logout()
-                    notify.info('SessÃƒÂ£o encerrada')
+                    notify.info('Sessao encerrada')
                   }}
                 >
                   Sair
