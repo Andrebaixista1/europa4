@@ -9,7 +9,8 @@ export const novidadesList = [
     titulo: 'Status Ferramentas',
     descricao:
       'Agora você pode verificar o status das ferramentas diretamente no dashboard, garantindo que tudo esteja funcionando perfeitamente.',
-  },  {
+  },  
+  {
     data: '28/10/2025',
     titulo: 'Histórico de Consultas (IN100)',
     descricao:

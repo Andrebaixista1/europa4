@@ -1,0 +1,159 @@
+﻿import { useEffect, useState } from 'react'
+import TopNav from '../components/TopNav.jsx'
+import Footer from '../components/Footer.jsx'
+import { FiCheckCircle, FiAlertTriangle, FiXCircle, FiRefreshCw } from 'react-icons/fi'
+
+function formatMs(ms) {
+  if (ms == null) return '-'
+  return `${Math.round(ms)} ms`
+}
+
+function formatMMSS(totalSeconds) {
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2,'0')
+  const ss = String(totalSeconds % 60).padStart(2,'0')
+  return `${mm}:${ss}`
+}
+
+export default function Status() {
+  const [checks, setChecks] = useState([])
+  const [running, setRunning] = useState(false)
+  const TOTAL_SEC = 180
+  const [remaining, setRemaining] = useState(TOTAL_SEC)
+
+  // Chama o endpoint do n8n ao abrir a pÃƒÂ¡gina e no botÃƒÂ£o Atualizar
+  const runN8nStatus = async () => {
+    if (running) return
+    setRunning(true)
+    setRemaining(TOTAL_SEC)
+    const started = performance.now()
+    let ok = false
+    let statusText = ''
+    let rows = []
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 15000)
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/status-workflows', { method: 'GET', signal: controller.signal })
+      clearTimeout(timeout)
+      ok = res.ok
+      statusText = String(res.status)
+      let data = null
+      try { data = await res.json() } catch (_) { data = null }
+      if (data) {
+        if (Array.isArray(data)) {
+          rows = data.map((item, idx) => ({
+            key: item.key || item.id || `wf-${idx}`,
+            name: item.name || item.workflow || item.service || 'Workflow',
+            ok: item.ok === true || String(item.status || '').toLowerCase().includes('ok') || String(item.health || '').toLowerCase().includes('ok'),
+            statusText: item.status || item.detail || '',
+            ms: Number(item.latency ?? item.ms ?? (item.timeMs ?? null)),
+            at: item.at ? new Date(item.at) : new Date(),
+          }))
+        } else if (typeof data === 'object') {
+          rows = Object.entries(data).map(([k, v], idx) => ({
+            key: k || `wf-${idx}`,
+            name: k || 'Workflow',
+            ok: v === true || v?.ok === true || String(v?.status || v).toLowerCase().includes('ok'),
+            statusText: typeof v === 'string' ? v : (v?.status || JSON.stringify(v)),
+            ms: Number(v?.ms ?? v?.latency ?? null),
+            at: new Date(),
+          }))
+        }
+      }
+    } catch (err) {
+      ok = false
+      statusText = err?.name === 'AbortError' ? 'timeout' : (err?.message || 'erro')
+    }
+    const ended = performance.now()
+    if (!rows.length) {
+      rows = [{ key: 'n8n', name: 'N8N status-workflows', ok, statusText, ms: ended - started, at: new Date() }]
+    }
+    setChecks(rows)
+    setRunning(false)
+  }
+
+  useEffect(() => { runN8nStatus() }, [])
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev <= 1) {
+          // dispara atualizaÃƒÂ§ÃƒÂ£o quando zera
+          if (!running) runN8nStatus()
+          return TOTAL_SEC
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(id)
+  }, [running])
+
+  const renderStatusIcon = (ok) => ok
+    ? <span className="text-success d-inline-flex align-items-center gap-1"><FiCheckCircle /> OK</span>
+    : <span className="text-danger d-inline-flex align-items-center gap-1"><FiXCircle /> Falha</span>
+
+  return (
+    <div className="bg-deep min-vh-100 d-flex flex-column">
+      <TopNav />
+      <main className="container-xxl py-4 flex-grow-1">
+        <div className="d-flex align-items-center justify-content-between mb-3">
+          <h2 className="fw-bold mb-0 d-flex align-items-center gap-2">Status</h2>
+          <div className="d-flex align-items-center gap-3">
+            <div className="small opacity-85">Próxima atualização em {formatMMSS(remaining)}</div>
+            <div className="progress" style={{ width: '160px', height: '6px' }}>
+              <div className="progress-bar bg-info" role="progressbar" style={{ width: `${(TOTAL_SEC - remaining) / TOTAL_SEC * 100}%` }} aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline-light btn-sm d-inline-flex align-items-center"
+              onClick={runN8nStatus}
+              disabled={running}
+              title="Atualizar agora"
+              aria-label="Atualizar agora"
+            >
+              <FiRefreshCw className={running ? 'spin' : ''} />
+            </button>
+          </div>
+        </div>
+
+        <div className="neo-card p-0">
+          <div className="section-bar px-4 py-3 d-flex align-items-center gap-2">
+            <FiAlertTriangle />
+            <div className="fw-semibold">APIs N8N</div>
+          </div>
+          <div className="table-responsive">
+            <table className="table table-dark table-striped table-hover mb-0 align-middle">
+              <thead>
+                <tr>
+                  <th style={{minWidth: '220px'}}>Serviço</th>
+                  <th style={{minWidth: '120px'}}>Status</th>
+                  <th style={{minWidth: '120px'}}>Latência</th>
+                  <th style={{minWidth: '220px'}}>Última checagem</th>
+                  <th>Detalhe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(checks.length ? checks : [{ key: 'n8n', name: 'N8N status-workflows' }]).map((c) => (
+                  <tr key={c.key}>
+                    <td>{c.name}</td>
+                    <td>{typeof c.ok === 'boolean' ? renderStatusIcon(c.ok) : '-'}</td>
+                    <td>{c.ms != null ? formatMs(c.ms) : '-'}</td>
+                    <td>{c.at ? c.at.toLocaleString('pt-BR') : '-'}</td>
+                    <td className="small opacity-75">{c.statusText || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  )
+}
+
+// simple spin css hook
+// the project theme.css will style the rest
+const style = document.createElement('style')
+style.innerHTML = `.spin{ animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`
+document.head && document.head.appendChild(style)
+
