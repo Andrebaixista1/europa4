@@ -134,6 +134,11 @@ export default function Dashboard() {
                   </Card>
                 </div>
               )}
+              <div className="col-md-6 col-lg-4 col-xl-3">
+                <Card title="Gerador de Sites" icon="FiGlobe" accent="primary" to="/admin/gerador-sites">
+                  Gere sites profissionais de forma automatizada com base em templates predefinidos, apenas fornecendo as informações essenciais.
+                </Card>
+              </div>
             </div>
           </section>
         </Can>

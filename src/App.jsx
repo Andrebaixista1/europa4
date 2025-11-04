@@ -9,8 +9,9 @@ import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
+import GeradorSites from './pages/GeradorSites.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
-import Status from './pages/Status.jsx'
+// import Status from './pages/Status.jsx' // Temporariamente desativado
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
@@ -37,7 +38,8 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="/status" element={<Status />} />
+      {/* Rota Status temporariamente desativada */}
+      {/* <Route path="/status" element={<Status />} /> */}
       <Route
         path="/multiplos-disparos"
         element={
@@ -59,6 +61,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master", "Administrador"]}>
             <AdminControlePlanejamento />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/gerador-sites"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador"]}>
+            <GeradorSites />
           </ProtectedRoute>
         }
       />
