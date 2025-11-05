@@ -56,6 +56,10 @@ export default function GeradorSites() {
   const [editMetaTag, setEditMetaTag] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   
+  // Modal de confirmação de exclusão
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [siteToDelete, setSiteToDelete] = useState(null)
+  
   // Busca e filtros
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -340,21 +344,34 @@ export default function GeradorSites() {
     }
   }
   
+  // Abrir modal de confirmação de exclusão
+  function handleOpenDeleteConfirm(site) {
+    setSiteToDelete(site)
+    setShowDeleteConfirm(true)
+  }
+  
+  // Fechar modal de confirmação de exclusão
+  function handleCloseDeleteConfirm() {
+    setShowDeleteConfirm(false)
+    setSiteToDelete(null)
+  }
+  
   // Excluir site
-  async function handleDelete(siteId) {
-    if (!confirm('Tem certeza que deseja excluir este site?')) return
+  async function handleDelete() {
+    if (!siteToDelete) return
     
     try {
-      setDeletingId(siteId)
-      const res = await fetch('https://n8n.sistemavieira.com.br/webhook-test/deleta-site', {
+      setDeletingId(siteToDelete.id)
+      const res = await fetch('https://n8n.sistemavieira.com.br/webhook-test/excluiur-site', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: siteId })
+        body: JSON.stringify({ id: siteToDelete.id })
       })
       
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       
       notify.success('Site excluído com sucesso!')
+      handleCloseDeleteConfirm()
       await loadSites()
     } catch (e) {
       console.error('Falha ao excluir site:', e)
@@ -482,8 +499,8 @@ export default function GeradorSites() {
 
         {/* Filtros e Ações */}
         <div className="neo-card neo-lg p-4 mb-3">
-          <div className="row g-2 align-items-end">
-            <div className="col-12 col-md-6">
+          <div className="row g-3 align-items-end">
+            <div className="col-12 col-md-8">
               <label className="form-label small opacity-75">Buscar</label>
               <input 
                 className="form-control" 
@@ -492,17 +509,17 @@ export default function GeradorSites() {
                 onChange={e => setSearch(e.target.value)} 
               />
             </div>
-            <div className="col-12 col-md-6 d-flex gap-2 justify-content-end">
+            <div className="col-12 col-md-4 d-flex gap-2 justify-content-end align-items-end">
               <button 
-                className="btn btn-ghost btn-ghost-primary btn-sm" 
+                className="btn btn-outline-primary d-flex align-items-center gap-2" 
                 onClick={loadSites} 
                 disabled={isLoading}
               >
-                <Fi.FiRefreshCcw className="me-1" />
-                <span className="d-none d-sm-inline">Atualizar</span>
+                <Fi.FiRefreshCcw size={16} />
+                Atualizar
               </button>
               <button 
-                className="btn btn-primary btn-sm d-flex align-items-center gap-2"
+                className="btn btn-primary d-flex align-items-center gap-2"
                 onClick={() => setShowCreate(true)}
               >
                 <Fi.FiPlus size={16} />
@@ -512,8 +529,8 @@ export default function GeradorSites() {
           </div>
         </div>
 
-        <div className="small opacity-75 mb-2">
-          Mostrando {filtered.length} de {sites.length} sites
+        <div className="mb-3 opacity-75">
+          <small>Mostrando {filtered.length} de {sites.length} sites</small>
         </div>
 
         {/* Tabela de Sites */}
@@ -583,12 +600,12 @@ export default function GeradorSites() {
               <table className="table table-dark table-hover align-middle mb-0">
                 <thead>
                   <tr>
-                    <th style={{width:80}}>ID</th>
+                    <th style={{width:60}}>ID</th>
                     <th>Razão Social</th>
                     <th>CNPJ</th>
                     <th>WhatsApp</th>
                     <th>Meta Tag</th>
-                    <th className="text-end">Ações</th>
+                    <th style={{width:100}}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -601,7 +618,7 @@ export default function GeradorSites() {
                   )}
                   {paginated.map((site) => (
                     <tr key={site.id}>
-                      <td>{site.id}</td>
+                      <td className="text-center">{site.id}</td>
                       <td className="text-uppercase">{site.razao_social}</td>
                       <td>{formatCNPJ(site.cnpj)}</td>
                       <td>{formatWhatsApp(site.whatsapp)}</td>
@@ -620,32 +637,26 @@ export default function GeradorSites() {
                         </div>
                       </td>
                       <td>
-                        <div className="d-flex gap-2 justify-content-end">
+                        <div className="d-flex gap-2 justify-content-center">
                           <button
-                            className="btn btn-ghost btn-ghost-success btn-icon"
+                            className="btn btn-success btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
+                            style={{width: 32, height: 32, padding: 0}}
                             title="Download HTML"
                             aria-label="Download HTML"
                             onClick={() => handleDownloadHTML(site)}
                             disabled={!site.html_content}
                           >
-                            <Fi.FiDownload />
+                            <Fi.FiDownload size={16} />
                           </button>
                           <button
-                            className="btn btn-ghost btn-ghost-info btn-icon"
-                            title="Alterar"
-                            aria-label="Alterar"
-                            onClick={() => handleOpenEdit(site)}
-                          >
-                            <Fi.FiEdit2 />
-                          </button>
-                          <button
-                            className="btn btn-ghost btn-ghost-danger btn-icon"
+                            className="btn btn-danger btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
+                            style={{width: 32, height: 32, padding: 0}}
                             title="Excluir"
                             aria-label="Excluir"
                             disabled={deletingId === site.id}
-                            onClick={() => handleDelete(site.id)}
+                            onClick={() => handleOpenDeleteConfirm(site)}
                           >
-                            <Fi.FiTrash2 />
+                            <Fi.FiTrash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -657,6 +668,59 @@ export default function GeradorSites() {
           )}
         </div>
       </main>
+
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteConfirm && siteToDelete && (
+        <div 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+          onClick={handleCloseDeleteConfirm}
+        >
+          <div 
+            className="bg-white rounded-3 p-4" 
+            style={{maxWidth:500, width:'95%'}}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h5 className="mb-0 text-dark fw-bold">Confirmar exclusão</h5>
+              <button 
+                type="button"
+                className="btn-close" 
+                onClick={handleCloseDeleteConfirm} 
+                aria-label="Fechar"
+                disabled={deletingId === siteToDelete.id}
+              />
+            </div>
+            
+            <p className="text-dark mb-3">
+              Tem certeza que deseja excluir <strong className="text-uppercase">{siteToDelete.razao_social}</strong>?
+            </p>
+            
+            <p className="text-muted small mb-4">
+              Esta ação não pode ser desfeita.
+            </p>
+            
+            <div className="d-flex justify-content-end gap-2">
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={handleCloseDeleteConfirm}
+                disabled={deletingId === siteToDelete.id}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-danger" 
+                onClick={handleDelete}
+                disabled={deletingId === siteToDelete.id}
+              >
+                {deletingId === siteToDelete.id ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Edição */}
       {showEdit && selectedSite && (

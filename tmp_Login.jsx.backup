@@ -1,8 +1,0 @@
-﻿          <div className="col-lg-6">
-            <h2 className="fw-bold gradient-text mb-3">Bem-vindo(a) ao Nova Europa 4</h2>
-            <p className="opacity-75">
-              Faça login com suas credenciais.
-            </p>
-          </div>
-          <div className="col-lg-5 ms-lg-auto">
-
