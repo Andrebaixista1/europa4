@@ -60,6 +60,12 @@ export default function GeradorSites() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [siteToDelete, setSiteToDelete] = useState(null)
   
+  // Modal de upload em lote
+  const [showBatchUpload, setShowBatchUpload] = useState(false)
+  const [csvFile, setCsvFile] = useState(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, errors: [] })
+  
   // Busca e filtros
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
@@ -356,13 +362,162 @@ export default function GeradorSites() {
     setSiteToDelete(null)
   }
   
-  // Excluir site
+  // Processar CSV em lote
+  async function handleBatchUpload(e) {
+    e?.preventDefault()
+    
+    if (!csvFile) return notify.error('Selecione um arquivo CSV')
+    
+    try {
+      setIsProcessing(true)
+      
+      // Ler arquivo CSV
+      const text = await csvFile.text()
+      const lines = text.split('\n').filter(line => line.trim())
+      
+      if (lines.length < 2) {
+        notify.error('Arquivo CSV vazio ou inválido')
+        return
+      }
+      
+      // Validar cabeçalho
+      const header = lines[0].split(';').map(h => h.trim().toLowerCase())
+      const requiredColumns = ['razão social', 'cnpj', 'whatsapp', 'endereço', 'e-mail', 'meta tag']
+      const hasAllColumns = requiredColumns.every(col => 
+        header.some(h => h.includes(col.toLowerCase().replace(/ã/g, 'a').replace(/ç/g, 'c')))
+      )
+      
+      if (!hasAllColumns) {
+        notify.error('CSV deve conter as colunas: Razão Social, CNPJ, Whatsapp, Endereço, E-mail, Meta Tag')
+        return
+      }
+      
+      const dataLines = lines.slice(1)
+      setBatchProgress({ current: 0, total: dataLines.length, errors: [] })
+      
+      const errors = []
+      
+      // Processar linha por linha SEQUENCIALMENTE (envia, aguarda resposta, envia próxima)
+      for (let i = 0; i < dataLines.length; i++) {
+        const line = dataLines[i].trim()
+        if (!line) continue
+        
+        const columns = line.split(';').map(c => c.trim())
+        
+        if (columns.length < 6) {
+          errors.push(`Linha ${i + 2}: Número de colunas insuficiente`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Erro`] }))
+          continue
+        }
+        
+        const [razaoSocial, cnpj, whatsapp, endereco, email, metaTag] = columns
+        
+        // Validar dados obrigatórios
+        if (!razaoSocial || !cnpj || !whatsapp || !endereco || !email) {
+          errors.push(`Linha ${i + 2}: Dados obrigatórios faltando`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Dados faltando`] }))
+          continue
+        }
+        
+        // Capturar IP do usuário
+        let ipAddress = null
+        try {
+          const ipRes = await fetch('https://api.ipify.org?format=json')
+          const ipData = await ipRes.json()
+          ipAddress = ipData.ip
+        } catch (e) {
+          console.warn('Não foi possível obter o IP:', e)
+        }
+        
+        const payload = {
+          razao_social: razaoSocial,
+          cnpj: cnpj.replace(/\D/g, ''),
+          whatsapp: whatsapp.replace(/\D/g, ''),
+          endereco: endereco,
+          email: email,
+          meta_tag: metaTag || '',
+          usuario_id: user?.id || null,
+          equipe_id: user?.equipe_id || null,
+          ip_address: ipAddress
+        }
+        
+        try {
+          // ENVIA POST E AGUARDA RESPOSTA
+          const res = await fetch('https://webhook.sistemavieira.com.br/webhook/gera-site-individual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+          
+          if (!res.ok) {
+            errors.push(`Linha ${i + 2} (${razaoSocial}): Erro HTTP ${res.status}`)
+            setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Erro HTTP`] }))
+          } else {
+            setBatchProgress(prev => ({ ...prev, current: i + 1 }))
+          }
+        } catch (err) {
+          errors.push(`Linha ${i + 2} (${razaoSocial}): ${err.message}`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: ${err.message}`] }))
+        }
+        
+        // Aguardar 500ms entre requisições para não sobrecarregar
+        if (i < dataLines.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+      }
+      
+      // Finalizar
+      if (errors.length > 0) {
+        notify.warning(`Processamento concluído com ${errors.length} erro(s)`)
+      } else {
+        notify.success('Todos os sites foram gerados com sucesso!')
+      }
+      
+      await loadSites()
+      
+      // Aguardar 2 segundos antes de fechar
+      setTimeout(() => {
+        setShowBatchUpload(false)
+        setCsvFile(null)
+        setBatchProgress({ current: 0, total: 0, errors: [] })
+      }, 2000)
+      
+    } catch (e) {
+      console.error('Erro ao processar CSV:', e)
+      notify.error(`Erro ao processar arquivo: ${e.message}`)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+  
+  // Baixar CSV de exemplo
+  function handleDownloadExampleCSV() {
+    const exampleData = [
+      ['razao social', 'cnpj', 'whatsapp', 'endereco', 'e-mail', 'meta tag'],
+      ['Empresa Exemplo LTDA', '12.345.678/0001-90', '(11) 98765-4321', 'Rua das Flores, 123 - Centro', 'contato@exemplo.com', 'Credito consignado rapido e facil'],
+      ['Consultoria ABC ME', '98.765.432/0001-12', '(21) 99999-8888', 'Av. Principal, 456 - Sala 10', 'vendas@abc.com', 'Emprestimo consignado com taxas baixas']
+    ]
+    
+    const csvContent = exampleData.map(row => row.join(';')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'exemplo-sites.csv'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    notify.success('Arquivo de exemplo baixado!')
+  }
   async function handleDelete() {
     if (!siteToDelete) return
     
     try {
       setDeletingId(siteToDelete.id)
-      const res = await fetch('https://n8n.sistemavieira.com.br/webhook-test/excluiur-site', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/excluiur-site', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: siteToDelete.id })
@@ -500,7 +655,7 @@ export default function GeradorSites() {
         {/* Filtros e Ações */}
         <div className="neo-card neo-lg p-4 mb-3">
           <div className="row g-3 align-items-end">
-            <div className="col-12 col-md-8">
+            <div className="col-12 col-lg-6">
               <label className="form-label small opacity-75">Buscar</label>
               <input 
                 className="form-control" 
@@ -509,21 +664,28 @@ export default function GeradorSites() {
                 onChange={e => setSearch(e.target.value)} 
               />
             </div>
-            <div className="col-12 col-md-4 d-flex gap-2 justify-content-end align-items-end">
+            <div className="col-12 col-lg-6 d-flex gap-2 justify-content-end align-items-end">
               <button 
                 className="btn btn-outline-primary d-flex align-items-center gap-2" 
                 onClick={loadSites} 
                 disabled={isLoading}
               >
                 <Fi.FiRefreshCcw size={16} />
-                Atualizar
+                <span>Atualizar</span>
+              </button>
+              <button 
+                className="btn btn-outline-success d-flex align-items-center gap-2"
+                onClick={() => setShowBatchUpload(true)}
+              >
+                <Fi.FiUpload size={16} />
+                <span>Upload CSV</span>
               </button>
               <button 
                 className="btn btn-primary d-flex align-items-center gap-2"
                 onClick={() => setShowCreate(true)}
               >
                 <Fi.FiPlus size={16} />
-                Gerar Novo Site
+                <span className="text-nowrap">Gerar Novo Site</span>
               </button>
             </div>
           </div>
@@ -597,15 +759,15 @@ export default function GeradorSites() {
                 </div>
               )}
               
-              <table className="table table-dark table-hover align-middle mb-0">
+              <table className="table table-dark table-hover table-bordered align-middle mb-0">
                 <thead>
                   <tr>
-                    <th style={{width:60}}>ID</th>
-                    <th>Razão Social</th>
-                    <th>CNPJ</th>
-                    <th>WhatsApp</th>
-                    <th>Meta Tag</th>
-                    <th style={{width:100}}>Ações</th>
+                    <th className="text-center" style={{width:60}}>ID</th>
+                    <th className="text-center">Razão Social</th>
+                    <th className="text-center">CNPJ</th>
+                    <th className="text-center">WhatsApp</th>
+                    <th className="text-center">Meta Tag</th>
+                    <th className="text-center" style={{width:80}}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -668,6 +830,149 @@ export default function GeradorSites() {
           )}
         </div>
       </main>
+
+      {/* Modal de Upload em Lote */}
+      {showBatchUpload && (
+        <div 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+        >
+          <div className="modal-dark p-4" style={{maxWidth:600, width:'95%'}}>
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <div>
+                <h4 className="modal-dark-title mb-1">
+                  <Fi.FiUpload className="me-2" size={24} />
+                  Upload em Lote (CSV)
+                </h4>
+                <p className="modal-dark-subtitle small mb-0">
+                  Gerar múltiplos sites a partir de arquivo CSV
+                </p>
+              </div>
+              <button 
+                className="btn btn-ghost btn-icon" 
+                onClick={() => {
+                  if (!isProcessing) {
+                    setShowBatchUpload(false)
+                    setCsvFile(null)
+                    setBatchProgress({ current: 0, total: 0, errors: [] })
+                  }
+                }} 
+                aria-label="Fechar"
+                disabled={isProcessing}
+              >
+                <Fi.FiX />
+              </button>
+            </div>
+            
+            <form onSubmit={handleBatchUpload}>
+              <div className="alert alert-info d-flex align-items-start gap-2 mb-3">
+                <Fi.FiInfo size={20} className="mt-1" />
+                <div className="small w-100">
+                  <strong>Formato do CSV:</strong>
+                  <p className="mb-1 mt-2">O arquivo deve usar <strong>ponto e vírgula (;)</strong> como separador e conter as colunas:</p>
+                  <ul className="mb-2 ps-3">
+                    <li>Razão Social</li>
+                    <li>CNPJ</li>
+                    <li>Whatsapp</li>
+                    <li>Endereço</li>
+                    <li>E-mail</li>
+                    <li>Meta Tag</li>
+                  </ul>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2"
+                    onClick={handleDownloadExampleCSV}
+                  >
+                    <Fi.FiDownload size={14} />
+                    Baixar arquivo de exemplo
+                  </button>
+                </div>
+              </div>
+              
+              {!isProcessing ? (
+                <>
+                  <div className="mb-3">
+                    <label className="form-label">Selecionar Arquivo CSV *</label>
+                    <input
+                      type="file"
+                      className="form-control"
+                      accept=".csv"
+                      onChange={(e) => setCsvFile(e.target.files[0])}
+                      required
+                    />
+                    {csvFile && (
+                      <small className="text-success mt-1 d-block">
+                        <Fi.FiCheck className="me-1" />
+                        Arquivo selecionado: {csvFile.name}
+                      </small>
+                    )}
+                  </div>
+                  
+                  <div className="d-flex justify-content-end gap-2">
+                    <button 
+                      type="button" 
+                      className="btn btn-ghost" 
+                      onClick={() => {
+                        setShowBatchUpload(false)
+                        setCsvFile(null)
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="btn btn-success d-flex align-items-center gap-2"
+                      disabled={!csvFile}
+                    >
+                      <Fi.FiUpload />
+                      Processar CSV
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-center py-4">
+                    <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
+                      <span className="visually-hidden">Processando...</span>
+                    </div>
+                    <h5 className="mb-2 text-light">Processando sites...</h5>
+                    <p className="text-light mb-3">
+                      {batchProgress.current} de {batchProgress.total} sites processados
+                    </p>
+                    
+                    <div className="progress" style={{height: '24px'}}>
+                      <div 
+                        className="progress-bar progress-bar-striped progress-bar-animated" 
+                        role="progressbar" 
+                        style={{width: `${(batchProgress.current / batchProgress.total) * 100}%`}}
+                        aria-valuenow={batchProgress.current} 
+                        aria-valuemin="0" 
+                        aria-valuemax={batchProgress.total}
+                      >
+                        {Math.round((batchProgress.current / batchProgress.total) * 100)}%
+                      </div>
+                    </div>
+                    
+                    {batchProgress.errors.length > 0 && (
+                      <div className="alert alert-warning mt-3 small text-start">
+                        <strong>Erros encontrados ({batchProgress.errors.length}):</strong>
+                        <ul className="mb-0 mt-2 ps-3">
+                          {batchProgress.errors.slice(0, 5).map((err, idx) => (
+                            <li key={idx}>{err}</li>
+                          ))}
+                          {batchProgress.errors.length > 5 && (
+                            <li>... e mais {batchProgress.errors.length - 5} erro(s)</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Confirmação de Exclusão */}
       {showDeleteConfirm && siteToDelete && (
