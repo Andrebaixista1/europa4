@@ -85,11 +85,24 @@ export default function GeradorSites() {
   
   // Formatar WhatsApp
   const formatWhatsApp = (value) => {
-    const numbers = value.replace(/\D/g, '')
-    if (numbers.length <= 11) {
-      return numbers.replace(/(\d{2})(\d{5})(\d{4})/, '+55 ($1) $2-$3')
+    if (!value) return '-'
+    const numbers = String(value).replace(/\D/g, '')
+    
+    // Se já tem DDI (55), remove para adicionar depois
+    let cleanNumber = numbers.startsWith('55') ? numbers.substring(2) : numbers
+    
+    // Se tem 11 dígitos (formato correto): (XX) XXXXX-XXXX
+    if (cleanNumber.length === 11) {
+      return cleanNumber.replace(/(\d{2})(\d{5})(\d{4})/, '+55 ($1) $2-$3')
     }
-    return value
+    
+    // Se tem 10 dígitos (telefone fixo): (XX) XXXX-XXXX
+    if (cleanNumber.length === 10) {
+      return cleanNumber.replace(/(\d{2})(\d{4})(\d{4})/, '+55 ($1) $2-$3')
+    }
+    
+    // Se não conseguir formatar, retorna com +55 no início
+    return numbers.startsWith('55') ? `+${numbers}` : `+55${numbers}`
   }
   
   // Formatar data
@@ -512,6 +525,41 @@ export default function GeradorSites() {
     
     notify.success('Arquivo de exemplo baixado!')
   }
+  
+  // Exportar tabela completa em CSV
+  function handleExportTableCSV() {
+    if (filtered.length === 0) {
+      notify.error('Nenhum dado para exportar')
+      return
+    }
+    
+    const headers = ['ID', 'Razao Social', 'CNPJ', 'WhatsApp', 'Endereco', 'E-mail', 'Meta Tag', 'Link Download']
+    const rows = filtered.map(site => [
+      site.id,
+      site.razao_social || '',
+      formatCNPJ(site.cnpj) || '',
+      formatWhatsApp(site.whatsapp) || '',
+      site.endereco || '',
+      site.email || '',
+      site.meta_tag || '',
+      site.html_content ? `${window.location.origin}/sites/${site.id}/index.html` : 'N/A'
+    ])
+    
+    const csvData = [headers, ...rows]
+    const csvContent = csvData.map(row => row.join(';')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `sites-${new Date().toISOString().split('T')[0]}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    
+    notify.success(`${filtered.length} registros exportados com sucesso!`)
+  }
   async function handleDelete() {
     if (!siteToDelete) return
     
@@ -665,6 +713,15 @@ export default function GeradorSites() {
               />
             </div>
             <div className="col-12 col-lg-6 d-flex gap-2 justify-content-end align-items-end">
+              <button 
+                className="btn btn-outline-info d-flex align-items-center gap-2"
+                onClick={handleExportTableCSV}
+                disabled={isLoading || filtered.length === 0}
+                title="Exportar tabela em CSV"
+              >
+                <Fi.FiDownload size={16} />
+                <span>Exportar CSV</span>
+              </button>
               <button 
                 className="btn btn-outline-primary d-flex align-items-center gap-2" 
                 onClick={loadSites} 
