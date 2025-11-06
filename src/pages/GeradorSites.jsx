@@ -1623,8 +1623,6 @@ export default function GeradorSites() {
                       onChange={e => setEditEmail(e.target.value)}
                       placeholder="contato@empresa.com.br"
                       required
-                      readOnly
-                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
                     />
                     <button
                       type="button"
