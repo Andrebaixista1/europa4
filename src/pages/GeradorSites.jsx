@@ -1439,7 +1439,7 @@ export default function GeradorSites() {
           )}
           
           {!isLoading && !error && (
-            <div className={`table-responsive ${isPageAnimating ? 'page-fade' : ''}`} style={{overflowX: 'auto', whiteSpace: 'nowrap'}}>
+            <div className={`table-responsive ${isPageAnimating ? 'page-fade' : ''}`} style={{overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch'}}>
               {/* Paginação Superior */}
               {totalPages > 1 && (
                 <div className="d-flex justify-content-end px-3 pt-3">
@@ -1557,10 +1557,10 @@ export default function GeradorSites() {
                         </button>
                       </td>
                       <td>
-                        <div className="d-flex gap-2 justify-content-center">
+                        <div className="d-flex flex-column flex-sm-row gap-2 justify-content-center">
                           <button
                             className="btn btn-primary btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
-                            style={{width: 32, height: 32, padding: 0}}
+                            style={{width: 32, height: 32, padding: 0, minWidth: 32}}
                             title="Alterar"
                             aria-label="Alterar"
                             onClick={() => handleOpenEdit(site)}
@@ -1569,7 +1569,7 @@ export default function GeradorSites() {
                           </button>
                           <button
                             className="btn btn-success btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
-                            style={{width: 32, height: 32, padding: 0}}
+                            style={{width: 32, height: 32, padding: 0, minWidth: 32}}
                             title="Download HTML"
                             aria-label="Download HTML"
                             onClick={() => handleDownloadHTML(site)}
@@ -1579,7 +1579,7 @@ export default function GeradorSites() {
                           </button>
                           <button
                             className="btn btn-danger btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
-                            style={{width: 32, height: 32, padding: 0}}
+                            style={{width: 32, height: 32, padding: 0, minWidth: 32}}
                             title="Excluir"
                             aria-label="Excluir"
                             disabled={deletingId === site.id}
@@ -1602,10 +1602,10 @@ export default function GeradorSites() {
       {/* Modal de Upload em Lote */}
       {showBatchUpload && (
         <div 
-          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
           style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
         >
-          <div className="modal-dark p-4" style={{maxWidth:600, width:'95%'}}>
+          <div className="modal-dark p-3 p-md-4" style={{maxWidth:600, width:'100%', maxHeight:'90vh', overflowY:'auto'}}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <div>
                 <h4 className="modal-dark-title mb-1">
@@ -1745,13 +1745,13 @@ export default function GeradorSites() {
       {/* Modal de Confirmação de Exclusão */}
       {showDeleteConfirm && siteToDelete && (
         <div 
-          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
           style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
           onClick={handleCloseDeleteConfirm}
         >
           <div 
-            className="bg-white rounded-3 p-4" 
-            style={{maxWidth:500, width:'95%'}}
+            className="bg-white rounded-3 p-3 p-md-4" 
+            style={{maxWidth:500, width:'100%'}}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -1798,13 +1798,13 @@ export default function GeradorSites() {
       {/* Modal de Alteração de Status */}
       {showStatusModal && selectedSiteForStatus && (
         <div 
-          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
           style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
           onClick={handleCloseStatusModal}
         >
           <div 
-            className="bg-white rounded-3 p-4" 
-            style={{maxWidth:500, width:'95%'}}
+            className="bg-white rounded-3 p-3 p-md-4" 
+            style={{maxWidth:500, width:'100%'}}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -1874,13 +1874,13 @@ export default function GeradorSites() {
       {/* Modal de Alteração de Proxy */}
       {showProxyModal && selectedSiteForProxy && (
         <div 
-          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
           style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
           onClick={handleCloseProxyModal}
         >
           <div 
-            className="bg-white rounded-3 p-4" 
-            style={{maxWidth:500, width:'95%'}}
+            className="bg-white rounded-3 p-3 p-md-4" 
+            style={{maxWidth:500, width:'100%'}}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="d-flex align-items-center justify-content-between mb-3">
@@ -1935,10 +1935,10 @@ export default function GeradorSites() {
       {/* Modal de Edição */}
       {showEdit && selectedSite && (
         <div 
-          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
-          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050, overflowY:'auto'}}
         >
-          <div className="modal-dark p-4" style={{maxWidth:680, width:'95%'}}>
+          <div className="modal-dark p-3 p-md-4 my-3" style={{maxWidth:680, width:'100%', maxHeight:'95vh', overflowY:'auto'}}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <div>
                 <h4 className="modal-dark-title mb-1">
@@ -1962,25 +1962,27 @@ export default function GeradorSites() {
             <div className="d-flex border-bottom mb-3" style={{borderColor: 'rgba(255,255,255,0.15)'}}>
               <button
                 type="button"
-                className={`btn btn-link text-decoration-none px-4 py-2 flex-grow-1 ${
+                className={`btn btn-link text-decoration-none px-2 px-md-4 py-2 flex-grow-1 ${
                   editModalTab === 'cadastro' ? 'text-primary border-bottom border-primary border-3' : 'text-light opacity-75'
                 }`}
                 onClick={() => setEditModalTab('cadastro')}
-                style={{borderRadius: 0}}
+                style={{borderRadius: 0, fontSize: 'clamp(0.85rem, 2vw, 1rem)'}}
               >
-                <Fi.FiDatabase size={16} className="me-2" />
-                Cadastro
+                <Fi.FiDatabase size={16} className="me-1 me-md-2" />
+                <span className="d-none d-sm-inline">Cadastro</span>
+                <span className="d-inline d-sm-none">Info</span>
               </button>
               <button
                 type="button"
-                className={`btn btn-link text-decoration-none px-4 py-2 flex-grow-1 ${
+                className={`btn btn-link text-decoration-none px-2 px-md-4 py-2 flex-grow-1 ${
                   editModalTab === 'limites' ? 'text-primary border-bottom border-primary border-3' : 'text-light opacity-75'
                 }`}
                 onClick={() => setEditModalTab('limites')}
-                style={{borderRadius: 0}}
+                style={{borderRadius: 0, fontSize: 'clamp(0.85rem, 2vw, 1rem)'}}
               >
-                <Fi.FiCreditCard size={16} className="me-2" />
-                Limites & Contas
+                <Fi.FiCreditCard size={16} className="me-1 me-md-2" />
+                <span className="d-none d-sm-inline">Limites & Contas</span>
+                <span className="d-inline d-sm-none">Limites</span>
               </button>
             </div>
             
