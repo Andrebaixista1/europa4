@@ -43,6 +43,7 @@ export default function GeradorSites() {
   const [endereco, setEndereco] = useState('')
   const [email, setEmail] = useState('')
   const [metaTag, setMetaTag] = useState('')
+  const [proxy, setProxy] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   
   // Modal de edição
@@ -54,11 +55,25 @@ export default function GeradorSites() {
   const [editEndereco, setEditEndereco] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editMetaTag, setEditMetaTag] = useState('')
+  const [editProxy, setEditProxy] = useState('')
+  const [editStatus, setEditStatus] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   
   // Modal de confirmação de exclusão
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [siteToDelete, setSiteToDelete] = useState(null)
+  
+  // Modal de alteração de status
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [selectedSiteForStatus, setSelectedSiteForStatus] = useState(null)
+  const [newStatus, setNewStatus] = useState('')
+  const [isSavingStatus, setIsSavingStatus] = useState(false)
+  
+  // Modal de alteração de proxy
+  const [showProxyModal, setShowProxyModal] = useState(false)
+  const [selectedSiteForProxy, setSelectedSiteForProxy] = useState(null)
+  const [newProxy, setNewProxy] = useState('')
+  const [isSavingProxy, setIsSavingProxy] = useState(false)
   
   // Modal de upload em lote
   const [showBatchUpload, setShowBatchUpload] = useState(false)
@@ -73,6 +88,24 @@ export default function GeradorSites() {
   
   // Estado para ações em andamento
   const [deletingId, setDeletingId] = useState(null)
+  
+  // IP do usuário
+  const [ipAddress, setIpAddress] = useState(null)
+  
+  // Obter IP do usuário ao carregar
+  useEffect(() => {
+    async function getIP() {
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipRes.json()
+        setIpAddress(ipData.ip)
+      } catch (e) {
+        console.warn('Não foi possível obter o IP:', e)
+        setIpAddress(null)
+      }
+    }
+    getIP()
+  }, [])
   
   // Formatar CNPJ
   const formatCNPJ = (value) => {
@@ -168,19 +201,6 @@ export default function GeradorSites() {
     
     if (!razaoSocial.trim()) return notify.error('Informe a razão social')
     if (!cnpj.trim()) return notify.error('Informe o CNPJ')
-    if (!whatsapp.trim()) return notify.error('Informe o WhatsApp')
-    if (!endereco.trim()) return notify.error('Informe o endereço')
-    if (!email.trim()) return notify.error('Informe o e-mail')
-    
-    // Capturar IP do usuário
-    let ipAddress = null
-    try {
-      const ipRes = await fetch('https://api.ipify.org?format=json')
-      const ipData = await ipRes.json()
-      ipAddress = ipData.ip
-    } catch (e) {
-      console.warn('Não foi possível obter o IP:', e)
-    }
     
     const payload = {
       razao_social: razaoSocial,
@@ -188,7 +208,9 @@ export default function GeradorSites() {
       whatsapp: whatsapp.replace(/\D/g, ''),
       endereco: endereco,
       email: email,
-      meta_tag: metaTag,
+      meta_tag: metaTag.trim() || '<meta />',
+      proxy: proxy.trim() || 'Não Informado',
+      status: 'Aguardando Pagamento',
       usuario_id: user?.id || null,
       equipe_id: user?.equipe_id || null,
       ip_address: ipAddress
@@ -214,6 +236,7 @@ export default function GeradorSites() {
       setEndereco('')
       setEmail('')
       setMetaTag('')
+      setProxy('')
       
       await loadSites()
     } catch (e) {
@@ -263,6 +286,8 @@ export default function GeradorSites() {
     setEditEndereco(site.endereco || '')
     setEditEmail(site.email || '')
     setEditMetaTag(site.meta_tag || '')
+    setEditProxy(site.proxy || '')
+    setEditStatus(site.status || 'Sem Status')
     setShowEdit(true)
   }
   
@@ -276,6 +301,8 @@ export default function GeradorSites() {
     setEditEndereco('')
     setEditEmail('')
     setEditMetaTag('')
+    setEditProxy('')
+    setEditStatus('')
   }
   
   // Função de alteração
@@ -334,7 +361,9 @@ export default function GeradorSites() {
         whatsapp: editWhatsapp.replace(/\D/g, ''),
         endereco: editEndereco,
         email: editEmail,
-        meta_tag: editMetaTag,
+        meta_tag: editMetaTag.trim() || '<meta />',
+        proxy: editProxy.trim() || 'Não Informado',
+        status: editStatus,
         html_content: htmlContent,
         usuario_id: user?.id || null,
         equipe_id: user?.equipe_id || null,
@@ -344,8 +373,8 @@ export default function GeradorSites() {
       console.log('Enviando alteração com html_content de', htmlContent.length, 'caracteres')
       
       // PASSO 4: Enviar alteração para o webhook
-      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/alterar-cnpj', {
-        method: 'POST',
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/alterar-cadastro', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
@@ -448,7 +477,8 @@ export default function GeradorSites() {
           whatsapp: whatsapp.replace(/\D/g, ''),
           endereco: endereco,
           email: email,
-          meta_tag: metaTag || '',
+          meta_tag: metaTag.trim() || '<meta />',
+          status: 'Aguardando Pagamento',
           usuario_id: user?.id || null,
           equipe_id: user?.equipe_id || null,
           ip_address: ipAddress
@@ -560,6 +590,182 @@ export default function GeradorSites() {
     
     notify.success(`${filtered.length} registros exportados com sucesso!`)
   }
+  // Copiar meta tag para clipboard
+  function handleCopyMetaTag(metaTag) {
+    if (!metaTag) {
+      notify.error('Meta tag vazia')
+      return
+    }
+    
+    navigator.clipboard.writeText(metaTag)
+      .then(() => {
+        notify.success('Meta tag copiada!')
+      })
+      .catch(() => {
+        notify.error('Erro ao copiar')
+      })
+  }
+  
+  // Copiar texto para clipboard
+  function handleCopyText(text, label) {
+    if (!text) {
+      notify.error(`${label} vazio`)
+      return
+    }
+    
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        notify.success(`${label} copiado!`)
+      })
+      .catch(() => {
+        notify.error('Erro ao copiar')
+      })
+  }
+  
+  // Abrir modal de status
+  function handleOpenStatusModal(site) {
+    setSelectedSiteForStatus(site)
+    setNewStatus(site.status || 'Sem Status')
+    setShowStatusModal(true)
+  }
+  
+  // Fechar modal de status
+  function handleCloseStatusModal() {
+    setShowStatusModal(false)
+    setSelectedSiteForStatus(null)
+    setNewStatus('')
+  }
+  
+  // Salvar novo status
+  async function handleSaveStatus() {
+    if (!selectedSiteForStatus) return
+    
+    try {
+      setIsSavingStatus(true)
+      
+      const payload = {
+        id: selectedSiteForStatus.id,
+        status: newStatus,
+        usuario_id: user?.id || null,
+        equipe_id: user?.equipe_id || null,
+        ip_address: ipAddress
+      }
+      
+      console.log('Enviando payload:', payload)
+      
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/mudar-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      console.log('Resposta:', res.status, res.statusText)
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('Erro da API:', errorText)
+        throw new Error(`Erro ao atualizar status: ${res.status}`)
+      }
+      
+      // Atualiza localmente
+      const updatedSites = sites.map(site => 
+        site.id === selectedSiteForStatus.id 
+          ? { ...site, status: newStatus }
+          : site
+      )
+      setSites(updatedSites)
+      
+      notify.success('Status atualizado com sucesso!')
+      handleCloseStatusModal()
+    } catch (e) {
+      console.error('Erro ao atualizar status:', e)
+      notify.error('Falha ao atualizar status')
+    } finally {
+      setIsSavingStatus(false)
+    }
+  }
+  
+  // Obter cor do badge de status
+  function getStatusBadgeClass(status) {
+    const statusMap = {
+      'Sem Status': 'bg-secondary',
+      'Aguardando Pagamento': 'bg-warning text-dark',
+      'Aguardando BM': 'bg-warning text-dark',
+      'Aguardando Criação BM': 'bg-warning text-dark',
+      'Aguardando Criação Site': 'bg-warning text-dark',
+      'Em Analise': 'bg-warning text-dark',
+      'Verificado': 'bg-success',
+      'Não Verificado': 'bg-danger',
+      'Banido': 'bg-danger'
+    }
+    return statusMap[status] || 'bg-secondary'
+  }
+  
+  // Abrir modal de proxy
+  function handleOpenProxyModal(site) {
+    setSelectedSiteForProxy(site)
+    setNewProxy(site.proxy && site.proxy !== 'Não Informado' ? site.proxy : '')
+    setShowProxyModal(true)
+  }
+  
+  // Fechar modal de proxy
+  function handleCloseProxyModal() {
+    setShowProxyModal(false)
+    setSelectedSiteForProxy(null)
+    setNewProxy('')
+  }
+  
+  // Salvar novo proxy
+  async function handleSaveProxy() {
+    if (!selectedSiteForProxy) return
+    
+    try {
+      setIsSavingProxy(true)
+      
+      const proxyValue = newProxy.trim() || 'Não Informado'
+      
+      const payload = {
+        id: selectedSiteForProxy.id,
+        proxy: proxyValue,
+        usuario_id: user?.id || null,
+        equipe_id: user?.equipe_id || null,
+        ip_address: ipAddress
+      }
+      
+      console.log('Enviando payload de proxy:', payload)
+      
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/mudar-proxy', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      console.log('Resposta:', res.status, res.statusText)
+      
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('Erro da API:', errorText)
+        throw new Error(`Erro ao atualizar proxy: ${res.status}`)
+      }
+      
+      // Atualiza localmente
+      const updatedSites = sites.map(site => 
+        site.id === selectedSiteForProxy.id 
+          ? { ...site, proxy: proxyValue }
+          : site
+      )
+      setSites(updatedSites)
+      
+      notify.success('Proxy atualizado com sucesso!')
+      handleCloseProxyModal()
+    } catch (e) {
+      console.error('Erro ao atualizar proxy:', e)
+      notify.error('Falha ao atualizar proxy')
+    } finally {
+      setIsSavingProxy(false)
+    }
+  }
+  
   async function handleDelete() {
     if (!siteToDelete) return
     
@@ -647,6 +853,17 @@ export default function GeradorSites() {
   
   // Estatísticas
   const stats = useMemo(() => {
+    const aguardando = filtered.filter(s => !s.status || s.status === 'Sem Status').length
+    const pendentes = filtered.filter(s => [
+      'Aguardando Pagamento',
+      'Aguardando BM',
+      'Aguardando Criação BM',
+      'Aguardando Criação Site',
+      'Em Analise'
+    ].includes(s.status)).length
+    const concluidos = filtered.filter(s => s.status === 'Verificado').length
+    const encerrados = filtered.filter(s => ['Não Verificado', 'Banido'].includes(s.status)).length
+    
     return {
       total: filtered.length,
       hoje: filtered.filter(s => {
@@ -659,7 +876,11 @@ export default function GeradorSites() {
         const weekAgo = new Date()
         weekAgo.setDate(weekAgo.getDate() - 7)
         return created >= weekAgo
-      }).length
+      }).length,
+      aguardando,
+      pendentes,
+      concluidos,
+      encerrados
     }
   }, [filtered])
 
@@ -672,7 +893,7 @@ export default function GeradorSites() {
           <div className="d-flex align-items-center gap-3">
             <Link 
               to="/dashboard" 
-              className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" 
+              className="btn btn-outline-light btn-sm d-flex align-items-cgap-2" 
               title="Voltar ao Dashboard"
             >
               <Fi.FiArrowLeft size={16} />
@@ -697,6 +918,22 @@ export default function GeradorSites() {
           </div>
           <div className="col-lg-4 col-md-6">
             <StatCard title="Última Semana" value={stats.semana} icon={Fi.FiTrendingUp} accent="info" />
+          </div>
+        </div>
+        
+        {/* Status Cards */}
+        <div className="row g-3 mb-4">
+          <div className="col-lg-3 col-md-6">
+            <StatCard title="Aguardando" value={stats.aguardando} icon={Fi.FiClock} accent="secondary" />
+          </div>
+          <div className="col-lg-3 col-md-6">
+            <StatCard title="Pendentes" value={stats.pendentes} icon={Fi.FiAlertCircle} accent="warning" />
+          </div>
+          <div className="col-lg-3 col-md-6">
+            <StatCard title="Concluídos" value={stats.concluidos} icon={Fi.FiCheckCircle} accent="success" />
+          </div>
+          <div className="col-lg-3 col-md-6">
+            <StatCard title="Encerrados" value={stats.encerrados} icon={Fi.FiXCircle} accent="danger" />
           </div>
         </div>
 
@@ -768,7 +1005,7 @@ export default function GeradorSites() {
           )}
           
           {!isLoading && !error && (
-            <div className={`table-responsive ${isPageAnimating ? 'page-fade' : ''}`}>
+            <div className={`table-responsive ${isPageAnimating ? 'page-fade' : ''}`} style={{overflowX: 'auto', whiteSpace: 'nowrap'}}>
               {/* Paginação Superior */}
               {totalPages > 1 && (
                 <div className="d-flex justify-content-end px-3 pt-3">
@@ -823,14 +1060,16 @@ export default function GeradorSites() {
                     <th className="text-center">Razão Social</th>
                     <th className="text-center">CNPJ</th>
                     <th className="text-center">WhatsApp</th>
+                    <th className="text-center" style={{width:120}}>Status</th>
+                    <th className="text-center" style={{width:120}}>Proxy Name</th>
                     <th className="text-center">Meta Tag</th>
-                    <th className="text-center" style={{width:80}}>Ações</th>
+                    <th className="text-center" style={{width:120}}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center opacity-75 p-4">
+                      <td colSpan={8} className="text-center opacity-75 p-4">
                         Nenhuma página criada
                       </td>
                     </tr>
@@ -841,22 +1080,53 @@ export default function GeradorSites() {
                       <td className="text-uppercase">{site.razao_social}</td>
                       <td>{formatCNPJ(site.cnpj)}</td>
                       <td>{formatWhatsApp(site.whatsapp)}</td>
-                      <td>
-                        <div 
-                          className="small" 
-                          style={{
-                            maxWidth: '200px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}
-                          title={site.meta_tag}
+                      <td className="text-center">
+                        <button
+                          className={`badge ${getStatusBadgeClass(site.status || 'Sem Status')} border-0`}
+                          style={{cursor: 'pointer'}}
+                          onClick={() => handleOpenStatusModal(site)}
                         >
-                          {site.meta_tag || '-'}
-                        </div>
+                          {site.status || 'Sem Status'}
+                        </button>
+                      </td>
+                      <td className="text-center">
+                        <button
+                          className="btn btn-link text-decoration-none p-0"
+                          style={{cursor: 'pointer'}}
+                          onClick={() => handleOpenProxyModal(site)}
+                        >
+                          {site.proxy && site.proxy !== 'Não Informado' ? (
+                            <span className="small text-light">{site.proxy}</span>
+                          ) : (
+                            <span className="small text-warning d-inline-flex align-items-center gap-1 px-2 py-1">
+                              <Fi.FiAlertCircle size={14} />
+                              Não Informado
+                            </span>
+                          )}
+                        </button>
+                      </td>
+                      <td className="text-center">
+                        <button
+                          className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                          onClick={() => handleCopyMetaTag(site.meta_tag)}
+                          disabled={!site.meta_tag}
+                          title={site.meta_tag || 'Sem meta tag'}
+                        >
+                          <Fi.FiCopy size={14} />
+                          Copiar
+                        </button>
                       </td>
                       <td>
                         <div className="d-flex gap-2 justify-content-center">
+                          <button
+                            className="btn btn-primary btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
+                            style={{width: 32, height: 32, padding: 0}}
+                            title="Alterar"
+                            aria-label="Alterar"
+                            onClick={() => handleOpenEdit(site)}
+                          >
+                            <Fi.FiEdit2 size={16} />
+                          </button>
                           <button
                             className="btn btn-success btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
                             style={{width: 32, height: 32, padding: 0}}
@@ -1084,6 +1354,143 @@ export default function GeradorSites() {
         </div>
       )}
 
+      {/* Modal de Alteração de Status */}
+      {showStatusModal && selectedSiteForStatus && (
+        <div 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+          onClick={handleCloseStatusModal}
+        >
+          <div 
+            className="bg-white rounded-3 p-4" 
+            style={{maxWidth:500, width:'95%'}}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h5 className="mb-0 text-dark fw-bold">Alterar Status</h5>
+              <button 
+                type="button"
+                className="btn-close" 
+                onClick={handleCloseStatusModal} 
+                aria-label="Fechar"
+              />
+            </div>
+            
+            <p className="text-dark mb-3">
+              Alterar status de <strong className="text-uppercase">{selectedSiteForStatus.razao_social}</strong>
+            </p>
+            
+            <div className="mb-4">
+              <label className="form-label text-dark fw-semibold">Selecione o novo status:</label>
+              <select 
+                className="form-select" 
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+              >
+                <option value="Sem Status">Sem Status</option>
+                <option value="Aguardando Pagamento">Aguardando Pagamento</option>
+                <option value="Aguardando BM">Aguardando BM</option>
+                <option value="Aguardando Criação BM">Aguardando Criação BM</option>
+                <option value="Aguardando Criação Site">Aguardando Criação Site</option>
+                <option value="Em Analise">Em Analise</option>
+                <option value="Verificado">Verificado</option>
+                <option value="Não Verificado">Não Verificado</option>
+                <option value="Banido">Banido</option>
+              </select>
+            </div>
+            
+            <div className="mb-3">
+              <div className="d-flex align-items-center gap-2">
+                <span className="text-dark small">Preview:</span>
+                <span className={`badge ${getStatusBadgeClass(newStatus)}`}>
+                  {newStatus}
+                </span>
+              </div>
+            </div>
+            
+            <div className="d-flex justify-content-end gap-2">
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={handleCloseStatusModal}
+                disabled={isSavingStatus}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleSaveStatus}
+                disabled={isSavingStatus}
+              >
+                {isSavingStatus ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Alteração de Proxy */}
+      {showProxyModal && selectedSiteForProxy && (
+        <div 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+          onClick={handleCloseProxyModal}
+        >
+          <div 
+            className="bg-white rounded-3 p-4" 
+            style={{maxWidth:500, width:'95%'}}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h5 className="mb-0 text-dark fw-bold">Alterar Proxy</h5>
+              <button 
+                type="button"
+                className="btn-close" 
+                onClick={handleCloseProxyModal} 
+                aria-label="Fechar"
+              />
+            </div>
+            
+            <p className="text-dark mb-3">
+              Alterar proxy de <strong className="text-uppercase">{selectedSiteForProxy.razao_social}</strong>
+            </p>
+            
+            <div className="mb-4">
+              <label className="form-label text-dark fw-semibold">Digite o nome do proxy:</label>
+              <input
+                type="text"
+                className="form-control"
+                value={newProxy}
+                onChange={(e) => setNewProxy(e.target.value)}
+                placeholder="Digite o nome do proxy no Dolphin"
+                autoFocus
+              />
+              <small className="text-muted">Deixe em branco para marcar como \"Não Informado\"</small>
+            </div>
+            
+            <div className="d-flex justify-content-end gap-2">
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={handleCloseProxyModal}
+                disabled={isSavingProxy}
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={handleSaveProxy}
+                disabled={isSavingProxy}
+              >
+                {isSavingProxy ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Edição */}
       {showEdit && selectedSite && (
         <div 
@@ -1114,60 +1521,120 @@ export default function GeradorSites() {
               <div className="row g-3">
                 <div className="col-12">
                   <label className="form-label">Razão Social *</label>
-                  <input
-                    className="form-control"
-                    value={editRazaoSocial}
-                    onChange={e => setEditRazaoSocial(e.target.value)}
-                    placeholder="Digite a razão social da empresa"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      className="form-control"
+                      value={editRazaoSocial}
+                      onChange={e => setEditRazaoSocial(e.target.value)}
+                      placeholder="Digite a razão social da empresa"
+                      required
+                      readOnly
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => handleCopyText(editRazaoSocial, 'Razão Social')}
+                      title="Copiar Razão Social"
+                    >
+                      <Fi.FiCopy size={16} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="col-12 col-md-6">
                   <label className="form-label">CNPJ *</label>
-                  <input
-                    className="form-control"
-                    value={editCnpj}
-                    onChange={e => setEditCnpj(formatCNPJ(e.target.value))}
-                    placeholder="00.000.000/0000-00"
-                    maxLength={18}
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      className="form-control"
+                      value={editCnpj}
+                      onChange={e => setEditCnpj(formatCNPJ(e.target.value))}
+                      placeholder="00.000.000/0000-00"
+                      maxLength={18}
+                      required
+                      readOnly
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => handleCopyText(editCnpj.replace(/\D/g, ''), 'CNPJ')}
+                      title="Copiar CNPJ"
+                    >
+                      <Fi.FiCopy size={16} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="col-12 col-md-6">
                   <label className="form-label">WhatsApp *</label>
-                  <input
-                    className="form-control"
-                    value={editWhatsapp}
-                    onChange={e => setEditWhatsapp(formatWhatsApp(e.target.value))}
-                    placeholder="+55 (00) 00000-0000"
-                    maxLength={20}
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      className="form-control"
+                      value={editWhatsapp}
+                      onChange={e => setEditWhatsapp(formatWhatsApp(e.target.value))}
+                      placeholder="+55 (00) 00000-0000"
+                      maxLength={20}
+                      required
+                      readOnly
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => handleCopyText(editWhatsapp.replace(/\D/g, ''), 'WhatsApp')}
+                      title="Copiar WhatsApp"
+                    >
+                      <Fi.FiCopy size={16} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="col-12">
                   <label className="form-label">Endereço *</label>
-                  <input
-                    className="form-control"
-                    value={editEndereco}
-                    onChange={e => setEditEndereco(e.target.value)}
-                    placeholder="Digite o endereço completo"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      className="form-control"
+                      value={editEndereco}
+                      onChange={e => setEditEndereco(e.target.value)}
+                      placeholder="Digite o endereço completo"
+                      required
+                      readOnly
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => handleCopyText(editEndereco, 'Endereço')}
+                      title="Copiar Endereço"
+                    >
+                      <Fi.FiCopy size={16} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="col-12">
                   <label className="form-label">E-mail *</label>
-                  <input
-                    type="email"
-                    className="form-control"
-                    value={editEmail}
-                    onChange={e => setEditEmail(e.target.value)}
-                    placeholder="contato@empresa.com.br"
-                    required
-                  />
+                  <div className="input-group">
+                    <input
+                      type="email"
+                      className="form-control"
+                      value={editEmail}
+                      onChange={e => setEditEmail(e.target.value)}
+                      placeholder="contato@empresa.com.br"
+                      required
+                      readOnly
+                      style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={() => handleCopyText(editEmail, 'E-mail')}
+                      title="Copiar E-mail"
+                    >
+                      <Fi.FiCopy size={16} />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="col-12">
@@ -1184,6 +1651,36 @@ export default function GeradorSites() {
                   <small className="form-text" style={{ color: 'rgba(226, 232, 240, 0.6)' }}>
                     {editMetaTag.length}/160 caracteres - Opcional, mas recomendado para SEO
                   </small>
+                </div>
+                
+                <div className="col-12 col-md-6">
+                  <label className="form-label">Proxy (nome no Dolphin)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={editProxy}
+                    onChange={e => setEditProxy(e.target.value)}
+                    placeholder="Digite o nome do proxy no Dolphin"
+                  />
+                </div>
+                
+                <div className="col-12 col-md-6">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={editStatus}
+                    onChange={e => setEditStatus(e.target.value)}
+                  >
+                    <option value="Sem Status">Sem Status</option>
+                    <option value="Aguardando Pagamento">Aguardando Pagamento</option>
+                    <option value="Aguardando BM">Aguardando BM</option>
+                    <option value="Aguardando Criação BM">Aguardando Criação BM</option>
+                    <option value="Aguardando Criação Site">Aguardando Criação Site</option>
+                    <option value="Em Analise">Em Analise</option>
+                    <option value="Verificado">Verificado</option>
+                    <option value="Não Verificado">Não Verificado</option>
+                    <option value="Banido">Banido</option>
+                  </select>
                 </div>
               </div>
               
@@ -1271,37 +1768,34 @@ export default function GeradorSites() {
                 </div>
                 
                 <div className="col-12 col-md-6">
-                  <label className="form-label">WhatsApp *</label>
+                  <label className="form-label">WhatsApp</label>
                   <input
                     className="form-control"
                     value={whatsapp}
                     onChange={e => setWhatsapp(formatWhatsApp(e.target.value))}
                     placeholder="+55 (00) 00000-0000"
                     maxLength={20}
-                    required
                   />
                 </div>
                 
                 <div className="col-12">
-                  <label className="form-label">Endereço *</label>
+                  <label className="form-label">Endereço</label>
                   <input
                     className="form-control"
                     value={endereco}
                     onChange={e => setEndereco(e.target.value)}
                     placeholder="Digite o endereço completo"
-                    required
                   />
                 </div>
                 
                 <div className="col-12">
-                  <label className="form-label">E-mail *</label>
+                  <label className="form-label">E-mail</label>
                   <input
                     type="email"
                     className="form-control"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="contato@empresa.com.br"
-                    required
                   />
                 </div>
                 
@@ -1319,6 +1813,17 @@ export default function GeradorSites() {
                   <small className="form-text" style={{ color: 'rgba(226, 232, 240, 0.6)' }}>
                     {metaTag.length}/160 caracteres - Opcional, mas recomendado para SEO
                   </small>
+                </div>
+                
+                <div className="col-12">
+                  <label className="form-label">Proxy (nome no Dolphin)</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={proxy}
+                    onChange={e => setProxy(e.target.value)}
+                    placeholder="Digite o nome do proxy no Dolphin"
+                  />
                 </div>
               </div>
               
