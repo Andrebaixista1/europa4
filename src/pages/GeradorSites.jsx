@@ -1490,7 +1490,7 @@ export default function GeradorSites() {
               <table className="table table-dark table-hover table-bordered align-middle mb-0">
                 <thead>
                   <tr>
-                    <th className="text-center" style={{width:150}}>Data/Hora</th>
+                    <th className="text-center" style={{width:150}}>Criado em</th>
                     <th className="text-center">Razão Social</th>
                     <th className="text-center" style={{width:120}}>Status</th>
                     <th className="text-center" style={{width:90}}>Telefones</th>
