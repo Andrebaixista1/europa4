@@ -1473,8 +1473,6 @@ export default function GeradorSites() {
                 <thead>
                   <tr>
                     <th className="text-center">Razão Social</th>
-                    <th className="text-center">CNPJ</th>
-                    <th className="text-center">WhatsApp</th>
                     <th className="text-center" style={{width:120}}>Status</th>
                     <th className="text-center" style={{width:90}}>Telefones</th>
                     <th className="text-center" style={{width:120}}>Proxy Name</th>
@@ -1485,7 +1483,7 @@ export default function GeradorSites() {
                 <tbody>
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center opacity-75 p-4">
+                      <td colSpan={6} className="text-center opacity-75 p-4">
                         Nenhuma página criada
                       </td>
                     </tr>
@@ -1495,8 +1493,6 @@ export default function GeradorSites() {
                     return (
                     <tr key={site.id}>
                       <td className="text-uppercase">{site.razao_social}</td>
-                      <td>{formatCNPJ(site.cnpj)}</td>
-                      <td>{formatWhatsApp(site.whatsapp)}</td>
                       <td className="text-center">
                         <button
                           className={`badge ${getStatusBadgeClass(site.status || 'Sem Status')} border-0`}
