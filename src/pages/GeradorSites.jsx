@@ -963,6 +963,24 @@ export default function GeradorSites() {
     return { total, ok, banido, semStatus }
   }
   
+  // Formatar data e hora
+  function formatDateTime(dateString) {
+    if (!dateString) return '-'
+    
+    try {
+      const date = new Date(dateString)
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      
+      return `${day}/${month}/${year} ${hours}:${minutes}`
+    } catch (e) {
+      return '-'
+    }
+  }
+  
   // Obter contagem de telefones de um site específico baseado no limite
   function getTelefonesDisplay(site) {
     // Se não for verificado, não mostra nada
@@ -1176,10 +1194,10 @@ export default function GeradorSites() {
     const uniqueSites = []
     const seenCNPJs = new Set()
     
-    // Ordenar primeiro por data (mais recente primeiro)
+    // Ordenar primeiro por data de criação (mais recente primeiro)
     const sortedByDate = filteredSites.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0)
-      const dateB = new Date(b.updated_at || b.created_at || 0)
+      const dateA = new Date(a.created_at || 0)
+      const dateB = new Date(b.created_at || 0)
       return dateB - dateA // Ordem decrescente (mais recente primeiro)
     })
     
@@ -1200,10 +1218,10 @@ export default function GeradorSites() {
     const uniqueSites = []
     const seenCNPJs = new Set()
     
-    // Ordenar por data
+    // Ordenar por data de criação (mais recente primeiro)
     const sortedByDate = allSites.sort((a, b) => {
-      const dateA = new Date(a.updated_at || a.created_at || 0)
-      const dateB = new Date(b.updated_at || b.created_at || 0)
+      const dateA = new Date(a.created_at || 0)
+      const dateB = new Date(b.created_at || 0)
       return dateB - dateA
     })
     
@@ -1472,6 +1490,7 @@ export default function GeradorSites() {
               <table className="table table-dark table-hover table-bordered align-middle mb-0">
                 <thead>
                   <tr>
+                    <th className="text-center" style={{width:150}}>Data/Hora</th>
                     <th className="text-center">Razão Social</th>
                     <th className="text-center" style={{width:120}}>Status</th>
                     <th className="text-center" style={{width:90}}>Telefones</th>
@@ -1483,7 +1502,7 @@ export default function GeradorSites() {
                 <tbody>
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center opacity-75 p-4">
+                      <td colSpan={7} className="text-center opacity-75 p-4">
                         Nenhuma página criada
                       </td>
                     </tr>
@@ -1492,6 +1511,9 @@ export default function GeradorSites() {
                     const telefonesDisplay = getTelefonesDisplay(site)
                     return (
                     <tr key={site.id}>
+                      <td className="text-center">
+                        <small className="text-light">{formatDateTime(site.created_at)}</small>
+                      </td>
                       <td className="text-uppercase">{site.razao_social}</td>
                       <td className="text-center">
                         <button
