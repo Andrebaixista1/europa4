@@ -87,7 +87,7 @@ html, body { color: var(--text); font-family: 'Inter', system-ui, -apple-system,
 .opacity-85 { opacity: 0.85; }
 
 /* Larger cards sizing */
-.neo-lg { min-height: 220px; }
+.neo-lg { min-height: 80px; }
 
 /* Muted/disabled visual for items em desenvolvimento */
 .neo-muted { opacity: 0.8; filter: grayscale(30%); }

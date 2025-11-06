@@ -8,10 +8,10 @@ import { Link } from 'react-router-dom'
 
 function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
   return (
-    <div className={`neo-card neo-lg neo-accent-${accent} h-100`} style={{padding: '12px 16px'}}>
+    <div className={`neo-card neo-lg neo-accent-${accent} h-100`} style={{padding: '8px 12px'}}>
       <div className="d-flex align-items-center justify-content-between">
         <div>
-          <div className="small opacity-75" style={{marginBottom: '4px'}}>{title}</div>
+          <div className="small opacity-75" style={{marginBottom: '2px'}}>{title}</div>
           <div className="display-6 fw-bold">{value}</div>
         </div>
         {Icon && (
@@ -24,7 +24,7 @@ function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
   )
 }
 
-const ROWS_PER_PAGE = 20
+const ROWS_PER_PAGE = 50
 
 export default function GeradorSites() {
   const { user } = useAuth()
@@ -59,6 +59,22 @@ export default function GeradorSites() {
   const [editStatus, setEditStatus] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   
+  // Limites & Chips
+  const [selectedLimit, setSelectedLimit] = useState('')
+  const [chip2Whatsapp, setChip2Whatsapp] = useState('')
+  const [chip3Whatsapp, setChip3Whatsapp] = useState('')
+  const [chip4Whatsapp, setChip4Whatsapp] = useState('')
+  const [chip5Whatsapp, setChip5Whatsapp] = useState('')
+  const [chip2Status, setChip2Status] = useState('Sem Status')
+  const [chip3Status, setChip3Status] = useState('Sem Status')
+  const [chip4Status, setChip4Status] = useState('Sem Status')
+  const [chip5Status, setChip5Status] = useState('Sem Status')
+  const [chip2Id, setChip2Id] = useState(null)
+  const [chip3Id, setChip3Id] = useState(null)
+  const [chip4Id, setChip4Id] = useState(null)
+  const [chip5Id, setChip5Id] = useState(null)
+  const [additionalChips, setAdditionalChips] = useState([])
+  
   // Modal de confirmação de exclusão
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [siteToDelete, setSiteToDelete] = useState(null)
@@ -85,6 +101,9 @@ export default function GeradorSites() {
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isPageAnimating, setIsPageAnimating] = useState(false)
+  
+  // Aba do modal de edição
+  const [editModalTab, setEditModalTab] = useState('cadastro')
   
   // Estado para ações em andamento
   const [deletingId, setDeletingId] = useState(null)
@@ -278,7 +297,7 @@ export default function GeradorSites() {
   }
   
   // Abrir modal de edição
-  function handleOpenEdit(site) {
+  async function handleOpenEdit(site) {
     setSelectedSite(site)
     setEditRazaoSocial(site.razao_social || '')
     setEditCnpj(formatCNPJ(site.cnpj || ''))
@@ -288,6 +307,97 @@ export default function GeradorSites() {
     setEditMetaTag(site.meta_tag || '')
     setEditProxy(site.proxy || '')
     setEditStatus(site.status || 'Sem Status')
+    
+    // Limpar estados de chips
+    setSelectedLimit('')
+    setChip2Whatsapp('')
+    setChip3Whatsapp('')
+    setChip4Whatsapp('')
+    setChip5Whatsapp('')
+    setChip2Status('Sem Status')
+    setChip3Status('Sem Status')
+    setChip4Status('Sem Status')
+    setChip5Status('Sem Status')
+    setChip2Id(null)
+    setChip3Id(null)
+    setChip4Id(null)
+    setChip5Id(null)
+    setAdditionalChips([])
+    
+    // Buscar dados de limites e chips do view-site
+    try {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Dados completos do view-site:', data)
+        if (Array.isArray(data)) {
+          // Agrupar todos os registros do mesmo ID (cada chip é uma linha separada)
+          const sitesData = data.filter(s => s.id === site.id)
+          console.log('Registros encontrados para o site:', sitesData)
+          
+          if (sitesData.length > 0) {
+            const firstRecord = sitesData[0]
+            
+            // Preencher limite (pega do primeiro registro)
+            if (firstRecord.limite) {
+              const limiteValue = String(firstRecord.limite)
+              setSelectedLimit(limiteValue)
+              console.log('Limite carregado:', limiteValue)
+            }
+            
+            // Coletar todos os números e status de todos os registros
+            const numeros = []
+            const statuses = []
+            const ids = []
+            
+            sitesData.forEach(record => {
+              if (record.numero && record.status_z) {
+                numeros.push(record.numero)
+                statuses.push(record.status_z)
+                ids.push(record.id_whats || null)
+              }
+            })
+            
+            console.log('Números coletados:', numeros)
+            console.log('Status coletados:', statuses)
+            console.log('IDs coletados:', ids)
+            
+            // Preencher os chips (pulando o primeiro que é o WhatsApp cadastrado)
+            for (let i = 1; i < numeros.length; i++) {
+              const numero = formatWhatsApp(numeros[i] || '')
+              const status = statuses[i] || 'Sem Status'
+              const idWhats = ids[i]
+              
+              console.log(`Chip ${i + 1}:`, { numero, status, idWhats })
+              
+              if (i === 1) {
+                setChip2Whatsapp(numero)
+                setChip2Status(status)
+                setChip2Id(idWhats)
+              } else if (i === 2) {
+                setChip3Whatsapp(numero)
+                setChip3Status(status)
+                setChip3Id(idWhats)
+              } else if (i === 3) {
+                setChip4Whatsapp(numero)
+                setChip4Status(status)
+                setChip4Id(idWhats)
+              } else if (i === 4) {
+                setChip5Whatsapp(numero)
+                setChip5Status(status)
+                setChip5Id(idWhats)
+              } else {
+                // Chips adicionais para limites maiores
+                setAdditionalChips(prev => [...prev, { whatsapp: numero, status, id_whats: idWhats }])
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados de limites:', error)
+    }
+    
     setShowEdit(true)
   }
   
@@ -622,6 +732,267 @@ export default function GeradorSites() {
       })
   }
   
+  // Adicionar novo chip
+  function handleAddChip() {
+    setAdditionalChips([...additionalChips, { whatsapp: '', status: 'Sem Status' }])
+  }
+  
+  // Remover chip
+  function handleRemoveChip(index) {
+    setAdditionalChips(additionalChips.filter((_, i) => i !== index))
+  }
+  
+  // Atualizar chip
+  function handleUpdateChip(index, value) {
+    const updated = [...additionalChips]
+    updated[index].whatsapp = formatWhatsApp(value)
+    setAdditionalChips(updated)
+  }
+  
+  // Atualizar status do chip
+  function handleUpdateChipStatus(index, status) {
+    const updated = [...additionalChips]
+    updated[index].status = status
+    setAdditionalChips(updated)
+  }
+  
+  // Excluir chip específico
+  async function handleDeleteChip(idWhats, chipNumero) {
+    if (!idWhats) {
+      notify.error('ID do telefone não encontrado')
+      return
+    }
+    
+    try {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/excluiur-telefone', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id: idWhats
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erro ao excluir chip')
+      }
+      
+      notify.success('Chip excluído com sucesso!')
+      
+      // Recarregar dados
+      await loadSites()
+      
+      // Reabrir modal com dados atualizados
+      if (selectedSite && selectedSite.id) {
+        const updatedSite = sites.find(s => s.id === selectedSite.id)
+        if (updatedSite) {
+          setTimeout(() => {
+            handleOpenEdit(updatedSite)
+          }, 500)
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao excluir chip:', error)
+      notify.error('Erro ao excluir chip')
+    }
+  }
+  
+  // Salvar limites e chips
+  async function handleSaveLimitesChips() {
+    if (!selectedSite || !selectedSite.id) {
+      notify.error('Site não selecionado')
+      return
+    }
+    
+    setIsEditing(true)
+    
+    try {
+      // Coletar todos os chips preenchidos
+      const chips = []
+      
+      // Chip 1 (sempre existe - WhatsApp cadastrado)
+      if (editWhatsapp) {
+        chips.push({
+          numero: editWhatsapp,
+          status: 'Ok' // Chip 1 sempre Ok por padrão
+        })
+      }
+      
+      // Chips do limite 250 e 2000
+      if (selectedLimit === '250' || selectedLimit === '2000') {
+        if (chip2Whatsapp) {
+          chips.push({ numero: chip2Whatsapp, status: chip2Status })
+        }
+      }
+      
+      if (selectedLimit === '2000') {
+        if (chip3Whatsapp) {
+          chips.push({ numero: chip3Whatsapp, status: chip3Status })
+        }
+        if (chip4Whatsapp) {
+          chips.push({ numero: chip4Whatsapp, status: chip4Status })
+        }
+        if (chip5Whatsapp) {
+          chips.push({ numero: chip5Whatsapp, status: chip5Status })
+        }
+      }
+      
+      // Chips adicionais (limites 10000, 100000, ilimitado)
+      if (selectedLimit === '10000' || selectedLimit === '100000' || selectedLimit === 'ilimitado') {
+        additionalChips.forEach(chip => {
+          if (chip.whatsapp) {
+            chips.push({ numero: chip.whatsapp, status: chip.status })
+          }
+        })
+      }
+      
+      const payload = {
+        // ID da empresa
+        id: selectedSite.id,
+        
+        // Dados do Cadastro
+        razao_social: editRazaoSocial,
+        cnpj: editCnpj,
+        whatsapp: editWhatsapp,
+        endereco: editEndereco,
+        email: editEmail,
+        meta_tag: editMetaTag,
+        proxy: editProxy,
+        status: editStatus,
+        
+        // Dados de Limites & Contas
+        limite: selectedLimit,
+        chips: chips
+      }
+      
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/save-zap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Erro da API:', errorText)
+        throw new Error('Erro ao salvar')
+      }
+      
+      notify.success('Limites e chips salvos com sucesso!')
+      
+      // Recarregar dados do view-site
+      await loadSites()
+      
+      // Reabrir o modal com dados atualizados
+      if (selectedSite && selectedSite.id) {
+        // Buscar o site atualizado da lista
+        const updatedSite = sites.find(s => s.id === selectedSite.id)
+        if (updatedSite) {
+          // Pequeno delay para garantir que o loadSites terminou
+          setTimeout(() => {
+            handleOpenEdit(updatedSite)
+          }, 500)
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao salvar limites:', error)
+      notify.error('Erro ao salvar limites e chips')
+    } finally {
+      setIsEditing(false)
+    }
+  }
+  
+  // Calcular estatísticas dos chips
+  function getChipsStats() {
+    let total = 0
+    let ok = 0
+    let banido = 0
+    let semStatus = 0
+    
+    // Chip 1 (WhatsApp cadastrado)
+    if (editWhatsapp) {
+      total++
+      ok++ // Sempre Ok
+    }
+    
+    // Chips do limite 250 e 2000
+    if (selectedLimit === '250' || selectedLimit === '2000') {
+      if (chip2Whatsapp) {
+        total++
+        if (chip2Status === 'Ok') ok++
+        else if (chip2Status === 'Banido') banido++
+        else semStatus++
+      }
+    }
+    
+    if (selectedLimit === '2000') {
+      if (chip3Whatsapp) {
+        total++
+        if (chip3Status === 'Ok') ok++
+        else if (chip3Status === 'Banido') banido++
+        else semStatus++
+      }
+      if (chip4Whatsapp) {
+        total++
+        if (chip4Status === 'Ok') ok++
+        else if (chip4Status === 'Banido') banido++
+        else semStatus++
+      }
+      if (chip5Whatsapp) {
+        total++
+        if (chip5Status === 'Ok') ok++
+        else if (chip5Status === 'Banido') banido++
+        else semStatus++
+      }
+    }
+    
+    // Chips adicionais
+    if (selectedLimit === '10000' || selectedLimit === '100000' || selectedLimit === 'ilimitado') {
+      additionalChips.forEach(chip => {
+        if (chip.whatsapp) {
+          total++
+          if (chip.status === 'Ok') ok++
+          else if (chip.status === 'Banido') banido++
+          else semStatus++
+        }
+      })
+    }
+    
+    return { total, ok, banido, semStatus }
+  }
+  
+  // Obter contagem de telefones de um site específico baseado no limite
+  function getTelefonesDisplay(site) {
+    // Se não for verificado, não mostra nada
+    if (site.status !== 'Verificado') {
+      return '-'
+    }
+    
+    // Buscar o limite do site
+    const limite = site.limite || ''
+    
+    // Buscar quantos registros existem para este ID (contagem real)
+    const siteRecords = sites.filter(s => s.id === site.id)
+    const totalReal = siteRecords.length
+    
+    // Definir total máximo baseado no limite
+    let totalMax = 0
+    if (limite === '250') {
+      totalMax = 2
+    } else if (limite === '2000') {
+      totalMax = 5
+    } else if (limite === '10000' || limite === '100000' || limite === 'ilimitado') {
+      return `${totalReal}/∞`
+    } else {
+      return '-'
+    }
+    
+    // Retornar contagem real / máximo
+    return `${totalReal}/${totalMax}`
+  }
+  
   // Abrir modal de status
   function handleOpenStatusModal(site) {
     setSelectedSiteForStatus(site)
@@ -801,13 +1172,51 @@ export default function GeradorSites() {
       return true
     })
     
-    // Ordenar por updated_at do mais recente para o mais antigo
-    return filteredSites.sort((a, b) => {
+    // Remover duplicados por CNPJ (mantém o mais recente)
+    const uniqueSites = []
+    const seenCNPJs = new Set()
+    
+    // Ordenar primeiro por data (mais recente primeiro)
+    const sortedByDate = filteredSites.sort((a, b) => {
       const dateA = new Date(a.updated_at || a.created_at || 0)
       const dateB = new Date(b.updated_at || b.created_at || 0)
       return dateB - dateA // Ordem decrescente (mais recente primeiro)
     })
+    
+    // Filtrar duplicados mantendo apenas o primeiro (mais recente) de cada CNPJ
+    for (const site of sortedByDate) {
+      if (!seenCNPJs.has(site.cnpj)) {
+        seenCNPJs.add(site.cnpj)
+        uniqueSites.push(site)
+      }
+    }
+    
+    return uniqueSites
   }, [sites, search])
+  
+  // Total de sites únicos (sem filtro de busca, apenas sem duplicados)
+  const totalUniqueSites = useMemo(() => {
+    const allSites = sites || []
+    const uniqueSites = []
+    const seenCNPJs = new Set()
+    
+    // Ordenar por data
+    const sortedByDate = allSites.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0)
+      const dateB = new Date(b.updated_at || b.created_at || 0)
+      return dateB - dateA
+    })
+    
+    // Filtrar duplicados
+    for (const site of sortedByDate) {
+      if (!seenCNPJs.has(site.cnpj)) {
+        seenCNPJs.add(site.cnpj)
+        uniqueSites.push(site)
+      }
+    }
+    
+    return uniqueSites.length
+  }, [sites])
   
   // Resetar página ao mudar filtros
   useEffect(() => {
@@ -993,7 +1402,7 @@ export default function GeradorSites() {
         </div>
 
         <div className="mb-3 opacity-75">
-          <small>Mostrando {filtered.length} de {sites.length} sites</small>
+          <small>Mostrando {filtered.length} de {totalUniqueSites} sites</small>
         </div>
 
         {/* Tabela de Sites */}
@@ -1067,6 +1476,7 @@ export default function GeradorSites() {
                     <th className="text-center">CNPJ</th>
                     <th className="text-center">WhatsApp</th>
                     <th className="text-center" style={{width:120}}>Status</th>
+                    <th className="text-center" style={{width:90}}>Telefones</th>
                     <th className="text-center" style={{width:120}}>Proxy Name</th>
                     <th className="text-center">Meta Tag</th>
                     <th className="text-center" style={{width:120}}>Ações</th>
@@ -1075,12 +1485,14 @@ export default function GeradorSites() {
                 <tbody>
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center opacity-75 p-4">
+                      <td colSpan={8} className="text-center opacity-75 p-4">
                         Nenhuma página criada
                       </td>
                     </tr>
                   )}
-                  {paginated.map((site) => (
+                  {paginated.map((site) => {
+                    const telefonesDisplay = getTelefonesDisplay(site)
+                    return (
                     <tr key={site.id}>
                       <td className="text-uppercase">{site.razao_social}</td>
                       <td>{formatCNPJ(site.cnpj)}</td>
@@ -1093,6 +1505,11 @@ export default function GeradorSites() {
                         >
                           {site.status || 'Sem Status'}
                         </button>
+                      </td>
+                      <td className="text-center">
+                        <span className="fw-bold text-light">
+                          {telefonesDisplay}
+                        </span>
                       </td>
                       <td className="text-center">
                         <button
@@ -1155,7 +1572,8 @@ export default function GeradorSites() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1522,7 +1940,35 @@ export default function GeradorSites() {
               </button>
             </div>
             
+            {/* Abas do Modal */}
+            <div className="d-flex border-bottom mb-3" style={{borderColor: 'rgba(255,255,255,0.15)'}}>
+              <button
+                type="button"
+                className={`btn btn-link text-decoration-none px-4 py-2 flex-grow-1 ${
+                  editModalTab === 'cadastro' ? 'text-primary border-bottom border-primary border-3' : 'text-light opacity-75'
+                }`}
+                onClick={() => setEditModalTab('cadastro')}
+                style={{borderRadius: 0}}
+              >
+                <Fi.FiDatabase size={16} className="me-2" />
+                Cadastro
+              </button>
+              <button
+                type="button"
+                className={`btn btn-link text-decoration-none px-4 py-2 flex-grow-1 ${
+                  editModalTab === 'limites' ? 'text-primary border-bottom border-primary border-3' : 'text-light opacity-75'
+                }`}
+                onClick={() => setEditModalTab('limites')}
+                style={{borderRadius: 0}}
+              >
+                <Fi.FiCreditCard size={16} className="me-2" />
+                Limites & Contas
+              </button>
+            </div>
+            
             <form onSubmit={handleEdit}>
+              {/* Aba Cadastro */}
+              {editModalTab === 'cadastro' && (
               <div className="row g-3">
                 <div className="col-12">
                   <label className="form-label">Razão Social *</label>
@@ -1686,6 +2132,401 @@ export default function GeradorSites() {
                   </select>
                 </div>
               </div>
+              )}
+              
+              {/* Aba Limites & Contas */}
+              {editModalTab === 'limites' && (
+              <div className="row g-3">
+                {/* Contador de Chips */}
+                <div className="col-12">
+                  <div className="row g-2">
+                    <div className="col-6 col-md-3">
+                      <div className="neo-card p-2" style={{backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)'}}>
+                        <div className="small opacity-75 mb-1">Números</div>
+                        <div className="h5 mb-0 fw-bold text-primary">{getChipsStats().total}</div>
+                      </div>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <div className="neo-card p-2" style={{backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: 'rgba(34, 197, 94, 0.3)'}}>
+                        <div className="small opacity-75 mb-1">Status OK</div>
+                        <div className="h5 mb-0 fw-bold text-success">{getChipsStats().ok}</div>
+                      </div>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <div className="neo-card p-2" style={{backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)'}}>
+                        <div className="small opacity-75 mb-1">Status Banido</div>
+                        <div className="h5 mb-0 fw-bold text-danger">{getChipsStats().banido}</div>
+                      </div>
+                    </div>
+                    <div className="col-6 col-md-3">
+                      <div className="neo-card p-2" style={{backgroundColor: 'rgba(148, 163, 184, 0.1)', borderColor: 'rgba(148, 163, 184, 0.3)'}}>
+                        <div className="small opacity-75 mb-1">Sem Status</div>
+                        <div className="h5 mb-0 fw-bold" style={{color: 'rgba(148, 163, 184, 0.9)'}}>{getChipsStats().semStatus}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="col-12">
+                  <h6 className="mb-3">Limites & Chips</h6>
+                </div>
+                
+                <div className="col-12">
+                  <label className="form-label">Selecionar Limite</label>
+                  <select 
+                    className="form-select"
+                    value={selectedLimit}
+                    onChange={e => setSelectedLimit(e.target.value)}
+                  >
+                    <option value="">Escolha um limite...</option>
+                    <option value="250">250</option>
+                    <option value="2000">2.000</option>
+                    <option value="10000">10.000</option>
+                    <option value="100000">100.000</option>
+                    <option value="ilimitado">Ilimitado</option>
+                  </select>
+                </div>
+                
+                {selectedLimit === '250' && (
+                  <>
+                    <div className="col-12">
+                      <div className="alert alert-info d-flex align-items-center gap-2">
+                        <Fi.FiInfo size={18} />
+                        <span>Até 2 Chips</span>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 1 (WhatsApp Cadastrado)</label>
+                      <div className="row g-2">
+                        <div className="col-md-8">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={editWhatsapp}
+                            readOnly
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <select className="form-select" defaultValue="Ok">
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 2 (Novo WhatsApp)</label>
+                      <div className="row g-2">
+                        <div className="col-md-7">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={chip2Whatsapp}
+                            onChange={e => setChip2Whatsapp(formatWhatsApp(e.target.value))}
+                            placeholder="+55 (00) 00000-0000"
+                            maxLength={20}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <select 
+                            className="form-select"
+                            value={chip2Status}
+                            onChange={e => setChip2Status(e.target.value)}
+                          >
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                        <div className="col-md-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={() => handleDeleteChip(chip2Id, chip2Whatsapp)}
+                            disabled={!chip2Whatsapp || !chip2Id}
+                            title="Excluir chip"
+                          >
+                            <Fi.FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {selectedLimit === '2000' && (
+                  <>
+                    <div className="col-12">
+                      <div className="alert alert-info d-flex align-items-center gap-2">
+                        <Fi.FiInfo size={18} />
+                        <span>Até 5 Chips</span>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 1 (WhatsApp Cadastrado)</label>
+                      <div className="row g-2">
+                        <div className="col-md-8">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={editWhatsapp}
+                            readOnly
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <select className="form-select" defaultValue="Ok">
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 2 (Novo WhatsApp)</label>
+                      <div className="row g-2">
+                        <div className="col-md-7">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={chip2Whatsapp}
+                            onChange={e => setChip2Whatsapp(formatWhatsApp(e.target.value))}
+                            placeholder="+55 (00) 00000-0000"
+                            maxLength={20}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <select 
+                            className="form-select"
+                            value={chip2Status}
+                            onChange={e => setChip2Status(e.target.value)}
+                          >
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                        <div className="col-md-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={() => handleDeleteChip(chip2Id, chip2Whatsapp)}
+                            disabled={!chip2Whatsapp || !chip2Id}
+                            title="Excluir chip"
+                          >
+                            <Fi.FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 3 (Novo WhatsApp)</label>
+                      <div className="row g-2">
+                        <div className="col-md-7">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={chip3Whatsapp}
+                            onChange={e => setChip3Whatsapp(formatWhatsApp(e.target.value))}
+                            placeholder="+55 (00) 00000-0000"
+                            maxLength={20}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <select 
+                            className="form-select"
+                            value={chip3Status}
+                            onChange={e => setChip3Status(e.target.value)}
+                          >
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                        <div className="col-md-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={() => handleDeleteChip(chip3Id, chip3Whatsapp)}
+                            disabled={!chip3Whatsapp || !chip3Id}
+                            title="Excluir chip"
+                          >
+                            <Fi.FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 4 (Novo WhatsApp)</label>
+                      <div className="row g-2">
+                        <div className="col-md-7">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={chip4Whatsapp}
+                            onChange={e => setChip4Whatsapp(formatWhatsApp(e.target.value))}
+                            placeholder="+55 (00) 00000-0000"
+                            maxLength={20}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <select 
+                            className="form-select"
+                            value={chip4Status}
+                            onChange={e => setChip4Status(e.target.value)}
+                          >
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                        <div className="col-md-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={() => handleDeleteChip(chip4Id, chip4Whatsapp)}
+                            disabled={!chip4Whatsapp || !chip4Id}
+                            title="Excluir chip"
+                          >
+                            <Fi.FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 5 (Novo WhatsApp)</label>
+                      <div className="row g-2">
+                        <div className="col-md-7">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={chip5Whatsapp}
+                            onChange={e => setChip5Whatsapp(formatWhatsApp(e.target.value))}
+                            placeholder="+55 (00) 00000-0000"
+                            maxLength={20}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <select 
+                            className="form-select"
+                            value={chip5Status}
+                            onChange={e => setChip5Status(e.target.value)}
+                          >
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                        <div className="col-md-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger w-100"
+                            onClick={() => handleDeleteChip(chip5Id, chip5Whatsapp)}
+                            disabled={!chip5Whatsapp || !chip5Id}
+                            title="Excluir chip"
+                          >
+                            <Fi.FiTrash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {(selectedLimit === '10000' || selectedLimit === '100000' || selectedLimit === 'ilimitado') && (
+                  <>
+                    <div className="col-12">
+                      <div className="alert alert-info d-flex align-items-center gap-2">
+                        <Fi.FiInfo size={18} />
+                        <span>Adicione quantos chips quiser</span>
+                      </div>
+                    </div>
+                    
+                    <div className="col-12">
+                      <label className="form-label">Chip 1 (WhatsApp Cadastrado)</label>
+                      <div className="row g-2">
+                        <div className="col-md-8">
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={editWhatsapp}
+                            readOnly
+                            style={{backgroundColor: 'rgba(255, 255, 255, 0.05)', cursor: 'not-allowed'}}
+                          />
+                        </div>
+                        <div className="col-md-4">
+                          <select className="form-select" defaultValue="Ok">
+                            <option value="Ok">Ok</option>
+                            <option value="Banido">Banido</option>
+                            <option value="Sem Status">Sem Status</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {additionalChips.map((chip, index) => (
+                      <div key={index} className="col-12">
+                        <label className="form-label">Chip {index + 2} (Novo WhatsApp)</label>
+                        <div className="row g-2">
+                          <div className="col-md-8">
+                            <div className="input-group">
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={chip.whatsapp}
+                                onChange={e => handleUpdateChip(index, e.target.value)}
+                                placeholder="+55 (00) 00000-0000"
+                                maxLength={20}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-outline-danger"
+                                onClick={() => handleRemoveChip(index)}
+                                title="Remover chip"
+                              >
+                                <Fi.FiTrash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="col-md-4">
+                            <select 
+                              className="form-select"
+                              value={chip.status}
+                              onChange={e => handleUpdateChipStatus(index, e.target.value)}
+                            >
+                              <option value="Ok">Ok</option>
+                              <option value="Banido">Banido</option>
+                              <option value="Sem Status">Sem Status</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <div className="col-12">
+                      <button
+                        type="button"
+                        className="btn btn-outline-success d-flex align-items-center gap-2"
+                        onClick={handleAddChip}
+                      >
+                        <Fi.FiPlus size={16} />
+                        Adicionar Chip
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+              )}
               
               <div className="d-flex justify-content-end gap-2 mt-4">
                 <button 
@@ -1696,23 +2537,47 @@ export default function GeradorSites() {
                 >
                   Cancelar
                 </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary d-flex align-items-center gap-2" 
-                  disabled={isEditing}
-                >
-                  {isEditing ? (
-                    <>
-                      <Fi.FiLoader className="spinner-border spinner-border-sm" />
-                      Alterando...
-                    </>
-                  ) : (
-                    <>
-                      <Fi.FiSave />
-                      Alterar
-                    </>
-                  )}
-                </button>
+                
+                {editModalTab === 'cadastro' && (
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary d-flex align-items-center gap-2" 
+                    disabled={isEditing}
+                  >
+                    {isEditing ? (
+                      <>
+                        <Fi.FiLoader className="spinner-border spinner-border-sm" />
+                        Alterando...
+                      </>
+                    ) : (
+                      <>
+                        <Fi.FiSave />
+                        Alterar
+                      </>
+                    )}
+                  </button>
+                )}
+                
+                {editModalTab === 'limites' && (
+                  <button 
+                    type="button" 
+                    className="btn btn-success d-flex align-items-center gap-2" 
+                    onClick={handleSaveLimitesChips}
+                    disabled={isEditing}
+                  >
+                    {isEditing ? (
+                      <>
+                        <Fi.FiLoader className="spinner-border spinner-border-sm" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Fi.FiSave />
+                        Salvar
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </form>
           </div>
