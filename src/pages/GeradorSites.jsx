@@ -8,10 +8,10 @@ import { Link } from 'react-router-dom'
 
 function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
   return (
-    <div className={`neo-card neo-lg p-4 neo-accent-${accent} h-100`}>
+    <div className={`neo-card neo-lg neo-accent-${accent} h-100`} style={{padding: '12px 16px'}}>
       <div className="d-flex align-items-center justify-content-between">
         <div>
-          <div className="small opacity-75 mb-1">{title}</div>
+          <div className="small opacity-75" style={{marginBottom: '4px'}}>{title}</div>
           <div className="display-6 fw-bold">{value}</div>
         </div>
         {Icon && (
@@ -793,12 +793,19 @@ export default function GeradorSites() {
   // Filtrar sites
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return (sites || []).filter(site => {
+    const filteredSites = (sites || []).filter(site => {
       if (q) {
         const searchText = `${site.razao_social || ''} ${site.cnpj || ''}`.toLowerCase()
         if (!searchText.includes(q)) return false
       }
       return true
+    })
+    
+    // Ordenar por updated_at do mais recente para o mais antigo
+    return filteredSites.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0)
+      const dateB = new Date(b.updated_at || b.created_at || 0)
+      return dateB - dateA // Ordem decrescente (mais recente primeiro)
     })
   }, [sites, search])
   
@@ -909,30 +916,30 @@ export default function GeradorSites() {
         </div>
 
         {/* Stats Cards */}
-        <div className="row g-3 mb-4">
-          <div className="col-lg-4 col-md-6">
+        <div className="row g-2 mb-2">
+          <div className="col-lg-4 col-md-4">
             <StatCard title="Total de Sites" value={stats.total} icon={Fi.FiGlobe} accent="primary" />
           </div>
-          <div className="col-lg-4 col-md-6">
+          <div className="col-lg-4 col-md-4">
             <StatCard title="Gerados Hoje" value={stats.hoje} icon={Fi.FiCalendar} accent="success" />
           </div>
-          <div className="col-lg-4 col-md-6">
+          <div className="col-lg-4 col-md-4">
             <StatCard title="Última Semana" value={stats.semana} icon={Fi.FiTrendingUp} accent="info" />
           </div>
         </div>
         
         {/* Status Cards */}
-        <div className="row g-3 mb-4">
-          <div className="col-lg-3 col-md-6">
+        <div className="row g-2 mb-3">
+          <div className="col-lg-3 col-md-3">
             <StatCard title="Aguardando" value={stats.aguardando} icon={Fi.FiClock} accent="secondary" />
           </div>
-          <div className="col-lg-3 col-md-6">
+          <div className="col-lg-3 col-md-3">
             <StatCard title="Pendentes" value={stats.pendentes} icon={Fi.FiAlertCircle} accent="warning" />
           </div>
-          <div className="col-lg-3 col-md-6">
+          <div className="col-lg-3 col-md-3">
             <StatCard title="Concluídos" value={stats.concluidos} icon={Fi.FiCheckCircle} accent="success" />
           </div>
-          <div className="col-lg-3 col-md-6">
+          <div className="col-lg-3 col-md-3">
             <StatCard title="Encerrados" value={stats.encerrados} icon={Fi.FiXCircle} accent="danger" />
           </div>
         </div>
@@ -1056,7 +1063,6 @@ export default function GeradorSites() {
               <table className="table table-dark table-hover table-bordered align-middle mb-0">
                 <thead>
                   <tr>
-                    <th className="text-center" style={{width:60}}>ID</th>
                     <th className="text-center">Razão Social</th>
                     <th className="text-center">CNPJ</th>
                     <th className="text-center">WhatsApp</th>
@@ -1069,14 +1075,13 @@ export default function GeradorSites() {
                 <tbody>
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center opacity-75 p-4">
+                      <td colSpan={7} className="text-center opacity-75 p-4">
                         Nenhuma página criada
                       </td>
                     </tr>
                   )}
                   {paginated.map((site) => (
                     <tr key={site.id}>
-                      <td className="text-center">{site.id}</td>
                       <td className="text-uppercase">{site.razao_social}</td>
                       <td>{formatCNPJ(site.cnpj)}</td>
                       <td>{formatWhatsApp(site.whatsapp)}</td>
