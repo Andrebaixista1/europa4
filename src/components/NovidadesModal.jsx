@@ -5,6 +5,12 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '06/11/2025',
+    titulo: 'Gerador e Controle de Sites',
+    descricao:
+      'Sistema completo de geração de sites com modais de status e proxy, cards de estatísticas (Aguardando, Pendentes, Concluídos, Encerrados), botões de copiar campos, upload em lote via CSV e controle total de cadastros.',
+  },
+  {
     data: '30/10/2025',
     titulo: 'Status Ferramentas',
     descricao:
