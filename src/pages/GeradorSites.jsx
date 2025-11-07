@@ -983,13 +983,13 @@ export default function GeradorSites() {
   
   // Obter contagem de telefones de um site específico baseado no limite
   function getTelefonesDisplay(site) {
-    // Se não for verificado, não mostra nada
-    if (site.status !== 'Verificado') {
-      return '-'
-    }
-    
     // Buscar o limite do site
     const limite = site.limite || ''
+    
+    // Se não tiver limite, não mostra nada
+    if (!limite) {
+      return '-'
+    }
     
     // Buscar quantos registros existem para este ID (contagem real)
     const siteRecords = sites.filter(s => s.id === site.id)
