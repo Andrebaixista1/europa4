@@ -2607,10 +2607,10 @@ export default function GeradorSites() {
       {/* Modal de Criação */}
       {showCreate && (
         <div 
-          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" 
-          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050, overflowY:'auto'}}
         >
-          <div className="modal-dark p-4" style={{maxWidth:680, width:'95%'}}>
+          <div className="modal-dark p-3 p-md-4 my-3" style={{maxWidth:680, width:'100%', maxHeight:'90vh', overflowY:'auto'}}>
             <div className="d-flex align-items-center justify-content-between mb-3">
               <div>
                 <h4 className="modal-dark-title mb-1">
