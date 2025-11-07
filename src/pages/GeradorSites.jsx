@@ -1082,6 +1082,7 @@ export default function GeradorSites() {
       'Aguardando BM': 'bg-warning text-dark',
       'Aguardando Criação BM': 'bg-warning text-dark',
       'Aguardando Criação Site': 'bg-warning text-dark',
+      'Aguardando Compra ZapResponder': 'bg-warning text-dark',
       'Em Analise': 'bg-warning text-dark',
       'Verificado': 'bg-success',
       'Não Verificado': 'bg-danger',
@@ -1293,6 +1294,7 @@ export default function GeradorSites() {
       'Aguardando BM',
       'Aguardando Criação BM',
       'Aguardando Criação Site',
+      'Aguardando Compra ZapResponder',
       'Em Analise'
     ].includes(s.status)).length
     const concluidos = filtered.filter(s => s.status === 'Verificado').length
@@ -1833,6 +1835,7 @@ export default function GeradorSites() {
                 <option value="Aguardando BM">Aguardando BM</option>
                 <option value="Aguardando Criação BM">Aguardando Criação BM</option>
                 <option value="Aguardando Criação Site">Aguardando Criação Site</option>
+                <option value="Aguardando Compra ZapResponder">Aguardando Compra ZapResponder</option>
                 <option value="Em Analise">Em Analise</option>
                 <option value="Verificado">Verificado</option>
                 <option value="Não Verificado">Não Verificado</option>
@@ -2145,6 +2148,7 @@ export default function GeradorSites() {
                     <option value="Aguardando BM">Aguardando BM</option>
                     <option value="Aguardando Criação BM">Aguardando Criação BM</option>
                     <option value="Aguardando Criação Site">Aguardando Criação Site</option>
+                    <option value="Aguardando Compra ZapResponder">Aguardando Compra ZapResponder</option>
                     <option value="Em Analise">Em Analise</option>
                     <option value="Verificado">Verificado</option>
                     <option value="Não Verificado">Não Verificado</option>
