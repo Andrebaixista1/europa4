@@ -1,3 +1,4 @@
+/*
 import { useEffect, useState, useMemo } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
@@ -59,6 +60,9 @@ export default function GeradorSites() {
   const [editStatus, setEditStatus] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   
+  // Modal de detalhes do site
+  const [showSiteDetails, setShowSiteDetails] = useState(false)
+  
   // Limites & Chips
   const [selectedLimit, setSelectedLimit] = useState('')
   const [chip2Whatsapp, setChip2Whatsapp] = useState('')
@@ -96,6 +100,11 @@ export default function GeradorSites() {
   const [csvFile, setCsvFile] = useState(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, errors: [] })
+  
+  // Efeito para monitorar mudanças no estado do upload
+  useEffect(() => {
+    console.log('Estado do upload em lote atualizado:', { showBatchUpload, csvFile, isProcessing, batchProgress })
+  }, [showBatchUpload, csvFile, isProcessing, batchProgress])
   
   // Busca e filtros
   const [search, setSearch] = useState('')
@@ -172,6 +181,7 @@ export default function GeradorSites() {
   
   // Carregar sites
   async function loadSites() {
+    console.log('Iniciando carregamento de sites...')
     setIsLoading(true)
     setError(null)
     try {
@@ -189,6 +199,7 @@ export default function GeradorSites() {
       let data
       try {
         data = await res.json()
+        console.log('Dados recebidos da API:', data)
       } catch (jsonError) {
         console.warn('Erro ao fazer parse do JSON, exibindo lista vazia:', jsonError)
         setSites([])
@@ -201,6 +212,7 @@ export default function GeradorSites() {
         console.warn('Resposta da API não é um array, exibindo lista vazia')
         setSites([])
       } else {
+        console.log(`Carregados ${data.length} sites`)
         setSites(data)
       }
     } catch (e) {
@@ -209,10 +221,14 @@ export default function GeradorSites() {
       // Não mostra notificação de erro, apenas log silencioso
     } finally {
       setIsLoading(false)
+      console.log('Carregamento de sites concluído')
     }
   }
   
-  useEffect(() => { loadSites() }, [])
+  useEffect(() => { 
+    console.log('Componente GeradorSites montado')
+    loadSites() 
+  }, [])
   
   // Criar novo site
   async function handleCreate(e) {
@@ -520,27 +536,85 @@ export default function GeradorSites() {
     
     if (!csvFile) return notify.error('Selecione um arquivo CSV')
     
+    // Verificação adicional do arquivo
+    if (csvFile.size === 0) {
+      notify.error('O arquivo selecionado está vazio')
+      return
+    }
+    
+    // Verificar se o arquivo parece ser um CSV válido
+    if (csvFile.name && !csvFile.name.toLowerCase().endsWith('.csv')) {
+      notify.error('O arquivo deve ter extensão .csv')
+      return
+    }
+    
+    if (csvFile.size > 10 * 1024 * 1024) { // 10MB
+      notify.error('O arquivo é muito grande. Tamanho máximo permitido: 10MB')
+      return
+    }
+    
+    console.log('Processando arquivo:', csvFile.name, 'Tamanho:', csvFile.size, 'bytes')
+    
     try {
       setIsProcessing(true)
       
       // Ler arquivo CSV
       const text = await csvFile.text()
-      const lines = text.split('\n').filter(line => line.trim())
+      console.log('Conteúdo do arquivo (primeiros 500 caracteres):', text.substring(0, 500))
       
-      if (lines.length < 2) {
-        notify.error('Arquivo CSV vazio ou inválido')
+      // Verificar se o conteúdo foi lido corretamente
+      if (!text || text.length === 0) {
+        notify.error('Não foi possível ler o conteúdo do arquivo')
         return
       }
       
-      // Validar cabeçalho
+      // Normalizar quebras de linha para diferentes sistemas operacionais
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      const lines = normalizedText.split('\n').filter(line => line.trim())
+      
+      // Verificar se há linhas suficientes
+      if (lines.length === 0) {
+        notify.error('Arquivo sem conteúdo legível')
+        return
+      }
+      
+      if (lines.length < 2) {
+        notify.error('Arquivo CSV vazio ou inválido. Deve conter pelo menos um cabeçalho e uma linha de dados.')
+        return
+      }
+      
+      // Validar cabeçalho - versão mais robusta
       const header = lines[0].split(';').map(h => h.trim().toLowerCase())
-      const requiredColumns = ['razão social', 'cnpj', 'whatsapp', 'endereço', 'e-mail', 'meta tag']
-      const hasAllColumns = requiredColumns.every(col => 
-        header.some(h => h.includes(col.toLowerCase().replace(/ã/g, 'a').replace(/ç/g, 'c')))
+      console.log('Cabeçalho encontrado:', header)
+      
+      // Verificar se o cabeçalho foi lido corretamente
+      if (!header || header.length === 0) {
+        notify.error('Não foi possível ler o cabeçalho do arquivo CSV')
+        return
+      }
+      
+      const requiredColumns = ['razao social', 'cnpj', 'whatsapp', 'endereco', 'e-mail', 'meta tag']
+      const normalizedHeader = header.map(h => 
+        h.normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+         .replace(/[^\w\s]/gi, '') // Remove caracteres especiais
       )
       
+      console.log('Cabeçalho normalizado:', normalizedHeader)
+      
+      const hasAllColumns = requiredColumns.every(col => {
+        const normalizedCol = col.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/gi, '')
+        return normalizedHeader.some(h => 
+          h.includes(normalizedCol) || 
+          normalizedCol.includes(h)
+        )
+      })
+      
+      console.log('Colunas encontradas:', hasAllColumns)
+      
       if (!hasAllColumns) {
-        notify.error('CSV deve conter as colunas: Razão Social, CNPJ, Whatsapp, Endereço, E-mail, Meta Tag')
+        notify.error(`CSV deve conter as colunas: Razão Social, CNPJ, Whatsapp, Endereço, E-mail, Meta Tag. Encontrado: ${header.join(', ')}`)
+        console.log('Colunas esperadas:', requiredColumns)
+        console.log('Colunas normalizadas no arquivo:', normalizedHeader)
         return
       }
       
@@ -557,7 +631,1304 @@ export default function GeradorSites() {
         const columns = line.split(';').map(c => c.trim())
         
         if (columns.length < 6) {
-          errors.push(`Linha ${i + 2}: Número de colunas insuficiente`)
+          errors.push(`Linha ${i + 2}: Número de colunas insuficiente. Esperado: 6, Encontrado: ${columns.length}`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Erro`] }))
+          continue
+        }
+        
+        const [razaoSocial, cnpj, whatsapp, endereco, email, metaTag] = columns
+        
+        // Validar dados obrigatórios
+        if (!razaoSocial || !cnpj || !whatsapp || !endereco || !email) {
+          errors.push(`Linha ${i + 2}: Dados obrigatórios faltando`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Dados faltando`] }))
+          continue
+        }
+</original_code>```
+
+*/
+/*
+import { useEffect, useState, useMemo } from 'react'
+import TopNav from '../components/TopNav.jsx'
+import Footer from '../components/Footer.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
+import * as Fi from 'react-icons/fi'
+import { notify } from '../utils/notify.js'
+import { Link } from 'react-router-dom'
+
+function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
+  return (
+    <div className={`neo-card neo-lg neo-accent-${accent} h-100`} style={{padding: '8px 12px'}}>
+      <div className="d-flex align-items-center justify-content-between">
+        <div>
+          <div className="small opacity-75" style={{marginBottom: '2px'}}>{title}</div>
+          <div className="display-6 fw-bold">{value}</div>
+        </div>
+        {Icon && (
+          <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
+            <Icon size={28} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const ROWS_PER_PAGE = 50
+
+export default function GeradorSites() {
+  const { user } = useAuth()
+  const isMaster = (user?.role || '').toLowerCase() === 'master'
+  
+  // Lista de sites
+  const [sites, setSites] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+  
+  // Modal de criação
+  const [showCreate, setShowCreate] = useState(false)
+  const [razaoSocial, setRazaoSocial] = useState('')
+  const [cnpj, setCnpj] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [endereco, setEndereco] = useState('')
+  const [email, setEmail] = useState('')
+  const [metaTag, setMetaTag] = useState('')
+  const [proxy, setProxy] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Modal de edição
+  const [showEdit, setShowEdit] = useState(false)
+  const [selectedSite, setSelectedSite] = useState(null)
+  const [editRazaoSocial, setEditRazaoSocial] = useState('')
+  const [editCnpj, setEditCnpj] = useState('')
+  const [editWhatsapp, setEditWhatsapp] = useState('')
+  const [editEndereco, setEditEndereco] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editMetaTag, setEditMetaTag] = useState('')
+  const [editProxy, setEditProxy] = useState('')
+  const [editStatus, setEditStatus] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+  
+  // Modal de detalhes do site
+  const [showSiteDetails, setShowSiteDetails] = useState(false)
+  
+  // Limites & Chips
+  const [selectedLimit, setSelectedLimit] = useState('')
+  const [chip2Whatsapp, setChip2Whatsapp] = useState('')
+  const [chip3Whatsapp, setChip3Whatsapp] = useState('')
+  const [chip4Whatsapp, setChip4Whatsapp] = useState('')
+  const [chip5Whatsapp, setChip5Whatsapp] = useState('')
+  const [chip2Status, setChip2Status] = useState('Sem Status')
+  const [chip3Status, setChip3Status] = useState('Sem Status')
+  const [chip4Status, setChip4Status] = useState('Sem Status')
+  const [chip5Status, setChip5Status] = useState('Sem Status')
+  const [chip2Id, setChip2Id] = useState(null)
+  const [chip3Id, setChip3Id] = useState(null)
+  const [chip4Id, setChip4Id] = useState(null)
+  const [chip5Id, setChip5Id] = useState(null)
+  const [additionalChips, setAdditionalChips] = useState([])
+  
+  // Modal de confirmação de exclusão
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [siteToDelete, setSiteToDelete] = useState(null)
+  
+  // Modal de alteração de status
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [selectedSiteForStatus, setSelectedSiteForStatus] = useState(null)
+  const [newStatus, setNewStatus] = useState('')
+  const [isSavingStatus, setIsSavingStatus] = useState(false)
+  
+  // Modal de alteração de proxy
+  const [showProxyModal, setShowProxyModal] = useState(false)
+  const [selectedSiteForProxy, setSelectedSiteForProxy] = useState(null)
+  const [newProxy, setNewProxy] = useState('')
+  const [isSavingProxy, setIsSavingProxy] = useState(false)
+  
+  // Modal de upload em lote
+  const [showBatchUpload, setShowBatchUpload] = useState(false)
+  const [csvFile, setCsvFile] = useState(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, errors: [] })
+  
+  // Efeito para monitorar mudanças no estado do upload
+  useEffect(() => {
+    console.log('Estado do upload em lote atualizado:', { showBatchUpload, csvFile, isProcessing, batchProgress })
+  }, [showBatchUpload, csvFile, isProcessing, batchProgress])
+  
+  // Busca e filtros
+  const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isPageAnimating, setIsPageAnimating] = useState(false)
+  
+  // Aba do modal de edição
+  const [editModalTab, setEditModalTab] = useState('cadastro')
+  
+  // Estado para ações em andamento
+  const [deletingId, setDeletingId] = useState(null)
+  
+  // IP do usuário
+  const [ipAddress, setIpAddress] = useState(null)
+  
+  // Obter IP do usuário ao carregar
+  useEffect(() => {
+    async function getIP() {
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipRes.json()
+        setIpAddress(ipData.ip)
+      } catch (e) {
+        console.warn('Não foi possível obter o IP:', e)
+        setIpAddress(null)
+      }
+    }
+    getIP()
+  }, [])
+  
+  // Formatar CNPJ
+  const formatCNPJ = (value) => {
+    const numbers = value.replace(/\D/g, '')
+    if (numbers.length <= 14) {
+      return numbers.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+    }
+    return value
+  }
+  
+  // Formatar WhatsApp
+  const formatWhatsApp = (value) => {
+    if (!value) return '-'
+    const numbers = String(value).replace(/\D/g, '')
+    
+    // Se já tem DDI (55), remove para adicionar depois
+    let cleanNumber = numbers.startsWith('55') ? numbers.substring(2) : numbers
+    
+    // Se tem 11 dígitos (formato correto): (XX) XXXXX-XXXX
+    if (cleanNumber.length === 11) {
+      return cleanNumber.replace(/(\d{2})(\d{5})(\d{4})/, '+55 ($1) $2-$3')
+    }
+    
+    // Se tem 10 dígitos (telefone fixo): (XX) XXXX-XXXX
+    if (cleanNumber.length === 10) {
+      return cleanNumber.replace(/(\d{2})(\d{4})(\d{4})/, '+55 ($1) $2-$3')
+    }
+    
+    // Se não conseguir formatar, retorna com +55 no início
+    return numbers.startsWith('55') ? `+${numbers}` : `+55${numbers}`
+  }
+  
+  // Formatar data
+  const formatDate = (dateString) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    return date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  // Carregar sites
+  async function loadSites() {
+    console.log('Iniciando carregamento de sites...')
+    setIsLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      
+      // Se a resposta não for OK, considera como lista vazia
+      if (!res.ok) {
+        console.warn(`API retornou status ${res.status}, exibindo lista vazia`)
+        setSites([])
+        setIsLoading(false)
+        return
+      }
+      
+      // Tentar fazer parse do JSON
+      let data
+      try {
+        data = await res.json()
+        console.log('Dados recebidos da API:', data)
+      } catch (jsonError) {
+        console.warn('Erro ao fazer parse do JSON, exibindo lista vazia:', jsonError)
+        setSites([])
+        setIsLoading(false)
+        return
+      }
+      
+      // Verificar se é um array válido
+      if (!Array.isArray(data)) {
+        console.warn('Resposta da API não é um array, exibindo lista vazia')
+        setSites([])
+      } else {
+        console.log(`Carregados ${data.length} sites`)
+        setSites(data)
+      }
+    } catch (e) {
+      console.error('Erro ao carregar sites:', e)
+      setSites([])
+      // Não mostra notificação de erro, apenas log silencioso
+    } finally {
+      setIsLoading(false)
+      console.log('Carregamento de sites concluído')
+    }
+  }
+  
+  useEffect(() => { 
+    console.log('Componente GeradorSites montado')
+    loadSites() 
+  }, [])
+  
+  // Criar novo site
+  async function handleCreate(e) {
+    e?.preventDefault?.()
+    
+    if (!razaoSocial.trim()) return notify.error('Informe a razão social')
+    if (!cnpj.trim()) return notify.error('Informe o CNPJ')
+    
+    const payload = {
+      razao_social: razaoSocial,
+      cnpj: cnpj.replace(/\D/g, ''),
+      whatsapp: whatsapp.replace(/\D/g, ''),
+      endereco: endereco,
+      email: email,
+      meta_tag: metaTag.trim() || '<meta />',
+      proxy: proxy.trim() || 'Não Informado',
+      status: 'Aguardando Pagamento',
+      usuario_id: user?.id || null,
+      equipe_id: user?.equipe_id || null,
+      ip_address: ipAddress
+    }
+    
+    try {
+      setIsSubmitting(true)
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/gera-site-individual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      
+      notify.success('Site gerado com sucesso!')
+      setShowCreate(false)
+      
+      // Limpar formulário
+      setRazaoSocial('')
+      setCnpj('')
+      setWhatsapp('')
+      setEndereco('')
+      setEmail('')
+      setMetaTag('')
+      setProxy('')
+      
+      await loadSites()
+    } catch (e) {
+      console.error('Falha ao gerar site:', e)
+      notify.error(`Falha ao gerar site: ${e.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  // Download do HTML
+  function handleDownloadHTML(site) {
+    if (!site.html_content) {
+      notify.error('HTML não disponível para este site')
+      return
+    }
+    
+    try {
+      // Criar um blob com o conteúdo HTML
+      const blob = new Blob([site.html_content], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      
+      // Criar elemento <a> temporário para download
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'index.html'
+      document.body.appendChild(a)
+      a.click()
+      
+      // Limpar
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      notify.success('Download iniciado!')
+    } catch (e) {
+      console.error('Falha ao fazer download:', e)
+      notify.error('Falha ao fazer download do HTML')
+    }
+  }
+  
+  // Abrir modal de edição
+  async function handleOpenEdit(site) {
+    setSelectedSite(site)
+    setEditRazaoSocial(site.razao_social || '')
+    setEditCnpj(formatCNPJ(site.cnpj || ''))
+    setEditWhatsapp(formatWhatsApp(site.whatsapp || ''))
+    setEditEndereco(site.endereco || '')
+    setEditEmail(site.email || '')
+    setEditMetaTag(site.meta_tag || '')
+    setEditProxy(site.proxy || '')
+    setEditStatus(site.status || 'Sem Status')
+    
+    // Limpar estados de chips
+    setSelectedLimit('')
+    setChip2Whatsapp('')
+    setChip3Whatsapp('')
+    setChip4Whatsapp('')
+    setChip5Whatsapp('')
+    setChip2Status('Sem Status')
+    setChip3Status('Sem Status')
+    setChip4Status('Sem Status')
+    setChip5Status('Sem Status')
+    setChip2Id(null)
+    setChip3Id(null)
+    setChip4Id(null)
+    setChip5Id(null)
+    setAdditionalChips([])
+    
+    // Buscar dados de limites e chips do view-site
+    try {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Dados completos do view-site:', data)
+        if (Array.isArray(data)) {
+          // Agrupar todos os registros do mesmo ID (cada chip é uma linha separada)
+          const sitesData = data.filter(s => s.id === site.id)
+          console.log('Registros encontrados para o site:', sitesData)
+          
+          if (sitesData.length > 0) {
+            const firstRecord = sitesData[0]
+            
+            // Preencher limite (pega do primeiro registro)
+            if (firstRecord.limite) {
+              const limiteValue = String(firstRecord.limite)
+              setSelectedLimit(limiteValue)
+              console.log('Limite carregado:', limiteValue)
+            }
+            
+            // Coletar todos os números e status de todos os registros
+            const numeros = []
+            const statuses = []
+            const ids = []
+            
+            sitesData.forEach(record => {
+              if (record.numero && record.status_z) {
+                numeros.push(record.numero)
+                statuses.push(record.status_z)
+                ids.push(record.id_whats || null)
+              }
+            })
+            
+            console.log('Números coletados:', numeros)
+            console.log('Status coletados:', statuses)
+            console.log('IDs coletados:', ids)
+            
+            // Preencher os chips (pulando o primeiro que é o WhatsApp cadastrado)
+            for (let i = 1; i < numeros.length; i++) {
+              const numero = formatWhatsApp(numeros[i] || '')
+              const status = statuses[i] || 'Sem Status'
+              const idWhats = ids[i]
+              
+              console.log(`Chip ${i + 1}:`, { numero, status, idWhats })
+              
+              if (i === 1) {
+                setChip2Whatsapp(numero)
+                setChip2Status(status)
+                setChip2Id(idWhats)
+              } else if (i === 2) {
+                setChip3Whatsapp(numero)
+                setChip3Status(status)
+                setChip3Id(idWhats)
+              } else if (i === 3) {
+                setChip4Whatsapp(numero)
+                setChip4Status(status)
+                setChip4Id(idWhats)
+              } else if (i === 4) {
+                setChip5Whatsapp(numero)
+                setChip5Status(status)
+                setChip5Id(idWhats)
+              } else {
+                // Chips adicionais para limites maiores
+                setAdditionalChips(prev => [...prev, { whatsapp: numero, status, id_whats: idWhats }])
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados de limites:', error)
+    }
+    
+    setShowEdit(true)
+  }
+  
+  // Fechar modal de edição
+  function handleCloseEdit() {
+    setShowEdit(false)
+    setSelectedSite(null)
+    setEditRazaoSocial('')
+    setEditCnpj('')
+    setEditWhatsapp('')
+    setEditEndereco('')
+    setEditEmail('')
+    setEditMetaTag('')
+    setEditProxy('')
+    setEditStatus('')
+  }
+  
+  // Função de alteração
+  async function handleEdit(e) {
+    e?.preventDefault?.()
+    
+    if (!editRazaoSocial.trim()) return notify.error('Informe a razão social')
+    if (!editCnpj.trim()) return notify.error('Informe o CNPJ')
+    if (!editWhatsapp.trim()) return notify.error('Informe o WhatsApp')
+    if (!editEndereco.trim()) return notify.error('Informe o endereço')
+    if (!editEmail.trim()) return notify.error('Informe o e-mail')
+    
+    try {
+      setIsEditing(true)
+      
+      // PASSO 1: Buscar o HTML content atualizado do endpoint view-site
+      let htmlContent = ''
+      try {
+        const viewRes = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+        if (viewRes.ok) {
+          const viewData = await viewRes.json()
+          if (Array.isArray(viewData)) {
+            const siteData = viewData.find(s => s.id === selectedSite?.id)
+            if (siteData && siteData.html_content) {
+              htmlContent = siteData.html_content
+              console.log('HTML content atualizado obtido do view-site')
+            } else {
+              console.warn('Site não encontrado ou sem html_content no view-site')
+              htmlContent = selectedSite?.html_content || ''
+            }
+          }
+        } else {
+          console.warn('Falha ao buscar view-site, usando html_content existente')
+          htmlContent = selectedSite?.html_content || ''
+        }
+      } catch (viewError) {
+        console.warn('Erro ao buscar view-site:', viewError)
+        htmlContent = selectedSite?.html_content || ''
+      }
+      
+      // PASSO 2: Capturar IP do usuário
+      let ipAddress = null
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipRes.json()
+        ipAddress = ipData.ip
+      } catch (e) {
+        console.warn('Não foi possível obter o IP:', e)
+      }
+      
+      // PASSO 3: Preparar payload com o HTML content atualizado
+      const payload = {
+        id: selectedSite?.id,
+        razao_social: editRazaoSocial,
+        cnpj: editCnpj.replace(/\D/g, ''),
+        whatsapp: editWhatsapp.replace(/\D/g, ''),
+        endereco: editEndereco,
+        email: editEmail,
+        meta_tag: editMetaTag.trim() || '<meta />',
+        proxy: editProxy.trim() || 'Não Informado',
+        status: editStatus,
+        html_content: htmlContent,
+        usuario_id: user?.id || null,
+        equipe_id: user?.equipe_id || null,
+        ip_address: ipAddress
+      }
+      
+      console.log('Enviando alteração com html_content de', htmlContent.length, 'caracteres')
+      
+      // PASSO 4: Enviar alteração para o webhook
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/alterar-cadastro', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      
+      notify.success('Site alterado com sucesso!')
+      handleCloseEdit()
+      await loadSites()
+    } catch (e) {
+      console.error('Falha ao alterar site:', e)
+      notify.error(`Falha ao alterar site: ${e.message}`)
+    } finally {
+      setIsEditing(false)
+    }
+  }
+  
+  // Abrir modal de confirmação de exclusão
+  function handleOpenDeleteConfirm(site) {
+    setSiteToDelete(site)
+    setShowDeleteConfirm(true)
+  }
+  
+  // Fechar modal de confirmação de exclusão
+  function handleCloseDeleteConfirm() {
+    setShowDeleteConfirm(false)
+    setSiteToDelete(null)
+  }
+  
+  // Processar CSV em lote
+  async function handleBatchUpload(e) {
+    e?.preventDefault()
+    
+    if (!csvFile) return notify.error('Selecione um arquivo CSV')
+    
+    // Verificação adicional do arquivo
+    if (csvFile.size === 0) {
+      notify.error('O arquivo selecionado está vazio')
+      return
+    }
+    
+    // Verificar se o arquivo parece ser um CSV válido
+    if (csvFile.name && !csvFile.name.toLowerCase().endsWith('.csv')) {
+      notify.error('O arquivo deve ter extensão .csv')
+      return
+    }
+    
+    if (csvFile.size > 10 * 1024 * 1024) { // 10MB
+      notify.error('O arquivo é muito grande. Tamanho máximo permitido: 10MB')
+      return
+    }
+    
+    console.log('Processando arquivo:', csvFile.name, 'Tamanho:', csvFile.size, 'bytes')
+    
+    try {
+      setIsProcessing(true)
+      
+      // Ler arquivo CSV
+      const text = await csvFile.text()
+      console.log('Conteúdo do arquivo (primeiros 500 caracteres):', text.substring(0, 500))
+      
+      // Verificar se o conteúdo foi lido corretamente
+      if (!text || text.length === 0) {
+        notify.error('Não foi possível ler o conteúdo do arquivo')
+        return
+      }
+      
+      // Normalizar quebras de linha para diferentes sistemas operacionais
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      const lines = normalizedText.split('\n').filter(line => line.trim())
+      
+      // Verificar se há linhas suficientes
+      if (lines.length === 0) {
+        notify.error('Arquivo sem conteúdo legível')
+        return
+      }
+      
+      if (lines.length < 2) {
+        notify.error('Arquivo CSV vazio ou inválido. Deve conter pelo menos um cabeçalho e uma linha de dados.')
+        return
+      }
+      
+      // Validar cabeçalho - versão mais robusta
+      const header = lines[0].split(';').map(h => h.trim().toLowerCase())
+      console.log('Cabeçalho encontrado:', header)
+      
+      // Verificar se o cabeçalho foi lido corretamente
+      if (!header || header.length === 0) {
+        notify.error('Não foi possível ler o cabeçalho do arquivo CSV')
+        return
+      }
+      
+      const requiredColumns = ['razao social', 'cnpj', 'whatsapp', 'endereco', 'e-mail', 'meta tag']
+      const normalizedHeader = header.map(h => 
+        h.normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+         .replace(/[^\w\s]/gi, '') // Remove caracteres especiais
+      )
+      
+      console.log('Cabeçalho normalizado:', normalizedHeader)
+      
+      const hasAllColumns = requiredColumns.every(col => {
+        const normalizedCol = col.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/gi, '')
+        return normalizedHeader.some(h => 
+          h.includes(normalizedCol) || 
+          normalizedCol.includes(h)
+        )
+      })
+      
+      console.log('Colunas encontradas:', hasAllColumns)
+      
+      if (!hasAllColumns) {
+        notify.error(`CSV deve conter as colunas: Razão Social, CNPJ, Whatsapp, Endereço, E-mail, Meta Tag. Encontrado: ${header.join(', ')}`)
+        console.log('Colunas esperadas:', requiredColumns)
+        console.log('Colunas normalizadas no arquivo:', normalizedHeader)
+        return
+      }
+      
+      const dataLines = lines.slice(1)
+      setBatchProgress({ current: 0, total: dataLines.length, errors: [] })
+      
+      const errors = []
+      
+      // Processar linha por linha SEQUENCIALMENTE (envia, aguarda resposta, envia próxima)
+      for (let i = 0; i < dataLines.length; i++) {
+        const line = dataLines[i].trim()
+        if (!line) continue
+        
+        const columns = line.split(';').map(c => c.trim())
+        
+        if (columns.length < 6) {
+          errors.push(`Linha ${i + 2}: Número de colunas insuficiente. Esperado: 6, Encontrado: ${columns.length}`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Erro`] }))
+          continue
+        }
+        
+        const [razaoSocial, cnpj, whatsapp, endereco, email, metaTag] = columns
+        
+        // Validar dados obrigatórios
+        if (!razaoSocial || !cnpj || !whatsapp || !endereco || !email) {
+          errors.push(`Linha ${i + 2}: Dados obrigatórios faltando`)
+          setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Dados faltando`] }))
+          continue
+        }
+</original_code>```
+
+*/
+import { useEffect, useState, useMemo } from 'react'
+import TopNav from '../components/TopNav.jsx'
+import Footer from '../components/Footer.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
+import * as Fi from 'react-icons/fi'
+import { notify } from '../utils/notify.js'
+import { Link } from 'react-router-dom'
+
+function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
+  return (
+    <div className={`neo-card neo-lg neo-accent-${accent} h-100`} style={{padding: '8px 12px'}}>
+      <div className="d-flex align-items-center justify-content-between">
+        <div>
+          <div className="small opacity-75" style={{marginBottom: '2px'}}>{title}</div>
+          <div className="display-6 fw-bold">{value}</div>
+        </div>
+        {Icon && (
+          <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
+            <Icon size={28} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const ROWS_PER_PAGE = 50
+
+export default function GeradorSites() {
+  const { user } = useAuth()
+  const isMaster = (user?.role || '').toLowerCase() === 'master'
+  
+  // Lista de sites
+  const [sites, setSites] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
+  
+  // Modal de criação
+  const [showCreate, setShowCreate] = useState(false)
+  const [razaoSocial, setRazaoSocial] = useState('')
+  const [cnpj, setCnpj] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [endereco, setEndereco] = useState('')
+  const [email, setEmail] = useState('')
+  const [metaTag, setMetaTag] = useState('')
+  const [proxy, setProxy] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Modal de edição
+  const [showEdit, setShowEdit] = useState(false)
+  const [selectedSite, setSelectedSite] = useState(null)
+  const [editRazaoSocial, setEditRazaoSocial] = useState('')
+  const [editCnpj, setEditCnpj] = useState('')
+  const [editWhatsapp, setEditWhatsapp] = useState('')
+  const [editEndereco, setEditEndereco] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editMetaTag, setEditMetaTag] = useState('')
+  const [editProxy, setEditProxy] = useState('')
+  const [editStatus, setEditStatus] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
+  
+  // Modal de detalhes do site
+  const [showSiteDetails, setShowSiteDetails] = useState(false)
+  
+  // Limites & Chips
+  const [selectedLimit, setSelectedLimit] = useState('')
+  const [chip2Whatsapp, setChip2Whatsapp] = useState('')
+  const [chip3Whatsapp, setChip3Whatsapp] = useState('')
+  const [chip4Whatsapp, setChip4Whatsapp] = useState('')
+  const [chip5Whatsapp, setChip5Whatsapp] = useState('')
+  const [chip2Status, setChip2Status] = useState('Sem Status')
+  const [chip3Status, setChip3Status] = useState('Sem Status')
+  const [chip4Status, setChip4Status] = useState('Sem Status')
+  const [chip5Status, setChip5Status] = useState('Sem Status')
+  const [chip2Id, setChip2Id] = useState(null)
+  const [chip3Id, setChip3Id] = useState(null)
+  const [chip4Id, setChip4Id] = useState(null)
+  const [chip5Id, setChip5Id] = useState(null)
+  const [additionalChips, setAdditionalChips] = useState([])
+  
+  // Modal de confirmação de exclusão
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [siteToDelete, setSiteToDelete] = useState(null)
+  
+  // Modal de alteração de status
+  const [showStatusModal, setShowStatusModal] = useState(false)
+  const [selectedSiteForStatus, setSelectedSiteForStatus] = useState(null)
+  const [newStatus, setNewStatus] = useState('')
+  const [isSavingStatus, setIsSavingStatus] = useState(false)
+  
+  // Modal de alteração de proxy
+  const [showProxyModal, setShowProxyModal] = useState(false)
+  const [selectedSiteForProxy, setSelectedSiteForProxy] = useState(null)
+  const [newProxy, setNewProxy] = useState('')
+  const [isSavingProxy, setIsSavingProxy] = useState(false)
+  
+  // Modal de upload em lote
+  const [showBatchUpload, setShowBatchUpload] = useState(false)
+  const [csvFile, setCsvFile] = useState(null)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, errors: [] })
+  
+  // Efeito para monitorar mudanças no estado do upload
+  useEffect(() => {
+    console.log('Estado do upload em lote atualizado:', { showBatchUpload, csvFile, isProcessing, batchProgress })
+  }, [showBatchUpload, csvFile, isProcessing, batchProgress])
+  
+  // Busca e filtros
+  const [search, setSearch] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [isPageAnimating, setIsPageAnimating] = useState(false)
+  
+  // Aba do modal de edição
+  const [editModalTab, setEditModalTab] = useState('cadastro')
+  
+  // Estado para ações em andamento
+  const [deletingId, setDeletingId] = useState(null)
+  
+  // IP do usuário
+  const [ipAddress, setIpAddress] = useState(null)
+  
+  // Obter IP do usuário ao carregar
+  useEffect(() => {
+    async function getIP() {
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipRes.json()
+        setIpAddress(ipData.ip)
+      } catch (e) {
+        console.warn('Não foi possível obter o IP:', e)
+        setIpAddress(null)
+      }
+    }
+    getIP()
+  }, [])
+  
+  // Formatar CNPJ
+  const formatCNPJ = (value) => {
+    const numbers = value.replace(/\D/g, '')
+    if (numbers.length <= 14) {
+      return numbers.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+    }
+    return value
+  }
+  
+  // Formatar WhatsApp
+  const formatWhatsApp = (value) => {
+    if (!value) return '-'
+    const numbers = String(value).replace(/\D/g, '')
+    
+    // Se já tem DDI (55), remove para adicionar depois
+    let cleanNumber = numbers.startsWith('55') ? numbers.substring(2) : numbers
+    
+    // Se tem 11 dígitos (formato correto): (XX) XXXXX-XXXX
+    if (cleanNumber.length === 11) {
+      return cleanNumber.replace(/(\d{2})(\d{5})(\d{4})/, '+55 ($1) $2-$3')
+    }
+    
+    // Se tem 10 dígitos (telefone fixo): (XX) XXXX-XXXX
+    if (cleanNumber.length === 10) {
+      return cleanNumber.replace(/(\d{2})(\d{4})(\d{4})/, '+55 ($1) $2-$3')
+    }
+    
+    // Se não conseguir formatar, retorna com +55 no início
+    return numbers.startsWith('55') ? `+${numbers}` : `+55${numbers}`
+  }
+  
+  // Formatar data
+  const formatDate = (dateString) => {
+    if (!dateString) return '-'
+    const date = new Date(dateString)
+    return date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  // Carregar sites
+  async function loadSites() {
+    console.log('Iniciando carregamento de sites...')
+    setIsLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      
+      // Se a resposta não for OK, considera como lista vazia
+      if (!res.ok) {
+        console.warn(`API retornou status ${res.status}, exibindo lista vazia`)
+        setSites([])
+        setIsLoading(false)
+        return
+      }
+      
+      // Tentar fazer parse do JSON
+      let data
+      try {
+        data = await res.json()
+        console.log('Dados recebidos da API:', data)
+      } catch (jsonError) {
+        console.warn('Erro ao fazer parse do JSON, exibindo lista vazia:', jsonError)
+        setSites([])
+        setIsLoading(false)
+        return
+      }
+      
+      // Verificar se é um array válido
+      if (!Array.isArray(data)) {
+        console.warn('Resposta da API não é um array, exibindo lista vazia')
+        setSites([])
+      } else {
+        console.log(`Carregados ${data.length} sites`)
+        setSites(data)
+      }
+    } catch (e) {
+      console.error('Erro ao carregar sites:', e)
+      setSites([])
+      // Não mostra notificação de erro, apenas log silencioso
+    } finally {
+      setIsLoading(false)
+      console.log('Carregamento de sites concluído')
+    }
+  }
+  
+  useEffect(() => { 
+    console.log('Componente GeradorSites montado')
+    loadSites() 
+  }, [])
+  
+  // Criar novo site
+  async function handleCreate(e) {
+    e?.preventDefault?.()
+    
+    if (!razaoSocial.trim()) return notify.error('Informe a razão social')
+    if (!cnpj.trim()) return notify.error('Informe o CNPJ')
+    
+    const payload = {
+      razao_social: razaoSocial,
+      cnpj: cnpj.replace(/\D/g, ''),
+      whatsapp: whatsapp.replace(/\D/g, ''),
+      endereco: endereco,
+      email: email,
+      meta_tag: metaTag.trim() || '<meta />',
+      proxy: proxy.trim() || 'Não Informado',
+      status: 'Aguardando Pagamento',
+      usuario_id: user?.id || null,
+      equipe_id: user?.equipe_id || null,
+      ip_address: ipAddress
+    }
+    
+    try {
+      setIsSubmitting(true)
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/gera-site-individual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      
+      notify.success('Site gerado com sucesso!')
+      setShowCreate(false)
+      
+      // Limpar formulário
+      setRazaoSocial('')
+      setCnpj('')
+      setWhatsapp('')
+      setEndereco('')
+      setEmail('')
+      setMetaTag('')
+      setProxy('')
+      
+      await loadSites()
+    } catch (e) {
+      console.error('Falha ao gerar site:', e)
+      notify.error(`Falha ao gerar site: ${e.message}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+  
+  // Download do HTML
+  function handleDownloadHTML(site) {
+    if (!site.html_content) {
+      notify.error('HTML não disponível para este site')
+      return
+    }
+    
+    try {
+      // Criar um blob com o conteúdo HTML
+      const blob = new Blob([site.html_content], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      
+      // Criar elemento <a> temporário para download
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'index.html'
+      document.body.appendChild(a)
+      a.click()
+      
+      // Limpar
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      notify.success('Download iniciado!')
+    } catch (e) {
+      console.error('Falha ao fazer download:', e)
+      notify.error('Falha ao fazer download do HTML')
+    }
+  }
+  
+  // Abrir modal de edição
+  async function handleOpenEdit(site) {
+    setSelectedSite(site)
+    setEditRazaoSocial(site.razao_social || '')
+    setEditCnpj(formatCNPJ(site.cnpj || ''))
+    setEditWhatsapp(formatWhatsApp(site.whatsapp || ''))
+    setEditEndereco(site.endereco || '')
+    setEditEmail(site.email || '')
+    setEditMetaTag(site.meta_tag || '')
+    setEditProxy(site.proxy || '')
+    setEditStatus(site.status || 'Sem Status')
+    
+    // Limpar estados de chips
+    setSelectedLimit('')
+    setChip2Whatsapp('')
+    setChip3Whatsapp('')
+    setChip4Whatsapp('')
+    setChip5Whatsapp('')
+    setChip2Status('Sem Status')
+    setChip3Status('Sem Status')
+    setChip4Status('Sem Status')
+    setChip5Status('Sem Status')
+    setChip2Id(null)
+    setChip3Id(null)
+    setChip4Id(null)
+    setChip5Id(null)
+    setAdditionalChips([])
+    
+    // Buscar dados de limites e chips do view-site
+    try {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Dados completos do view-site:', data)
+        if (Array.isArray(data)) {
+          // Agrupar todos os registros do mesmo ID (cada chip é uma linha separada)
+          const sitesData = data.filter(s => s.id === site.id)
+          console.log('Registros encontrados para o site:', sitesData)
+          
+          if (sitesData.length > 0) {
+            const firstRecord = sitesData[0]
+            
+            // Preencher limite (pega do primeiro registro)
+            if (firstRecord.limite) {
+              const limiteValue = String(firstRecord.limite)
+              setSelectedLimit(limiteValue)
+              console.log('Limite carregado:', limiteValue)
+            }
+            
+            // Coletar todos os números e status de todos os registros
+            const numeros = []
+            const statuses = []
+            const ids = []
+            
+            sitesData.forEach(record => {
+              if (record.numero && record.status_z) {
+                numeros.push(record.numero)
+                statuses.push(record.status_z)
+                ids.push(record.id_whats || null)
+              }
+            })
+            
+            console.log('Números coletados:', numeros)
+            console.log('Status coletados:', statuses)
+            console.log('IDs coletados:', ids)
+            
+            // Preencher os chips (pulando o primeiro que é o WhatsApp cadastrado)
+            for (let i = 1; i < numeros.length; i++) {
+              const numero = formatWhatsApp(numeros[i] || '')
+              const status = statuses[i] || 'Sem Status'
+              const idWhats = ids[i]
+              
+              console.log(`Chip ${i + 1}:`, { numero, status, idWhats })
+              
+              if (i === 1) {
+                setChip2Whatsapp(numero)
+                setChip2Status(status)
+                setChip2Id(idWhats)
+              } else if (i === 2) {
+                setChip3Whatsapp(numero)
+                setChip3Status(status)
+                setChip3Id(idWhats)
+              } else if (i === 3) {
+                setChip4Whatsapp(numero)
+                setChip4Status(status)
+                setChip4Id(idWhats)
+              } else if (i === 4) {
+                setChip5Whatsapp(numero)
+                setChip5Status(status)
+                setChip5Id(idWhats)
+              } else {
+                // Chips adicionais para limites maiores
+                setAdditionalChips(prev => [...prev, { whatsapp: numero, status, id_whats: idWhats }])
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao buscar dados de limites:', error)
+    }
+    
+    setShowEdit(true)
+  }
+  
+  // Fechar modal de edição
+  function handleCloseEdit() {
+    setShowEdit(false)
+    setSelectedSite(null)
+    setEditRazaoSocial('')
+    setEditCnpj('')
+    setEditWhatsapp('')
+    setEditEndereco('')
+    setEditEmail('')
+    setEditMetaTag('')
+    setEditProxy('')
+    setEditStatus('')
+  }
+  
+  // Função de alteração
+  async function handleEdit(e) {
+    e?.preventDefault?.()
+    
+    if (!editRazaoSocial.trim()) return notify.error('Informe a razão social')
+    if (!editCnpj.trim()) return notify.error('Informe o CNPJ')
+    if (!editWhatsapp.trim()) return notify.error('Informe o WhatsApp')
+    if (!editEndereco.trim()) return notify.error('Informe o endereço')
+    if (!editEmail.trim()) return notify.error('Informe o e-mail')
+    
+    try {
+      setIsEditing(true)
+      
+      // PASSO 1: Buscar o HTML content atualizado do endpoint view-site
+      let htmlContent = ''
+      try {
+        const viewRes = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+        if (viewRes.ok) {
+          const viewData = await viewRes.json()
+          if (Array.isArray(viewData)) {
+            const siteData = viewData.find(s => s.id === selectedSite?.id)
+            if (siteData && siteData.html_content) {
+              htmlContent = siteData.html_content
+              console.log('HTML content atualizado obtido do view-site')
+            } else {
+              console.warn('Site não encontrado ou sem html_content no view-site')
+              htmlContent = selectedSite?.html_content || ''
+            }
+          }
+        } else {
+          console.warn('Falha ao buscar view-site, usando html_content existente')
+          htmlContent = selectedSite?.html_content || ''
+        }
+      } catch (viewError) {
+        console.warn('Erro ao buscar view-site:', viewError)
+        htmlContent = selectedSite?.html_content || ''
+      }
+      
+      // PASSO 2: Capturar IP do usuário
+      let ipAddress = null
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json')
+        const ipData = await ipRes.json()
+        ipAddress = ipData.ip
+      } catch (e) {
+        console.warn('Não foi possível obter o IP:', e)
+      }
+      
+      // PASSO 3: Preparar payload com o HTML content atualizado
+      const payload = {
+        id: selectedSite?.id,
+        razao_social: editRazaoSocial,
+        cnpj: editCnpj.replace(/\D/g, ''),
+        whatsapp: editWhatsapp.replace(/\D/g, ''),
+        endereco: editEndereco,
+        email: editEmail,
+        meta_tag: editMetaTag.trim() || '<meta />',
+        proxy: editProxy.trim() || 'Não Informado',
+        status: editStatus,
+        html_content: htmlContent,
+        usuario_id: user?.id || null,
+        equipe_id: user?.equipe_id || null,
+        ip_address: ipAddress
+      }
+      
+      console.log('Enviando alteração com html_content de', htmlContent.length, 'caracteres')
+      
+      // PASSO 4: Enviar alteração para o webhook
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/alterar-cadastro', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      
+      notify.success('Site alterado com sucesso!')
+      handleCloseEdit()
+      await loadSites()
+    } catch (e) {
+      console.error('Falha ao alterar site:', e)
+      notify.error(`Falha ao alterar site: ${e.message}`)
+    } finally {
+      setIsEditing(false)
+    }
+  }
+  
+  // Abrir modal de confirmação de exclusão
+  function handleOpenDeleteConfirm(site) {
+    setSiteToDelete(site)
+    setShowDeleteConfirm(true)
+  }
+  
+  // Fechar modal de confirmação de exclusão
+  function handleCloseDeleteConfirm() {
+    setShowDeleteConfirm(false)
+    setSiteToDelete(null)
+  }
+  
+  // Processar CSV em lote
+  async function handleBatchUpload(e) {
+    e?.preventDefault()
+    
+    if (!csvFile) return notify.error('Selecione um arquivo CSV')
+    
+    // Verificação adicional do arquivo
+    if (csvFile.size === 0) {
+      notify.error('O arquivo selecionado está vazio')
+      return
+    }
+    
+    // Verificar se o arquivo parece ser um CSV válido
+    if (csvFile.name && !csvFile.name.toLowerCase().endsWith('.csv')) {
+      notify.error('O arquivo deve ter extensão .csv')
+      return
+    }
+    
+    if (csvFile.size > 10 * 1024 * 1024) { // 10MB
+      notify.error('O arquivo é muito grande. Tamanho máximo permitido: 10MB')
+      return
+    }
+    
+    console.log('Processando arquivo:', csvFile.name, 'Tamanho:', csvFile.size, 'bytes')
+    
+    try {
+      setIsProcessing(true)
+      
+      // Ler arquivo CSV
+      const text = await csvFile.text()
+      console.log('Conteúdo do arquivo (primeiros 500 caracteres):', text.substring(0, 500))
+      
+      // Verificar se o conteúdo foi lido corretamente
+      if (!text || text.length === 0) {
+        notify.error('Não foi possível ler o conteúdo do arquivo')
+        return
+      }
+      
+      // Normalizar quebras de linha para diferentes sistemas operacionais
+      const normalizedText = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+      const lines = normalizedText.split('\n').filter(line => line.trim())
+      
+      // Verificar se há linhas suficientes
+      if (lines.length === 0) {
+        notify.error('Arquivo sem conteúdo legível')
+        return
+      }
+      
+      if (lines.length < 2) {
+        notify.error('Arquivo CSV vazio ou inválido. Deve conter pelo menos um cabeçalho e uma linha de dados.')
+        return
+      }
+      
+      // Validar cabeçalho - versão mais robusta
+      const header = lines[0].split(';').map(h => h.trim().toLowerCase())
+      console.log('Cabeçalho encontrado:', header)
+      
+      // Verificar se o cabeçalho foi lido corretamente
+      if (!header || header.length === 0) {
+        notify.error('Não foi possível ler o cabeçalho do arquivo CSV')
+        return
+      }
+      
+      const requiredColumns = ['razao social', 'cnpj', 'whatsapp', 'endereco', 'e-mail', 'meta tag']
+      const normalizedHeader = header.map(h => 
+        h.normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+         .replace(/[^\w\s]/gi, '') // Remove caracteres especiais
+      )
+      
+      console.log('Cabeçalho normalizado:', normalizedHeader)
+      
+      const hasAllColumns = requiredColumns.every(col => {
+        const normalizedCol = col.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/gi, '')
+        return normalizedHeader.some(h => 
+          h.includes(normalizedCol) || 
+          normalizedCol.includes(h)
+        )
+      })
+      
+      console.log('Colunas encontradas:', hasAllColumns)
+      
+      if (!hasAllColumns) {
+        notify.error(`CSV deve conter as colunas: Razão Social, CNPJ, Whatsapp, Endereço, E-mail, Meta Tag. Encontrado: ${header.join(', ')}`)
+        console.log('Colunas esperadas:', requiredColumns)
+        console.log('Colunas normalizadas no arquivo:', normalizedHeader)
+        return
+      }
+      
+      const dataLines = lines.slice(1)
+      setBatchProgress({ current: 0, total: dataLines.length, errors: [] })
+      
+      const errors = []
+      
+      // Processar linha por linha SEQUENCIALMENTE (envia, aguarda resposta, envia próxima)
+      for (let i = 0; i < dataLines.length; i++) {
+        const line = dataLines[i].trim()
+        if (!line) continue
+        
+        const columns = line.split(';').map(c => c.trim())
+        
+        if (columns.length < 6) {
+          errors.push(`Linha ${i + 2}: Número de colunas insuficiente. Esperado: 6, Encontrado: ${columns.length}`)
           setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Erro`] }))
           continue
         }
@@ -571,12 +1942,15 @@ export default function GeradorSites() {
           continue
         }
         
+        // Log para depuração
+        console.log(`Processando linha ${i + 2}:`, { razaoSocial, cnpj, whatsapp, endereco, email, metaTag })
+        
         // Capturar IP do usuário
-        let ipAddress = null
+        let ipAddressBatch = null
         try {
           const ipRes = await fetch('https://api.ipify.org?format=json')
           const ipData = await ipRes.json()
-          ipAddress = ipData.ip
+          ipAddressBatch = ipData.ip
         } catch (e) {
           console.warn('Não foi possível obter o IP:', e)
         }
@@ -591,8 +1965,11 @@ export default function GeradorSites() {
           status: 'Aguardando Pagamento',
           usuario_id: user?.id || null,
           equipe_id: user?.equipe_id || null,
-          ip_address: ipAddress
+          ip_address: ipAddressBatch
         }
+        
+        // Log para depuração
+        console.log('Enviando payload para API:', payload)
         
         try {
           // ENVIA POST E AGUARDA RESPOSTA
@@ -603,10 +1980,13 @@ export default function GeradorSites() {
           })
           
           if (!res.ok) {
-            errors.push(`Linha ${i + 2} (${razaoSocial}): Erro HTTP ${res.status}`)
+            const errorText = await res.text()
+            errors.push(`Linha ${i + 2} (${razaoSocial}): Erro HTTP ${res.status} - ${errorText}`)
             setBatchProgress(prev => ({ ...prev, current: i + 1, errors: [...prev.errors, `Linha ${i + 2}: Erro HTTP`] }))
+            console.error(`Erro na linha ${i + 2}:`, errorText)
           } else {
             setBatchProgress(prev => ({ ...prev, current: i + 1 }))
+            console.log(`Linha ${i + 2} processada com sucesso`)
           }
         } catch (err) {
           errors.push(`Linha ${i + 2} (${razaoSocial}): ${err.message}`)
@@ -621,12 +2001,21 @@ export default function GeradorSites() {
       
       // Finalizar
       if (errors.length > 0) {
+        console.log('Erros encontrados:', errors)
         notify.warning(`Processamento concluído com ${errors.length} erro(s)`)
+        console.log(`Processamento concluído com ${errors.length} erro(s) de ${dataLines.length} linhas`)
       } else {
         notify.success('Todos os sites foram gerados com sucesso!')
+        console.log(`Processamento concluído com sucesso: ${dataLines.length} linhas processadas`)
       }
       
-      await loadSites()
+      try {
+        await loadSites()
+        console.log('Sites recarregados com sucesso após upload em lote')
+      } catch (loadError) {
+        console.error('Erro ao recarregar sites após upload em lote:', loadError)
+        notify.error('Erro ao atualizar lista de sites')
+      }
       
       // Aguardar 2 segundos antes de fechar
       setTimeout(() => {
@@ -638,6 +2027,11 @@ export default function GeradorSites() {
     } catch (e) {
       console.error('Erro ao processar CSV:', e)
       notify.error(`Erro ao processar arquivo: ${e.message}`)
+      // Adicionar erro ao progresso para exibição
+      setBatchProgress(prev => ({ 
+        ...prev, 
+        errors: [...prev.errors, `Erro geral: ${e.message}`] 
+      }))
     } finally {
       setIsProcessing(false)
     }
@@ -646,13 +2040,13 @@ export default function GeradorSites() {
   // Baixar CSV de exemplo
   function handleDownloadExampleCSV() {
     const exampleData = [
-      ['razao social', 'cnpj', 'whatsapp', 'endereco', 'e-mail', 'meta tag'],
-      ['Empresa Exemplo LTDA', '12.345.678/0001-90', '(11) 98765-4321', 'Rua das Flores, 123 - Centro', 'contato@exemplo.com', 'Credito consignado rapido e facil'],
-      ['Consultoria ABC ME', '98.765.432/0001-12', '(21) 99999-8888', 'Av. Principal, 456 - Sala 10', 'vendas@abc.com', 'Emprestimo consignado com taxas baixas']
+      'razao social;cnpj;whatsapp;endereco;e-mail;meta tag',
+      'Empresa Exemplo LTDA;12.345.678/0001-90;(11) 98765-4321;Rua das Flores, 123 - Centro;contato@exemplo.com;Credito consignado rapido e facil',
+      'Consultoria ABC ME;98.765.432/0001-12;(21) 99999-8888;Av. Principal, 456 - Sala 10;vendas@abc.com;Emprestimo consignado com taxas baixas'
     ]
     
-    const csvContent = exampleData.map(row => row.join(';')).join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const csvContent = exampleData.join('\n')
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' }) // Adiciona BOM para UTF-8
     const url = URL.createObjectURL(blob)
     
     const link = document.createElement('a')
@@ -1561,6 +2955,18 @@ export default function GeradorSites() {
                       <td>
                         <div className="d-flex flex-column flex-sm-row gap-2 justify-content-center">
                           <button
+                            className="btn btn-info btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
+                            style={{width: 32, height: 32, padding: 0, minWidth: 32}}
+                            title="Visualizar"
+                            aria-label="Visualizar"
+                            onClick={() => {
+                              setSelectedSite(site)
+                              setShowSiteDetails(true)
+                            }}
+                          >
+                            <Fi.FiEye size={16} />
+                          </button>
+                          <button
                             className="btn btn-primary btn-sm d-inline-flex align-items-center justify-content-center rounded-circle"
                             style={{width: 32, height: 32, padding: 0, minWidth: 32}}
                             title="Alterar"
@@ -1621,6 +3027,7 @@ export default function GeradorSites() {
               <button 
                 className="btn btn-ghost btn-icon" 
                 onClick={() => {
+                  console.log('Botão de fechar modal clicado')
                   if (!isProcessing) {
                     setShowBatchUpload(false)
                     setCsvFile(null)
@@ -1634,7 +3041,19 @@ export default function GeradorSites() {
               </button>
             </div>
             
-            <form onSubmit={handleBatchUpload}>
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                console.log('Formulário de upload submitido');
+                console.log('Arquivo selecionado:', csvFile);
+                if (csvFile) {
+                  console.log('Detalhes do arquivo:', {
+                    name: csvFile.name,
+                    size: csvFile.size,
+                    type: csvFile.type
+                  });
+                }
+                handleBatchUpload(e);
+              }}>
               <div className="alert alert-info d-flex align-items-start gap-2 mb-3">
                 <Fi.FiInfo size={20} className="mt-1" />
                 <div className="small w-100">
@@ -1666,8 +3085,28 @@ export default function GeradorSites() {
                     <input
                       type="file"
                       className="form-control"
-                      accept=".csv"
-                      onChange={(e) => setCsvFile(e.target.files[0])}
+                      accept=".csv,text/csv"
+                      onChange={(e) => {
+                          const file = e.target.files[0]
+                          if (file) {
+                            console.log('Arquivo selecionado:', file.name, file.type, file.size)
+                            // Verificar se é realmente um CSV
+                            if (!file.name.toLowerCase().endsWith('.csv')) {
+                              notify.error('Por favor, selecione um arquivo com extensão .csv')
+                              e.target.value = '' // Limpar o input
+                              return
+                            }
+                            
+                            // Verificar tipo MIME
+                            const validTypes = ['text/csv', 'application/vnd.ms-excel', 'text/plain']
+                            if (file.type && !validTypes.includes(file.type)) {
+                              console.warn('Tipo MIME não reconhecido como CSV:', file.type)
+                              // Não vamos bloquear, mas vamos registrar o aviso
+                            }
+                            
+                            setCsvFile(file)
+                          }
+                        }}
                       required
                     />
                     {csvFile && (
@@ -1700,46 +3139,146 @@ export default function GeradorSites() {
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="text-center py-4">
-                    <div className="spinner-border text-primary mb-3" style={{width: '3rem', height: '3rem'}} role="status">
-                      <span className="visually-hidden">Processando...</span>
-                    </div>
-                    <h5 className="mb-2 text-light">Processando sites...</h5>
-                    <p className="text-light mb-3">
-                      {batchProgress.current} de {batchProgress.total} sites processados
-                    </p>
-                    
-                    <div className="progress" style={{height: '24px'}}>
+                <div className="alert alert-warning d-flex align-items-start gap-2">
+                  <Fi.FiLoader size={20} className="spinner" />
+                  <div className="small w-100">
+                    <strong>Processando...</strong>
+                    <p>Upload do arquivo CSV em andamento.</p>
+                    <div className="progress mt-2">
                       <div 
-                        className="progress-bar progress-bar-striped progress-bar-animated" 
+                        className="progress-bar"
                         role="progressbar" 
-                        style={{width: `${(batchProgress.current / batchProgress.total) * 100}%`}}
+                        style={{width:`${(batchProgress.current / batchProgress.total) * 100}%`}}
                         aria-valuenow={batchProgress.current} 
-                        aria-valuemin="0" 
+                        aria-valuemin={0} 
                         aria-valuemax={batchProgress.total}
                       >
-                        {Math.round((batchProgress.current / batchProgress.total) * 100)}%
+                        {batchProgress.current} / {batchProgress.total} registros processados
                       </div>
                     </div>
-                    
-                    {batchProgress.errors.length > 0 && (
-                      <div className="alert alert-warning mt-3 small text-start">
-                        <strong>Erros encontrados ({batchProgress.errors.length}):</strong>
-                        <ul className="mb-0 mt-2 ps-3">
-                          {batchProgress.errors.slice(0, 5).map((err, idx) => (
-                            <li key={idx}>{err}</li>
-                          ))}
-                          {batchProgress.errors.length > 5 && (
-                            <li>... e mais {batchProgress.errors.length - 5} erro(s)</li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
                   </div>
-                </>
+                </div>
               )}
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalhes do Site */}
+      {showSiteDetails && selectedSite && (
+        <div 
+          className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-2 p-md-3" 
+          style={{background:'rgba(0,0,0,0.7)', zIndex:1050}}
+        >
+          <div className="modal-dark p-3 p-md-4" style={{maxWidth:600, width:'100%', maxHeight:'90vh', overflowY:'auto'}}>
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <div>
+                <h4 className="modal-dark-title mb-1">
+                  Detalhes do Site
+                </h4>
+                <p className="modal-dark-subtitle small mb-0">
+                  Informações do site selecionado
+                </p>
+              </div>
+              <button 
+                className="btn btn-ghost btn-icon" 
+                onClick={() => {
+                  setShowSiteDetails(false)
+                  setSelectedSite(null)
+                }} 
+                aria-label="Fechar"
+              >
+                <Fi.FiX />
+              </button>
+            </div>
+            
+            <div className="row g-3">
+              <div className="col-12">
+                <div className="neo-card p-3">
+                  <div className="d-flex align-items-center gap-3 mb-3">
+                    <div className="bg-primary rounded-circle d-flex align-items-center justify-content-center" style={{width: 48, height: 48}}>
+                      <Fi.FiGlobe size={24} />
+                    </div>
+                    <div>
+                      <h5 className="mb-1 text-uppercase">{selectedSite.razao_social}</h5>
+                      <p className="small opacity-75 mb-0">ID: {selectedSite.id}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="row g-2">
+                    <div className="col-12 col-md-6">
+                      <small className="opacity-75">CNPJ</small>
+                      <div className="fw-medium">{formatCNPJ(selectedSite.cnpj)}</div>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <small className="opacity-75">Status</small>
+                      <div>
+                        <span className={`badge ${getStatusBadgeClass(selectedSite.status || 'Sem Status')}`}>
+                          {selectedSite.status || 'Sem Status'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <small className="opacity-75">WhatsApp</small>
+                      <div className="fw-medium">{formatWhatsApp(selectedSite.whatsapp)}</div>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <small className="opacity-75">Criado em</small>
+                      <div className="fw-medium">{formatDateTime(selectedSite.created_at)}</div>
+                    </div>
+                    <div className="col-12">
+                      <small className="opacity-75">Endereço</small>
+                      <div className="fw-medium">{selectedSite.endereco || '-'}</div>
+                    </div>
+                    <div className="col-12">
+                      <small className="opacity-75">E-mail</small>
+                      <div className="fw-medium">{selectedSite.email || '-'}</div>
+                    </div>
+                    <div className="col-12">
+                      <small className="opacity-75">Proxy</small>
+                      <div className="fw-medium">{selectedSite.proxy && selectedSite.proxy !== 'Não Informado' ? selectedSite.proxy : 'Não Informado'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="col-12">
+                <div className="neo-card p-3">
+                  <h6 className="mb-3">Meta Tag</h6>
+                  <div className="bg-dark rounded-2 p-3">
+                    <code className="small text-light">
+                      {selectedSite.meta_tag || '<meta />'}
+                    </code>
+                  </div>
+                  <div className="d-flex justify-content-end mt-2">
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => handleCopyMetaTag(selectedSite.meta_tag)}
+                    >
+                      <Fi.FiCopy size={14} className="me-1" />
+                      Copiar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              {selectedSite.html_content && (
+                <div className="col-12">
+                  <div className="neo-card p-3">
+                    <h6 className="mb-3">HTML Gerado</h6>
+                    <div className="d-flex justify-content-end">
+                      <button
+                        className="btn btn-sm btn-success"
+                        onClick={() => handleDownloadHTML(selectedSite)}
+                      >
+                        <Fi.FiDownload size={14} className="me-1" />
+                        Download HTML
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
