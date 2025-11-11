@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import { notify } from '../utils/notify.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
-const endpoint = 'https://n8n.apivieiracred.store/webhook/get-saldos'
+const endpoint = 'https://webhook.sistemavieira.com.br/webhook/get-saldos'
 
 const ROWS_PER_PAGE = 100
 
@@ -130,7 +130,7 @@ export default function Recargas() {
         equipeId: selectedTeam.id,
         quantidade: addAmountValue,
       }
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/adc-saldo', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/adc-saldo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

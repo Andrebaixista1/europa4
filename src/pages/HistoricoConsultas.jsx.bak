@@ -56,7 +56,7 @@ export default function HistoricoConsultas() {
     if (!equipeId || !loginId) return
     const role = user?.role
     const nivel = role === Roles.Master ? 'master' : role === Roles.Administrador ? 'adm' : role === Roles.Supervisor ? 'super' : 'operador'
-    const url = 'https://n8n.apivieiracred.store/webhook/consulta-logs-in100'
+    const url = 'https://webhook.sistemavieira.com.br/webhook/consulta-logs-in100'
     const payload = { equipe_id: equipeId, id: loginId, nivel }
     setLoading(true)
     setFetchError(null)

@@ -43,7 +43,7 @@ export default function TopNav() {
   //     try {
   //       const controller = new AbortController()
   //       const timeout = setTimeout(() => controller.abort(), 10000)
-  //       const res = await fetch('https://n8n.apivieiracred.store/webhook/status-workflows', { method: 'GET', signal: controller.signal })
+  //       const res = await fetch('https://webhook.sistemavieira.com.br/webhook/status-workflows', { method: 'GET', signal: controller.signal })
   //       clearTimeout(timeout)
   //       let data = null
   //       try { data = await res.json() } catch {}
@@ -129,7 +129,7 @@ export default function TopNav() {
 
     try {
       setChangingPassword(true)
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-pass', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-pass', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

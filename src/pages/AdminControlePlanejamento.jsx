@@ -207,7 +207,7 @@ export default function AdminControlePlanejamento() {
     }
     try {
       setInactivatingId(item.id)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/del-vanguard', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/api/del-vanguard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })
@@ -234,7 +234,7 @@ export default function AdminControlePlanejamento() {
     }
     try {
       setRenewingId(item.id)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/up-vanguard', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/api/up-vanguard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })

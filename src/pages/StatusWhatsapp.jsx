@@ -5,7 +5,7 @@ import Footer from '../components/Footer.jsx'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 
-const API_ENDPOINT = 'https://n8n.apivieiracred.store/webhook/canais'
+const API_ENDPOINT = 'https://webhook.sistemavieira.com.br/webhook/canais'
 
 const STATUS_META = {
   CONNECTED: { label: 'Connected', variant: 'success', tone: 'green' },

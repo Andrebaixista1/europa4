@@ -185,7 +185,7 @@ export default function GeradorSites() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
       
       // Se a resposta não for OK, considera como lista vazia
       if (!res.ok) {
@@ -253,7 +253,7 @@ export default function GeradorSites() {
     
     try {
       setIsSubmitting(true)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/gera-site-individual', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/gera-site-individual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -342,7 +342,7 @@ export default function GeradorSites() {
     
     // Buscar dados de limites e chips do view-site
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
       if (response.ok) {
         const data = await response.json()
         console.log('Dados completos do view-site:', data)
@@ -447,7 +447,7 @@ export default function GeradorSites() {
       // PASSO 1: Buscar o HTML content atualizado do endpoint view-site
       let htmlContent = ''
       try {
-        const viewRes = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+        const viewRes = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
         if (viewRes.ok) {
           const viewData = await viewRes.json()
           if (Array.isArray(viewData)) {
@@ -499,7 +499,7 @@ export default function GeradorSites() {
       console.log('Enviando alteração com html_content de', htmlContent.length, 'caracteres')
       
       // PASSO 4: Enviar alteração para o webhook
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/alterar-cadastro', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/alterar-cadastro', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -834,7 +834,7 @@ export default function GeradorSites() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
       
       // Se a resposta não for OK, considera como lista vazia
       if (!res.ok) {
@@ -902,7 +902,7 @@ export default function GeradorSites() {
     
     try {
       setIsSubmitting(true)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/gera-site-individual', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/gera-site-individual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -991,7 +991,7 @@ export default function GeradorSites() {
     
     // Buscar dados de limites e chips do view-site
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
       if (response.ok) {
         const data = await response.json()
         console.log('Dados completos do view-site:', data)
@@ -1096,7 +1096,7 @@ export default function GeradorSites() {
       // PASSO 1: Buscar o HTML content atualizado do endpoint view-site
       let htmlContent = ''
       try {
-        const viewRes = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+        const viewRes = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
         if (viewRes.ok) {
           const viewData = await viewRes.json()
           if (Array.isArray(viewData)) {
@@ -1148,7 +1148,7 @@ export default function GeradorSites() {
       console.log('Enviando alteração com html_content de', htmlContent.length, 'caracteres')
       
       // PASSO 4: Enviar alteração para o webhook
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/alterar-cadastro', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/alterar-cadastro', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1482,7 +1482,7 @@ export default function GeradorSites() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
       
       // Se a resposta não for OK, considera como lista vazia
       if (!res.ok) {
@@ -1550,7 +1550,7 @@ export default function GeradorSites() {
     
     try {
       setIsSubmitting(true)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/gera-site-individual', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/gera-site-individual', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1639,7 +1639,7 @@ export default function GeradorSites() {
     
     // Buscar dados de limites e chips do view-site
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
       if (response.ok) {
         const data = await response.json()
         console.log('Dados completos do view-site:', data)
@@ -1744,7 +1744,7 @@ export default function GeradorSites() {
       // PASSO 1: Buscar o HTML content atualizado do endpoint view-site
       let htmlContent = ''
       try {
-        const viewRes = await fetch('https://n8n.apivieiracred.store/webhook/view-site')
+        const viewRes = await fetch('https://webhook.sistemavieira.com.br/webhook/view-site')
         if (viewRes.ok) {
           const viewData = await viewRes.json()
           if (Array.isArray(viewData)) {
@@ -1796,7 +1796,7 @@ export default function GeradorSites() {
       console.log('Enviando alteração com html_content de', htmlContent.length, 'caracteres')
       
       // PASSO 4: Enviar alteração para o webhook
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/alterar-cadastro', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/alterar-cadastro', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1973,7 +1973,7 @@ export default function GeradorSites() {
         
         try {
           // ENVIA POST E AGUARDA RESPOSTA
-          const res = await fetch('https://n8n.apivieiracred.store/webhook/gera-site-individual', {
+          const res = await fetch('https://webhook.sistemavieira.com.br/webhook/gera-site-individual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -2158,7 +2158,7 @@ export default function GeradorSites() {
     }
     
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/excluiur-telefone', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/excluiur-telefone', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -2260,7 +2260,7 @@ export default function GeradorSites() {
         chips: chips
       }
       
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/save-zap', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/save-zap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -2436,7 +2436,7 @@ export default function GeradorSites() {
       
       console.log('Enviando payload:', payload)
       
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/mudar-status', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/mudar-status', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2518,7 +2518,7 @@ export default function GeradorSites() {
       
       console.log('Enviando payload de proxy:', payload)
       
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/mudar-proxy', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/mudar-proxy', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2555,7 +2555,7 @@ export default function GeradorSites() {
     
     try {
       setDeletingId(siteToDelete.id)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/excluiur-site', {
+      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/excluiur-site', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: siteToDelete.id })

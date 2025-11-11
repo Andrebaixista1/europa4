@@ -38,7 +38,7 @@ export default function Equipes() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch('https://n8n.apivieiracred.store/webhook/user-team', {
+        const res = await fetch('https://webhook.sistemavieira.com.br/webhook/user-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: user?.id }),
@@ -213,7 +213,7 @@ export default function Equipes() {
         nova_equipe_id: newTeamNum,
         supervisor: ((transferMember.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
       }
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-team-name', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -262,7 +262,7 @@ export default function Equipes() {
         nome: name,
       }
 
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-team-name', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team-name', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -350,7 +350,7 @@ export default function Equipes() {
           supervisor_nome: supervisor?.nome ?? null,
           supervisor: supervisor ? { id: supervisor.id, nome: supervisor.nome } : null,
         }
-        const resp = await fetch('https://n8n.apivieiracred.store/webhook/add-team', {
+        const resp = await fetch('https://webhook.sistemavieira.com.br/webhook/add-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -461,7 +461,7 @@ export default function Equipes() {
     setAddUserSaving(true)
 
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/add-user', {
+      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

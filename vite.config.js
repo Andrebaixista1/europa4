@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://n8n.apivieiracred.store',
+        target: 'https://webhook.sistemavieira.com.br',
         changeOrigin: true,
         secure: true,
       },
