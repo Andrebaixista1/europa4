@@ -68,7 +68,7 @@ export default function MultiploDisparos() {
   const fetchChannels = async () => {
     setLoadingChannels(true)
     try {
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/canais')
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/canais')
       if (response.ok) {
         const data = await response.json()
         setChannels(data)
@@ -88,7 +88,7 @@ export default function MultiploDisparos() {
     if (!accountId) return []
     
     try {
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/templates', {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/templates', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -523,7 +523,7 @@ export default function MultiploDisparos() {
       console.log('   - intervalos:', formData.intervalMin, 'a', formData.intervalMax)
       console.log('   - contactCount:', csvData.length)
       
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/multi-disparos', {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/multi-disparos', {
         method: 'POST',
         body: formData_upload
       })

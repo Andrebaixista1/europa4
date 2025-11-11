@@ -41,7 +41,7 @@ export default function Equipes() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch('https://webhook.sistemavieira.com.br/webhook/user-team', {
+        const res = await fetch('https://n8n.apivieiracred.store/webhook/user-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: user?.id }),
@@ -220,7 +220,7 @@ export default function Equipes() {
         id_usuario: transferMember.id,
         equipe_id: newTeamNum,
       }
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/transfer-team', {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -269,7 +269,7 @@ async function handleSaveNomeEquipe() {
         nome: name,
       }
 
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/alter-team-name', {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-team-name', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -335,7 +335,7 @@ async function handleSaveNomeEquipe() {
     const teamName = selected.nome || 'Equipe'
     try {
       setIsDeletingTeam(true)
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/del-team', {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/del-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: teamId })
@@ -407,7 +407,7 @@ async function handleSaveNomeEquipe() {
           
           saldo: saldoNum,
         }
-        const resp = await fetch('https://webhook.sistemavieira.com.br/webhook/add-team', {
+        const resp = await fetch('https://n8n.apivieiracred.store/webhook/add-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -520,7 +520,7 @@ async function handleSaveNomeEquipe() {
     setAddUserSaving(true)
 
     try {
-      const response = await fetch('https://webhook.sistemavieira.com.br/webhook/add-user', {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/add-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

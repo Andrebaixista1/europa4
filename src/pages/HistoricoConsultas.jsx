@@ -59,7 +59,7 @@ export default function HistoricoConsultas() {
         const role = user?.role
         const nivel = role === Roles.Master ? 'master' : role === Roles.Administrador ? 'adm' : role === Roles.Supervisor ? 'super' : 'operador'
         const payload = { id: user.id, equipe_id: equipeId, nivel }
-        const res = await fetch('https://webhook.sistemavieira.com.br/webhook/consulta-logs-in100', {
+        const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-logs-in100', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json; charset=UTF-8' },
           body: JSON.stringify(payload),

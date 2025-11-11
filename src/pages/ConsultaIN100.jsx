@@ -64,7 +64,7 @@ export default function ConsultaIN100() {
     const fetchSaldoUsuario = async () => {
       if (!user || !user.id) return
       try {
-        const url = 'https://webhook.sistemavieira.com.br/webhook/saldo'
+        const url = 'https://n8n.apivieiracred.store/webhook/saldo'
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -228,7 +228,7 @@ export default function ConsultaIN100() {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 60000)
-      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/consulta-nbcpf', {
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-nbcpf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tipo: isCpf ? 'cpf' : 'nb', numero: digits }),
@@ -362,7 +362,7 @@ export default function ConsultaIN100() {
     try {
       if (online) {
         // 1) Dispara consulta online
-        const urlConsulta = 'https://webhook.sistemavieira.com.br/webhook/consulta-online'
+        const urlConsulta = 'https://n8n.apivieiracred.store/webhook/consulta-online'
         const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
         const consultaPayload = {
           id: (typeof user?.id !== 'undefined' ? user.id : user),
@@ -472,7 +472,7 @@ export default function ConsultaIN100() {
 
         // 3) ApÃ³s a resposta final, atualiza os saldos agregados (cards)
         try {
-          const urlSaldo = 'https://webhook.sistemavieira.com.br/webhook/saldo'
+          const urlSaldo = 'https://n8n.apivieiracred.store/webhook/saldo'
           const resSaldo = await fetch(urlSaldo, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -494,7 +494,7 @@ export default function ConsultaIN100() {
         return
       }
       // Fluxo OFFLINE: chamada direta para webhook resposta-api
-      const urlRespostaOffline = 'https://webhook.sistemavieira.com.br/webhook/resposta-api'
+      const urlRespostaOffline = 'https://n8n.apivieiracred.store/webhook/resposta-api'
       // Aguarda 5s antes de buscar a resposta offline
       await new Promise(r => setTimeout(r, 5000))
       const resOff = await fetch(urlRespostaOffline, {
