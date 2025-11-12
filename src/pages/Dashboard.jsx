@@ -139,6 +139,11 @@ export default function Dashboard() {
                   Gere sites profissionais de forma automatizada com base em templates predefinidos, apenas fornecendo as informações essenciais.
                 </Card>
               </div>
+              <div className="col-md-6 col-lg-4 col-xl-3">
+                <Card title="Status BM's" icon="FiInfo" accent="info" to="/admin/gerador-sites-v3">
+                  Status de BMs e linhas com detalhes por telefone.
+                </Card>
+              </div>
             </div>
           </section>
         </Can>

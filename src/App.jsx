@@ -10,6 +10,7 @@ import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import GeradorSites from './pages/GeradorSites.jsx'
+import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 // import Status from './pages/Status.jsx' // Temporariamente desativado
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
@@ -69,6 +70,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master", "Administrador"]}>
             <GeradorSites />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/gerador-sites-v3"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador"]}>
+            <GeradorSitesV3 />
           </ProtectedRoute>
         }
       />
