@@ -140,7 +140,7 @@ export default function Dashboard() {
                 </Card>
               </div>
               <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Status BM's" icon="FiInfo" accent="info" to="/admin/gerador-sites-v3">
+                <Card title="Status BM's" icon="FiInfo" accent="info" to="/admin/status-bm">
                   Status de BMs e linhas com detalhes por telefone.
                 </Card>
               </div>

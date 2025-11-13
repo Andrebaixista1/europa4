@@ -17,7 +17,8 @@ export default function Toasts() {
       pauseOnHover
       theme={theme === 'dark' ? 'dark' : 'light'}
       limit={3}
+      containerClassName="neo-toast-container"
+      style={{ zIndex: 2147483647 }}
     />
   )
 }
-

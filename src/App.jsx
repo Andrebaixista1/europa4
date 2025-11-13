@@ -74,7 +74,7 @@ function App() {
         }
       />
       <Route
-        path="/admin/gerador-sites-v3"
+        path="/admin/status-bm"
         element={
           <ProtectedRoute roles={["Master", "Administrador"]}>
             <GeradorSitesV3 />
