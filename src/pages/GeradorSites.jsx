@@ -82,6 +82,17 @@ export default function GeradorSites() {
     }
     return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
   }, [siteRows])
+  const empresaCounts = useMemo(() => {
+    const m = new Map()
+    for (const r of (siteRows || [])) {
+      const name = String(r?.empresa || '').trim()
+      if (!name) continue
+      m.set(name, (m.get(name) || 0) + 1)
+    }
+    const arr = Array.from(m.entries()) // [name, count]
+    arr.sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0], 'pt-BR', { sensitivity: 'base' }))
+    return arr
+  }, [siteRows])
   const filteredRows = useMemo(() => {
     const empSel = String(filterEmpresa || '').trim()
     const dolSel = String(filterDolphin || '').trim()
@@ -165,6 +176,8 @@ export default function GeradorSites() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [deleteRow, setDeleteRow] = useState(null)
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  // Modal lista completa de empresas
+  const [isEmpListOpen, setIsEmpListOpen] = useState(false)
 
   // Modal Gerar Site
   const [isGenerateOpen, setIsGenerateOpen] = useState(false)
@@ -577,7 +590,7 @@ export default function GeradorSites() {
 
         {/* Quantidades + Filtros */}
         <div className="row g-3 mb-3">
-          <div className="col-lg-8">
+          <div className="col-lg-5">
             <div className="neo-card p-3 h-100">
               <div className="d-flex align-items-center justify-content-between mb-2">
                 <strong>Quantidades</strong>
@@ -637,6 +650,30 @@ export default function GeradorSites() {
                   </div>
                 )
               })()}
+            </div>
+          </div>
+          <div className="col-lg-3">
+            <div className="neo-card p-3 h-100">
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <strong>Empresas</strong>
+              </div>
+              <div className="neo-card p-2" style={{ maxHeight: 240, overflow: 'auto' }}>
+                {(empresaCounts.length === 0) ? (
+                  <div className="opacity-75 small">Sem dados</div>
+                ) : (
+                  empresaCounts.slice(0, 10).map(([name, count]) => (
+                    <div key={name} className="d-flex align-items-center justify-content-between py-1" style={{ borderBottom: '1px dashed rgba(148,163,184,0.2)' }}>
+                      <span className="text-truncate" title={name}>{name}</span>
+                      <span className="badge bg-secondary">{count}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              {empresaCounts.length > 10 && (
+                <div className="mt-2 text-end">
+                  <button type="button" className="btn btn-sm btn-outline-light" onClick={() => setIsEmpListOpen(true)}>Ver mais</button>
+                </div>
+              )}
             </div>
           </div>
           <div className="col-lg-4">
@@ -709,7 +746,7 @@ export default function GeradorSites() {
                 <tr>
                   <th style={{width: '220px'}}>CNPJ</th>
                   <th>Razão Social</th>
-                  <th style={{minWidth: '200px'}}>Dolphin</th>
+                  <th style={{minWidth: '200px'}}>Empresa</th>
                   <th className="text-center" style={{width: '140px'}}>Empresa</th>
                   <th className="text-center" style={{width: '140px'}}>BM Vinculada</th>
                   <th className="text-center" style={{width: '140px'}}>Dolphin</th>
@@ -731,7 +768,7 @@ export default function GeradorSites() {
                   <tr key={`${row.id || 'site'}-${idx}`}>
                     <td className="text-nowrap">{formatCNPJ(row.cnpj)}</td>
                     <td className="text-nowrap">{row.razao_social || '-'}</td>
-                    <td className="text-nowrap">{row.dolphin || '-'}</td>
+                    <td className="text-nowrap">{row.empresa || '-'}</td>
                     <td className="text-center">
                       {row.empresaLinked ? (
                         <Fi.FiCheck size={16} style={{ color: '#22c55e' }} title="Com Empresa" />
@@ -1428,6 +1465,37 @@ export default function GeradorSites() {
                     >
                       {genStep < 2 ? 'Próximo' : (genSubmitting ? 'Enviando...' : 'Finalizar')}
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>, document.body
+          )}
+
+          {/* Modal: Lista completa de empresas */}
+          {isEmpListOpen && typeof document !== 'undefined' && createPortal(
+            <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.65)', position: 'fixed', inset: 0, zIndex: 12000 }} role="dialog" aria-modal="true">
+              <div className="modal-dialog modal-md modal-dialog-centered">
+                <div className="modal-content modal-dark">
+                  <div className="modal-header">
+                    <h5 className="modal-title">Empresas ({empresaCounts.length})</h5>
+                    <button type="button" className="btn-close btn-close-white" aria-label="Close" onClick={() => setIsEmpListOpen(false)} style={{ filter: 'invert(1)', opacity: 0.9 }}></button>
+                  </div>
+                  <div className="modal-body">
+                    <div className="neo-card p-2" style={{ maxHeight: 420, overflow: 'auto' }}>
+                      {empresaCounts.length === 0 ? (
+                        <div className="opacity-75">Sem dados</div>
+                      ) : (
+                        empresaCounts.map(([name, count]) => (
+                          <div key={name} className="d-flex align-items-center justify-content-between py-1" style={{ borderBottom: '1px dashed rgba(148,163,184,0.2)' }}>
+                            <span className="text-truncate" title={name}>{name}</span>
+                            <span className="badge bg-secondary">{count}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setIsEmpListOpen(false)}>Fechar</button>
                   </div>
                 </div>
               </div>

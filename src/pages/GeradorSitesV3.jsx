@@ -142,6 +142,14 @@ function renderStatusBM(value) {
       <span className="badge" style={{ backgroundColor: '#d1fae5', color: '#065f46', border: '1px solid #34d399', fontWeight: 600 }}>Verificado</span>
     )
   }
+  if (s === 'expired') {
+    return (
+      <span className="d-inline-flex align-items-center gap-2">
+        <span aria-hidden style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)' }} />
+        Conta desabilitada
+      </span>
+    )
+  }
   // Sem traducao: manter o texto original, sem cor
   return <span>{v || '-'}</span>
 }
@@ -199,6 +207,14 @@ function valueForKey(key, value) {
         <span className="d-inline-flex align-items-center gap-2">
           <span aria-hidden style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)' }} />
           Nao verificado
+        </span>
+      )
+    }
+    if (s === 'EXPIRED') {
+      return (
+        <span className="d-inline-flex align-items-center gap-2">
+          <span aria-hidden style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)' }} />
+          Conta desabilitada
         </span>
       )
     }
