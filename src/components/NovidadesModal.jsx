@@ -5,6 +5,12 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '13/11/2025',
+    titulo: 'Cards no Gerador de Sites e Status BM',
+    descricao:
+      'Adicionamos cards de contagem no Gerador de Sites (Empresa ok/x, BM Vinculada e Dolphin) e deixamos o modal de Dados da Empresa no Status BM apenas para visualização, simplificando a checagem rápida.',
+  },
+  {
     data: '06/11/2025',
     titulo: 'Gerador e Controle de Sites',
     descricao:

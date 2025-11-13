@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import * as Fi from 'react-icons/fi'
@@ -62,6 +63,34 @@ export default function GeradorSites() {
   const [siteRows, setSiteRows] = useState([])
   const [siteLoading, setSiteLoading] = useState(false)
   const [siteError, setSiteError] = useState(null)
+  // Filtros
+  const [filterEmpresa, setFilterEmpresa] = useState('')
+  const [filterDolphin, setFilterDolphin] = useState('')
+  const empresaOptions = useMemo(() => {
+    const s = new Set()
+    for (const r of (siteRows || [])) {
+      const name = String(r?.empresa || '').trim()
+      if (name) s.add(name)
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [siteRows])
+  const dolphinOptions = useMemo(() => {
+    const s = new Set()
+    for (const r of (siteRows || [])) {
+      const name = String(r?.dolphin || '').trim()
+      if (name) s.add(name)
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+  }, [siteRows])
+  const filteredRows = useMemo(() => {
+    const empSel = String(filterEmpresa || '').trim()
+    const dolSel = String(filterDolphin || '').trim()
+    return (siteRows || []).filter(r => {
+      const okEmp = empSel ? String(r.empresa || '').trim() === empSel : true
+      const okDol = dolSel ? String(r.dolphin || '').trim() === dolSel : true
+      return okEmp && okDol
+    })
+  }, [siteRows, filterEmpresa, filterDolphin])
 
   // Modais de ações por linha
   const [isCompanyOpen, setIsCompanyOpen] = useState(false)
@@ -525,6 +554,117 @@ export default function GeradorSites() {
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
       <main className="container flex-grow-1 py-3">
+        {/* Header da página */}
+        <div className="d-flex align-items-baseline justify-content-between mb-3">
+          <div className="d-flex align-items-center gap-3">
+            <Link
+              to="/dashboard"
+              className="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
+              title="Voltar ao Dashboard"
+            >
+              <Fi.FiArrowLeft size={16} />
+              <span className="d-none d-sm-inline">Voltar</span>
+            </Link>
+            <div>
+              <h2 className="fw-bold mb-1">Gerador de Sites</h2>
+              <div className="opacity-75 small">Controle e geração de sites</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quantidades + Filtros */}
+        <div className="row g-3 mb-3">
+          <div className="col-lg-8">
+            <div className="neo-card p-3 h-100">
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <strong>Quantidades</strong>
+              </div>
+              {(() => {
+                const total = Array.isArray(siteRows) ? siteRows.length : 0
+                const empresaOk = (siteRows || []).filter(r => r.empresaLinked).length
+                const empresaBad = Math.max(total - empresaOk, 0)
+                const bmOk = (siteRows || []).filter(r => r.bmLinked).length
+                const dolphinOk = (siteRows || []).filter(r => r.dolphinLinked).length
+                return (
+                  <div className="neo-card p-2">
+                    <div className="d-flex align-items-center justify-content-between py-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <Fi.FiBriefcase size={16} />
+                        <span>Empresa</span>
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="d-inline-flex align-items-center" title="Ok">
+                          <Fi.FiCheck size={14} style={{ color: '#22c55e', marginRight: 4 }} /> {empresaOk}
+                        </span>
+                        <span className="d-inline-flex align-items-center" title="Faltando/Errada">
+                          <Fi.FiX size={14} style={{ color: '#ef4444', marginRight: 4 }} /> {empresaBad}
+                        </span>
+                      </div>
+                    </div>
+                    <hr className="my-2" style={{ opacity: 0.15 }} />
+                    <div className="d-flex align-items-center justify-content-between py-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <Fi.FiLink size={16} />
+                        <span>BM Vinculada</span>
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="d-inline-flex align-items-center" title="Vinculadas">
+                          <Fi.FiCheck size={14} style={{ color: '#22c55e', marginRight: 4 }} /> {bmOk}
+                        </span>
+                        <span className="d-inline-flex align-items-center" title="Sem vínculo">
+                          <Fi.FiX size={14} style={{ color: '#ef4444', marginRight: 4 }} /> {Math.max(total - bmOk, 0)}
+                        </span>
+                      </div>
+                    </div>
+                    <hr className="my-2" style={{ opacity: 0.15 }} />
+                    <div className="d-flex align-items-center justify-content-between py-1">
+                      <div className="d-flex align-items-center gap-2">
+                        <Fi.FiCpu size={16} />
+                        <span>Dolphin</span>
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="d-inline-flex align-items-center" title="Com Dolphin">
+                          <Fi.FiCheck size={14} style={{ color: '#22c55e', marginRight: 4 }} /> {dolphinOk}
+                        </span>
+                        <span className="d-inline-flex align-items-center" title="Sem Dolphin">
+                          <Fi.FiX size={14} style={{ color: '#ef4444', marginRight: 4 }} /> {Math.max(total - dolphinOk, 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+          <div className="col-lg-4">
+            <div className="neo-card p-3 h-100">
+              <div className="d-flex align-items-center justify-content-between mb-2">
+                <strong>Filtros</strong>
+                <button type="button" className="btn btn-sm btn-outline-light" onClick={() => { setFilterEmpresa(''); setFilterDolphin('') }}>Limpar</button>
+              </div>
+              <div className="mb-2">
+                <label className="form-label">Empresa</label>
+                <select className="form-select" value={filterEmpresa} onChange={(e) => setFilterEmpresa(e.target.value)}>
+                  <option value="">Selecione</option>
+                  {empresaOptions.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label">Dolphin</label>
+                <select className="form-select" value={filterDolphin} onChange={(e) => setFilterDolphin(e.target.value)}>
+                  <option value="">Selecione</option>
+                  {dolphinOptions.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="small opacity-75 mt-2">Exibindo {filteredRows.length} de {(siteRows || []).length}</div>
+            </div>
+          </div>
+        </div>
+
         {/* Gerador de Sites */}
         <div className="neo-card neo-lg p-4 mt-3">
           <div className="d-flex align-items-center justify-content-between mb-3">
@@ -579,12 +719,12 @@ export default function GeradorSites() {
                     <td colSpan={7} className="text-danger">{String(siteError)}</td>
                   </tr>
                 )}
-                {(!siteRows || siteRows.length === 0) && !siteLoading && !siteError && (
+                {((filteredRows || []).length === 0) && !siteLoading && !siteError && (
                   <tr>
                     <td colSpan={7} className="text-center opacity-75 p-4">Nenhum registro</td>
                   </tr>
                 )}
-                {siteRows.map((row, idx) => (
+                {filteredRows.map((row, idx) => (
                   <tr key={`${row.id || 'site'}-${idx}`}>
                     <td className="text-nowrap">{formatCNPJ(row.cnpj)}</td>
                     <td className="text-nowrap">{row.razao_social || '-'}</td>
