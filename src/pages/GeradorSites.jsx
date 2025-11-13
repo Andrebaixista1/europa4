@@ -193,6 +193,9 @@ export default function GeradorSites() {
   const [genVincIdBm, setGenVincIdBm] = useState('')
   const [genStep, setGenStep] = useState(1)
   const [genSubmitting, setGenSubmitting] = useState(false)
+  const [genAppTesting, setGenAppTesting] = useState(false)
+  const [genAppTestOk, setGenAppTestOk] = useState(null)
+  const [genAppTestMsg, setGenAppTestMsg] = useState('')
 
   const canProceed = useMemo(() => {
     if (genStep === 1) {
@@ -693,7 +696,7 @@ export default function GeradorSites() {
               <button
                 type="button"
                 className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2"
-                onClick={() => { setIsGenerateOpen(true); setGenRazao(''); setGenCnpj(''); setGenEmpresa(''); setGenEmpresaId(''); setGenEndereco(''); setGenWhatsapp(''); setGenMetaTag(''); setGenAppId(''); setGenBmName(''); setGenToken(''); setGenAppEnabled(false); setGenVincEnabled(false); setGenVincIdBm(''); setGenVincNotes(''); setGenEmpresaManual(false); setEmpresaList([]); setEmpresaListError(null); setGenStep(1) }}
+                onClick={() => { setIsGenerateOpen(true); setGenRazao(''); setGenCnpj(''); setGenEmpresa(''); setGenEmpresaId(''); setGenEndereco(''); setGenWhatsapp(''); setGenMetaTag(''); setGenAppId(''); setGenBmName(''); setGenToken(''); setGenAppEnabled(false); setGenVincEnabled(false); setGenVincIdBm(''); setGenEmpresaManual(false); setEmpresaList([]); setEmpresaListError(null); setGenStep(1); setGenAppTesting(false); setGenAppTestOk(null); setGenAppTestMsg('') }}
               >
                 <Fi.FiZap size={14} />
                 Gerar
@@ -1173,14 +1176,11 @@ export default function GeradorSites() {
                       {(() => {
                         const s1 = genStep > 1 ? 'done' : (genStep === 1 ? 'active' : 'todo')
                         const s2 = genStep > 2 ? 'done' : (genStep === 2 ? 'active' : 'todo')
-                        const s3 = genStep > 3 ? 'done' : (genStep === 3 ? 'active' : 'todo')
                         return (
                           <div className="d-flex align-items-center justify-content-between">
                             <StepBullet label="Dados" state={s1} />
                             <StepLine active={genStep >= 2} />
                             <StepBullet label="APP BM" state={s2} />
-                            <StepLine active={genStep >= 3} />
-                            <StepBullet label="Vínculo BM" state={s3} />
                           </div>
                         )
                       })()}
@@ -1298,7 +1298,7 @@ export default function GeradorSites() {
                           <form onSubmit={(e) => e.preventDefault()}>
                             <div className="row g-3">
                               <div className="col-md-4">
-                                <label className="form-label">ID App</label>
+                                <label className="form-label">ID Business</label>
                                 <input className="form-control" value={genAppId} onChange={(e) => setGenAppId(e.target.value)} placeholder="000000000000000" />
                               </div>
                               <div className="col-md-4">
@@ -1309,30 +1309,60 @@ export default function GeradorSites() {
                                 <label className="form-label">Token</label>
                                 <input className="form-control" value={genToken} onChange={(e) => setGenToken(e.target.value)} placeholder="EAAG..." />
                               </div>
+                              {(() => {
+                                const id = String(genAppId || '').trim()
+                                const token = String(genToken || '').trim()
+                                const canTest = !!id && !!token
+                                if (!canTest) return null
+                                const handleTest = async () => {
+                                  try {
+                                    setGenAppTesting(true)
+                                    setGenAppTestOk(null)
+                                    setGenAppTestMsg('')
+                                    const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(id)}?fields=id,name,verification_status,vertical,owned_ad_accounts,owned_pages,owned_whatsapp_business_accounts`
+                                    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+                                    if (res.ok) {
+                                      setGenAppTestOk(true)
+                                      setGenAppTestMsg('API OK')
+                                    } else {
+                                      const txt = await res.text().catch(() => '')
+                                      if (res.status === 401) setGenAppTestMsg('Token inválido (401)')
+                                      else setGenAppTestMsg(`${res.status} ${(txt || '').slice(0,120).replace(/\s+/g,' ')}`.trim())
+                                      setGenAppTestOk(false)
+                                    }
+                                  } catch (e) {
+                                    setGenAppTestOk(false)
+                                    setGenAppTestMsg(e?.message || 'erro')
+                                  } finally {
+                                    setGenAppTesting(false)
+                                  }
+                                }
+                                return (
+                                  <div className="col-12 d-flex justify-content-end align-items-center" style={{ gap: 12 }}>
+                                    {genAppTestOk === true && (
+                                      <span className="small d-inline-flex align-items-center" style={{ color: '#22c55e' }}>
+                                        <Fi.FiCheck size={14} style={{ marginRight: 6 }} />
+                                        {genAppTestMsg || 'API OK'}
+                                      </span>
+                                    )}
+                                    {genAppTestOk === false && (
+                                      <span className="small d-inline-flex align-items-center" style={{ color: '#ef4444' }}>
+                                        <Fi.FiX size={14} style={{ marginRight: 6 }} />
+                                        {genAppTestMsg || 'Falha'}
+                                      </span>
+                                    )}
+                                    <a href="#" onClick={(e) => { e.preventDefault(); if (!genAppTesting) handleTest() }} className="small" style={{ opacity: genAppTesting ? 0.7 : 1 }}>
+                                      {genAppTesting ? 'Testando API…' : 'Testar API'}
+                                    </a>
+                                  </div>
+                                )
+                              })()}
                             </div>
                           </form>
                         )}
                       </div>
                     )}
-                    {genStep === 3 && (
-                      <div className="__fade_slide_in">
-                        <div className="form-check form-switch mb-3">
-                          <input className="form-check-input" type="checkbox" id="chkVincBm" checked={genVincEnabled} onChange={(e) => setGenVincEnabled(e.target.checked)} />
-                          <label className="form-check-label" htmlFor="chkVincBm">Preencher vínculo manualmente</label>
-                        </div>
-                        {genVincEnabled && (
-                          <form onSubmit={(e) => e.preventDefault()}>
-                            <div className="row g-3">
-                              <div className="col-md-6">
-                                <label className="form-label">ID BM</label>
-                                <input className="form-control" value={genVincIdBm} onChange={(e) => setGenVincIdBm(e.target.value)} placeholder="0000000000000000" />
-                              </div>
-                              
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    )}
+                    {/* Vínculo BM removido para este fluxo */}
                   </div>
                   <div className="modal-footer">
                     <button
@@ -1347,7 +1377,7 @@ export default function GeradorSites() {
                       type="button"
                       className="btn btn-primary"
                       onClick={async () => {
-                        if (genStep < 3) {
+                        if (genStep < 2) {
                           setGenStep(s => s + 1)
                           return
                         }
@@ -1396,7 +1426,7 @@ export default function GeradorSites() {
                       }}
                       disabled={!canProceed || genSubmitting}
                     >
-                      {genStep < 3 ? 'Próximo' : (genSubmitting ? 'Enviando...' : 'Finalizar')}
+                      {genStep < 2 ? 'Próximo' : (genSubmitting ? 'Enviando...' : 'Finalizar')}
                     </button>
                   </div>
                 </div>
