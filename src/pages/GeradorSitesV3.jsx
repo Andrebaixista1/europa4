@@ -119,6 +119,7 @@ function mapWhatsappLimit(value) {
   const s = String(value).toUpperCase()
   if (s === 'TIER_2K') return '2.000'
   if (s === 'TIER_250') return '250'
+  if (s === 'TIER_10K' || s === '10000' || s === '10K' || s === '10.000') return '10.000'
   return value
 }
 
@@ -210,6 +211,14 @@ function valueForKey(key, value) {
         </span>
       )
     }
+    if (s === 'BANNED') {
+      return (
+        <span className="d-inline-flex align-items-center gap-2">
+          <span aria-hidden style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)' }} />
+          Banido
+        </span>
+      )
+    }
     if (s === 'EXPIRED') {
       return (
         <span className="d-inline-flex align-items-center gap-2">
@@ -218,7 +227,14 @@ function valueForKey(key, value) {
         </span>
       )
     }
-    if (s.includes('CONNECT') && !s.includes('DISCONNECT')) return 'Conectado'
+    if (s.includes('CONNECT') && !s.includes('DISCONNECT')) {
+      return (
+        <span className="d-inline-flex align-items-center gap-2">
+          <span aria-hidden style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: '#22c55e', boxShadow: '0 0 0 2px rgba(34,197,94,0.25)' }} />
+          Conectado
+        </span>
+      )
+    }
     if (s.includes('DISCONNECT') || s === 'NOT_CONNECTED') return 'Desconectado'
     return s
   }
@@ -539,6 +555,7 @@ export default function GeradorSitesV3() {
     const s = (limitRaw ?? '').toString().trim().toUpperCase()
     if (s === 'TIER_250' || s === '250') return 2
     if (s === 'TIER_2K' || s === '2000' || s === '2K' || s === '2.000') return 5
+    if (s === 'TIER_10K' || s === '10000' || s === '10K' || s === '10.000') return 5
     return Infinity
   }
 
@@ -573,7 +590,7 @@ export default function GeradorSitesV3() {
             </>
           )}
           <span>{connected} /</span>
-          <Fi.FiInfinity size={14} />
+          <span style={{fontWeight: 600}}>∞</span>
         </span>
       )
     }
@@ -613,14 +630,13 @@ export default function GeradorSitesV3() {
   const totalConexoes = useMemo(() => {
     let connected = 0
     let capacity = 0
-    let hasInfinity = false
     for (const r of records) {
-      connected += countConexoes(r.id)
+      const c = countConexoes(r.id)
       const cap = connectionCapacity(r.whatsapp_limit)
-      if (cap === Infinity) hasInfinity = true
-      else capacity += cap
+      connected += c
+      capacity += (cap === Infinity ? c : cap)
     }
-    return { connected, capacity, hasInfinity }
+    return { connected, capacity }
   }, [records, rawById])
 
   // Map empresa por BM e opções distintas
@@ -810,11 +826,7 @@ export default function GeradorSitesV3() {
               <div className="display-4 fw-bold d-flex align-items-center gap-2">
                 <span>{totalConexoes.connected}</span>
                 <span>/</span>
-                {totalConexoes.hasInfinity ? (
-                  <Fi.FiInfinity size={20} />
-                ) : (
-                  <span>{totalConexoes.capacity}</span>
-                )}
+                <span>{totalConexoes.capacity}</span>
               </div>
             </div>
           </div>
