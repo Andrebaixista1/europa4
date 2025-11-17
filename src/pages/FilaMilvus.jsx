@@ -34,6 +34,8 @@ const statusVariants = {
   aguardandocliente: 'warning',
   pendentedousuario: 'warning',
   pendentedocliente: 'warning',
+  pausado: 'warning',
+  pausa: 'warning',
   ematendimento: 'info',
   emexecucao: 'info',
   atendendo: 'info',
@@ -48,6 +50,10 @@ const priorityVariants = {
   media: 'primary',
   baixa: 'success',
 }
+
+const QUEUE_KEYWORDS = ['fila']
+const WAITING_KEYWORDS = ['aguard', 'pendent', 'pausad', 'pausa', 'paus']
+const ACTIVE_KEYWORDS = ['atendimento', 'execucao', 'atendendo']
 
 const getStatusVariant = (value) => {
   const key = normalizeKey(value)
@@ -218,14 +224,21 @@ export default function FilaMilvus() {
     const summary = { queue: 0, active: 0, waiting: 0 }
     tickets.forEach((ticket) => {
       const key = normalizeKey(ticket.status)
-      if (key.includes('fila')) summary.queue += 1
-      else if (key.includes('aguard') || key.includes('pendente')) summary.waiting += 1
-      else if (
-        key.includes('atendimento') ||
-        key.includes('execucao') ||
-        key.includes('atendendo')
-      )
+      if (!key) return
+
+      if (QUEUE_KEYWORDS.some((pattern) => key.includes(pattern))) {
+        summary.queue += 1
+        return
+      }
+
+      if (WAITING_KEYWORDS.some((pattern) => key.includes(pattern))) {
+        summary.waiting += 1
+        return
+      }
+
+      if (ACTIVE_KEYWORDS.some((pattern) => key.includes(pattern))) {
         summary.active += 1
+      }
     })
     return [
       { label: 'Na fila', value: summary.queue, helper: 'Aguardam triagem do time Milvus' },
