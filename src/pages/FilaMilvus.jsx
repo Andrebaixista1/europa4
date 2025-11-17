@@ -51,7 +51,7 @@ const priorityVariants = {
   baixa: 'success',
 }
 
-const QUEUE_KEYWORDS = ['fila']
+const QUEUE_KEYWORDS = ['fila', 'afazer']
 const WAITING_KEYWORDS = ['aguard', 'pendent', 'pausad', 'pausa', 'paus']
 const ACTIVE_KEYWORDS = ['atendimento', 'execucao', 'atendendo']
 
