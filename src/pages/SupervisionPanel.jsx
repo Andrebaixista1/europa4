@@ -18,17 +18,39 @@ export default function SupervisionPanel() {
           </div>
         </div>
         <div className="row g-3 mb-4">
-          <div className="col-md-6">
+          <div className="col-md-6 col-lg-4">
             <div className="neo-card neo-lg p-5 h-100">
               <h5 className="mb-2">Usuários</h5>
               <p className="mb-0 opacity-85">Gerencie perfis. Supervisor vê apenas sua própria equipe.</p>
             </div>
           </div>
-          <div className="col-md-6">
+          <div className="col-md-6 col-lg-4">
             <div className="neo-card neo-lg p-5 h-100">
               <h5 className="mb-2">Equipes</h5>
               <p className="mb-0 opacity-85">Estruture e visualize sua equipe.</p>
             </div>
+          </div>
+          <div className="col-md-6 col-lg-4">
+            <Link
+              to="/fila-milvus"
+              className="neo-card neo-lg p-5 h-100 d-block text-reset text-decoration-none"
+            >
+              <div className="d-flex align-items-center gap-3 mb-2">
+                <img
+                  src="https://carreira.inhire.com.br/wp-content/uploads/2025/10/logo_Logo-Milvus-1.png"
+                  alt="Milvus"
+                  width="40"
+                  height="40"
+                  className="rounded flex-shrink-0"
+                  style={{ objectFit: 'contain' }}
+                />
+                <h5 className="mb-0">Fila Milvus</h5>
+              </div>
+              <p className="mb-0 opacity-85">
+                Acompanhe o andamento do seu chamado diretamente na fila de atendimento do Milvus e saiba quando sera
+                respondido.
+              </p>
+            </Link>
           </div>
         </div>
         

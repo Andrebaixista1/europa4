@@ -12,6 +12,7 @@ import Recargas from './pages/Recargas.jsx'
 import GeradorSites from './pages/GeradorSites.jsx'
 import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
+import FilaMilvus from './pages/FilaMilvus.jsx'
 // import Status from './pages/Status.jsx' // Temporariamente desativado
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
@@ -102,6 +103,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
             <SupervisionPanel />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fila-milvus"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
+            <FilaMilvus />
           </ProtectedRoute>
         }
       />

@@ -12,7 +12,7 @@ function Icon({ name, size = 24 }) {
   return <Comp size={size} />
 }
 
-function Card({ title, icon, children, accent = 'primary', muted = false, to, onClick }) {
+function Card({ title, icon, iconUrl, iconAlt = title, children, accent = 'primary', muted = false, to, onClick }) {
   const body = (
     <>
       {muted && (
@@ -21,9 +21,20 @@ function Card({ title, icon, children, accent = 'primary', muted = false, to, on
         </span>
       )}
       <div className="d-flex align-items-center gap-3 mb-2">
-        {icon && (
+        {(icon || iconUrl) && (
           <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
-            <Icon name={icon} size={22} />
+            {iconUrl ? (
+              <img
+                src={iconUrl}
+                alt={iconAlt}
+                width="26"
+                height="26"
+                className="rounded-1"
+                style={{ objectFit: 'contain' }}
+              />
+            ) : (
+              <Icon name={icon} size={22} />
+            )}
           </div>
         )}
         <h5 className="mb-0">{title}</h5>
@@ -152,14 +163,25 @@ export default function Dashboard() {
           <section className="mb-4">
             <h5 className="section-title">Supervisão</h5>
             <div className="row g-3">
-              <div className="col-md-6">
+              <div className="col-md-6 col-lg-4 col-xl-3">
                 <Card title="Usuários" icon="FiUserCheck" accent="primary" to="/usuarios">
                   Supervisor vê apenas a própria equipe.
                 </Card>
               </div>
-              <div className="col-md-6">
+              <div className="col-md-6 col-lg-4 col-xl-3">
                 <Card title="Equipes" icon="FiGrid" accent="info" to="/equipes">
                   Estruture e visualize sua equipe.
+                </Card>
+              </div>
+              <div className="col-md-6 col-lg-4 col-xl-3">
+                <Card
+                  title="Fila Milvus"
+                  iconUrl="https://carreira.inhire.com.br/wp-content/uploads/2025/10/logo_Logo-Milvus-1.png"
+                  iconAlt="Milvus"
+                  accent="primary"
+                  to="/fila-milvus"
+                >
+                  Veja o andamento do seu chamado diretamente na fila do Milvus e saiba quando sera respondido.
                 </Card>
               </div>
             </div>
