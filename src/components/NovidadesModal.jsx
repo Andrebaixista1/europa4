@@ -8,7 +8,7 @@ export const novidadesList = [
     data: '17/11/2025',
     titulo: 'Fila Milvus integrada',
     descricao:
-      'Supervisao agora conta com o card Fila Milvus, exibindo a fila real do Setor Planejamento com filtros, auto-atualizacao a cada 60s e atalho para o portal Vieira RTech.',
+      'Supervisão agora conta com o card Fila Milvus, exibindo a fila real do Setor Planejamento com filtros, auto-atualização a cada 60s e atalho para o portal Vieira Tech.',
   },
   {
     data: '13/11/2025',

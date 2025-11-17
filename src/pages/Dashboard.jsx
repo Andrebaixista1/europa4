@@ -181,7 +181,7 @@ export default function Dashboard() {
                   accent="primary"
                   to="/fila-milvus"
                 >
-                  Veja o andamento do seu chamado diretamente na fila do Milvus e saiba quando sera respondido.
+                  Veja o andamento do seu chamado diretamente na fila do Milvus e saiba quando será respondido.
                 </Card>
               </div>
             </div>
