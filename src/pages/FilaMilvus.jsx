@@ -88,7 +88,7 @@ const adaptTickets = (items = []) =>
         status: item?.status ?? 'Sem status',
         prioridade: item?.prioridade ?? 'Sem prioridade',
         ultimaAtualizacao: item?.data_modificacao ?? item?.data ?? '',
-        tecnico: item?.tecnico ?? item?.responsavel ?? 'Equipe Milvus',
+        tecnico: item?.tecnico ?? item?.responsavel ?? 'Agurdando técnico',
         mesaTrabalho: desk,
       }
     })
