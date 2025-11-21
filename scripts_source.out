@@ -1,0 +1,604 @@
+--- /root/n8n_backups/credenciais.sh ---
+#!/usr/bin/env bash
+# credenciais.sh - Migra workflows entre duas instâncias n8n via /api/v1
+# Requisitos: curl e jq
+
+set -euo pipefail
+
+# ========= CONFIG =========
+SOURCE_HOST="https://n8n.sistemavieira.com.br"
+DEST_HOST="https://n8n.apivieiracred.store"
+
+# SUAS KEYS EMBUTIDAS (X-N8N-API-KEY)
+SOURCE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5M2JlYmU3Ny1iOGZmLTQwYTEtYjVhNS1lM2I5MWE2ODM4ODkiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU4NzQ2NDk3fQ.pvc5pd_jT1EXQm4sp9BUCWv8rQFis9ITXYSi1LunLfo"
+DEST_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNGZkNTNjOS1kMWViLTRkYWMtODhhMS1jMDIzOTk0N2Q3MDUiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU4NzQ2MjU4fQ.0JMntzPKJRVpF80nqyxvxtnPB4F5W-AhyA0iz_tVgro"
+
+ACTIVE_ONLY="true"
+LIMIT="100"
+SLEEP_BETWEEN="0.25"
+INSECURE="1"         # 1 para ignorar SSL
+PROJECT_ID=""        # opcional: força projectId no destino
+
+# ========= CHECAGENS =========
+command -v jq >/dev/null || { echo "ERRO: instale 'jq'."; exit 1; }
+command -v curl >/dev/null || { echo "ERRO: instale 'curl'."; exit 1; }
+
+# ========= CURL =========
+CURL_OPTS=(-sS -L -H "Accept: application/json")
+[[ "$INSECURE" == "1" ]] && CURL_OPTS+=(-k)
+
+src_get() {  # GET origem
+  local path="$1"
+  curl "${CURL_OPTS[@]}" -H "X-N8N-API-KEY: ${SOURCE_KEY}" "${SOURCE_HOST%/}${path}"
+}
+
+dest_post_file() {  # POST destino com arquivo JSON
+  local path="$1" file="$2"
+  curl "${CURL_OPTS[@]}" -w "HTTPSTATUS:%{http_code}" \
+    -H "X-N8N-API-KEY: ${DEST_KEY}" \
+    -H "Content-Type: application/json" \
+    -X POST --data-binary "@${file}" "${DEST_HOST%/}${path}"
+}
+
+json_or_die() {  # valida JSON
+  local body="$1" ctx="$2"
+  if ! printf '%s' "$body" | jq -e . >/dev/null 2>&1; then
+    echo "ERRO: resposta não é JSON (${ctx}). Trecho:" >&2
+    printf '%s' "$body" | head -c 400 >&2; echo >&2
+    exit 2
+  fi
+}
+
+# ========= MIGRAÇÃO =========
+echo "[LIST] Coletando workflows da origem (${SOURCE_HOST}) ..."
+PAGE="/api/v1/workflows?active=${ACTIVE_ONLY}&limit=${LIMIT}"
+
+OK=0; FAIL=0; TOTAL=0
+
+while :; do
+  RESP="$(src_get "$PAGE")" || { echo "ERRO ao listar página: $PAGE"; exit 2; }
+  json_or_die "$RESP" "GET $PAGE"
+
+  NUM_ON_PAGE="$(printf '%s' "$RESP" | jq '.data|length')" || true
+  echo "[PAGE] Itens: $NUM_ON_PAGE"
+
+  # Itera item a item SEM guardar tudo em variável gigante
+  while IFS= read -r ROW; do
+    ((TOTAL++)) || true
+    ID="$(printf '%s' "$ROW" | jq -r '.id // .workflowId // .uuid // empty')"
+    NAME="$(printf '%s' "$ROW" | jq -r '.name // ("id-" + (.id // .workflowId // .uuid // "desconhecido"))')"
+
+    if [[ -z "$ID" || "$ID" == "null" ]]; then
+      echo "[-] SKIP sem id: $(printf '%s' "$ROW" | jq -c '{name,id}')" >&2
+      continue
+    fi
+
+    echo "[GET] ${NAME} (${ID})"
+    DETAIL_RAW="$(src_get "/api/v1/workflows/${ID}")" || {
+      echo "[!] Falha ao buscar detalhe de ${NAME}" >&2; ((FAIL++)); continue; }
+    json_or_die "$DETAIL_RAW" "GET /api/v1/workflows/${ID}"
+
+    DETAIL="$(printf '%s' "$DETAIL_RAW" | jq 'if type=="object" and has("data") then .data else . end')"
+
+    # Monta payload aceito no POST /workflows
+    if [[ -n "$PROJECT_ID" ]]; then
+      PAYLOAD="$(printf '%s' "$DETAIL" | jq --arg pid "$PROJECT_ID" '{
+        name,
+        nodes: (.nodes // []),
+        connections: (.connections // {}),
+        settings: (.settings // {}),
+        active: (.active // false),
+        pinData: (.pinData // {})
+      } + ( $pid|length>0 ? {projectId:$pid} : {} )')"
+    else
+      PAYLOAD="$(printf '%s' "$DETAIL" | jq '{
+        name,
+        nodes: (.nodes // []),
+        connections: (.connections // {}),
+        settings: (.settings // {}),
+        active: (.active // false),
+        pinData: (.pinData // {})
+      }')"
+    fi
+
+    if [[ "$(printf '%s' "$PAYLOAD" | jq -r '.name // empty')" == "" ]]; then
+      PAYLOAD="$(printf '%s' "$PAYLOAD" | jq --arg n "Migrated ${ID}" '.name = $n')"
+    fi
+
+    TMP="$(mktemp)"
+    printf '%s' "$PAYLOAD" > "$TMP"
+
+    echo "[POST] Criando '${NAME}' no destino (${DEST_HOST})..."
+    RESP_POST="$(dest_post_file "/api/v1/workflows" "$TMP")"
+    rm -f "$TMP"
+
+    HTTP_CODE="${RESP_POST##*HTTPSTATUS:}"
+    BODY="${RESP_POST%HTTPSTATUS:*}"
+
+    if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+      NEW_NAME="$(printf '%s' "$BODY" | jq -r '.data.name // .name // "?"' 2>/dev/null || echo "?")"
+      echo "✅ OK: ${NEW_NAME}"
+      ((OK++))
+    else
+      echo "❌ ERRO (${HTTP_CODE}) ao criar '${NAME}'. Trecho da resposta:" >&2
+      printf '%s' "$BODY" | head -c 400 >&2; echo >&2
+      ((FAIL++))
+    fi
+
+    sleep "$SLEEP_BETWEEN"
+  done < <(printf '%s' "$RESP" | jq -c '.data[]?')
+
+  # Próxima página
+  NEXT_CURSOR="$(printf '%s' "$RESP" | jq -r '.nextCursor // .cursor // empty')"
+  [[ -n "$NEXT_CURSOR" && "$NEXT_CURSOR" != "null" ]] \
+    && PAGE="/api/v1/workflows?active=${ACTIVE_ONLY}&limit=${LIMIT}&cursor=${NEXT_CURSOR}" \
+    || break
+done
+
+echo "=============================="
+echo "Total: ${TOTAL} | Sucesso: ${OK} | Falhas: ${FAIL}"
+[[ "$FAIL" -eq 0 ]]
+--- /root/n8n_backups/backup_n8n_workflows.py ---
+#!/usr/bin/env python3
+"""
+backup_n8n_workflows.py
+
+Exporta workflows do n8n via API e salva cada workflow como JSON separado em --out-dir.
+Opção adicional:
+  --only-active / -a : salva apenas workflows que NÃO parecem arquivados/desativados.
+"""
+
+from __future__ import annotations
+import argparse
+import os
+import re
+import json
+from datetime import datetime
+import requests
+from typing import List, Dict, Any, Optional
+
+DEFAULT_OUT_DIR = "/n8n_backups"
+KEYWORD_WORKFLOW_FIELDS = ("nodes", "name", "id")
+
+def slugify_for_filename(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"[^\w\s-]", "", s, flags=re.U)
+    s = re.sub(r"[-\s]+", "_", s)
+    return (s[:120] or "workflow").lower()
+
+def now_ts() -> str:
+    return datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+
+def ensure_dir(path: str):
+    os.makedirs(path, exist_ok=True)
+
+def safe_dump_json(obj: Any, path: str):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+class N8NClient:
+    def __init__(self, base_url: str, auth_type: str="none", api_key: Optional[str]=None,
+                 bearer: Optional[str]=None, email: Optional[str]=None, password: Optional[str]=None,
+                 verify_ssl: bool=True, timeout: int=30):
+        self.base = base_url.rstrip("/")
+        self.s = requests.Session()
+        self.verify = verify_ssl
+        self.timeout = timeout
+        self.auth_type = (auth_type or "none").lower()
+        self.email = email
+        self.password = password
+        if self.auth_type == "api_key" and api_key:
+            self.s.headers.update({"X-N8N-API-KEY": api_key})
+        elif self.auth_type == "bearer" and bearer:
+            self.s.headers.update({"Authorization": f"Bearer {bearer}"})
+
+    def try_login_if_needed(self) -> bool:
+        if self.auth_type != "basic":
+            return True
+        if not (self.email and self.password):
+            print("[login] auth-type basic mas email/senha não foram informados")
+            return False
+        url = f"{self.base}/rest/login"
+        try:
+            r = self.s.post(url, json={"email": self.email, "password": self.password},
+                            timeout=self.timeout, verify=self.verify)
+            if r.status_code in (200, 204):
+                print("[login] login bem sucedido.")
+                return True
+            else:
+                print(f"[login] falha login: status {r.status_code} body: {r.text[:200]}")
+                return False
+        except Exception as e:
+            print(f"[login] exceção durante login: {e}")
+            return False
+
+    def _get(self, path: str, params: Dict[str, Any]=None) -> requests.Response:
+        url = f"{self.base}{path}"
+        return self.s.get(url, timeout=self.timeout, verify=self.verify, params=params)
+
+    def get_workflows_list(self) -> List[Dict[str, Any]]:
+        candidates = [
+            "/rest/workflows",
+            "/rest/workflows?limit=1000",
+            "/workflows",
+            "/api/v1/workflows",
+            "/v1/workflows",
+        ]
+        last_err = None
+        for p in candidates:
+            try:
+                r = self._get(p)
+                if r.status_code == 200:
+                    try:
+                        data = r.json()
+                    except Exception:
+                        data = None
+                    if data is None:
+                        # resposta 200 não-json (ignorar)
+                        continue
+                    if isinstance(data, list):
+                        return data
+                    if isinstance(data, dict):
+                        for k in ("data", "workflows", "items"):
+                            if k in data and isinstance(data[k], list):
+                                return data[k]
+                        if any(k in data for k in KEYWORD_WORKFLOW_FIELDS):
+                            return [data]
+                        for v in data.values():
+                            if isinstance(v, list):
+                                return v
+                else:
+                    last_err = (p, r.status_code, r.text[:200])
+            except Exception as e:
+                last_err = (p, str(e))
+                continue
+        print(f"[get_workflows_list] falhou em todas as rotas. último erro: {last_err}")
+        return []
+
+    def get_workflow_detail(self, wf_id: Any) -> Optional[Dict[str, Any]]:
+        candidates = [
+            f"/rest/workflows/{wf_id}",
+            f"/rest/workflows/{wf_id}/export",
+            f"/workflows/{wf_id}",
+            f"/api/v1/workflows/{wf_id}",
+            f"/v1/workflows/{wf_id}",
+            f"/rest/workflows/{wf_id}?includeData=true",
+        ]
+        for p in candidates:
+            try:
+                r = self._get(p)
+                if r.status_code == 200:
+                    try:
+                        return r.json()
+                    except Exception:
+                        return {"raw": r.text}
+            except Exception:
+                continue
+        return None
+
+def looks_archived_or_inactive(wf: Dict[str, Any]) -> bool:
+    """
+    Heurísticas para detectar workflows arquivados/desativados.
+    Retorna True se parecer arquivado/desativado.
+    """
+    if not isinstance(wf, dict):
+        return False
+    # chaves diretas
+    for key in ("archived", "isArchived", "deleted"):
+        if wf.get(key) is True:
+            return True
+    # flags de atividade (se existir e for explicitamente falso -> arquivado/desativado)
+    for key in ("active", "isActive", "enabled"):
+        val = wf.get(key)
+        if val is False:
+            return True
+    # outras variações
+    if wf.get("disabled") is True:
+        return True
+    state = wf.get("state")
+    if isinstance(state, str) and state.lower() in ("archived", "deleted", "disabled", "inactive"):
+        return True
+    # nested settings
+    settings = wf.get("settings") or wf.get("workflow") or {}
+    if isinstance(settings, dict):
+        nested = settings.get("active")
+        if nested is False:
+            return True
+        if settings.get("archived") is True:
+            return True
+    # se não encontrou indicadores de arquivamento, assume ativo
+    return False
+
+def backup_all(base_url: str, out_dir: str = DEFAULT_OUT_DIR, auth_type: str="none",
+               api_key: Optional[str]=None, bearer: Optional[str]=None,
+               email: Optional[str]=None, password: Optional[str]=None,
+               dry_run: bool=False, verify_ssl: bool=True, only_active: bool=False) -> List[str]:
+    client = N8NClient(base_url, auth_type=auth_type, api_key=api_key, bearer=bearer,
+                      email=email, password=password, verify_ssl=verify_ssl)
+    if not client.try_login_if_needed():
+        print("[WARN] falha no login (se aplicável). Continuando, pode falhar nas requisições.")
+
+    print(f"[INFO] solicitando lista de workflows em {base_url} ...")
+    raw_list = client.get_workflows_list()
+    print(f"[INFO] encontrados {len(raw_list)} itens (brutos).")
+    ensure_dir(out_dir)
+
+    saved_paths: List[str] = []
+    for item in raw_list:
+        wf_obj = None
+        wf_id = None
+        wf_name = None
+
+        if isinstance(item, dict):
+            wf_id = item.get("id") or item.get("workflowId") or item.get("_id") or item.get("uid")
+            wf_name = item.get("name") or item.get("title") or ""
+            if "nodes" in item or "nodes" in item.get("workflow", {}):
+                wf_obj = item
+
+        if wf_obj is None:
+            if not wf_id:
+                if isinstance(item, dict) and any(k in item for k in KEYWORD_WORKFLOW_FIELDS):
+                    wf_obj = item
+                else:
+                    print(f"[SKIP] item sem id/nodes detectado: {str(item)[:200]}")
+                    continue
+            else:
+                detail = client.get_workflow_detail(wf_id)
+                if not detail:
+                    print(f"[ERR] não foi possível obter detalhe para workflow id={wf_id}")
+                    continue
+                if isinstance(detail, dict) and ("data" in detail and isinstance(detail["data"], dict)):
+                    wf_obj = detail["data"]
+                elif isinstance(detail, dict) and ("workflow" in detail and isinstance(detail["workflow"], dict)):
+                    wf_obj = detail["workflow"]
+                else:
+                    wf_obj = detail
+                if not wf_name and isinstance(wf_obj, dict):
+                    wf_name = wf_obj.get("name") or wf_obj.get("title") or ""
+
+        # se apenas queremos ativos, checar heurística
+        if only_active:
+            if looks_archived_or_inactive(wf_obj):
+                id_part = f"id{wf_id}" if wf_id else "unknown"
+                print(f"[SKIP-ARCHIVED] pulando {id_part} / '{wf_name}' (aparenta arquivado/desativado).")
+                continue
+
+        ts = now_ts()
+        safe_name = slugify_for_filename(wf_name or "")
+        id_part = f"id{wf_id}" if wf_id else "unknown"
+        filename = f"{ts}_{id_part}_{safe_name}.json"
+        filepath = os.path.join(out_dir, filename)
+
+        if dry_run:
+            print(f"[DRY-RUN] salvaria: {filepath}")
+            saved_paths.append(filepath)
+            continue
+
+        try:
+            safe_dump_json(wf_obj, filepath)
+            saved_paths.append(filepath)
+            print(f"[OK] salvo: {filepath}")
+        except Exception as e:
+--- /root/n8n_backups/cp-workflows-api.py ---
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import time
+import requests
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# -------- CONFIG ----------
+SOURCE_HOST = os.getenv("SOURCE_HOST", "https://n8n.sistemavieira.com.br").rstrip("/")
+DEST_HOST = os.getenv("DEST_HOST", "https://n8n.apivieiracred.store").rstrip("/")
+
+# Defaults taken from your previous inputs; override with env vars for safety
+SOURCE_KEY = os.getenv("SOURCE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5M2JlYmU3Ny1iOGZmLTQwYTEtYjVhNS1lM2I5MWE2ODM4ODkiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU4NzQ2NDk3fQ.pvc5pd_jT1EXQm4sp9BUCWv8rQFis9ITXYSi1LunLfo")
+DEST_KEY = os.getenv("DEST_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlNGZkNTNjOS1kMWViLTRkYWMtODhhMS1jMDIzOTk0N2Q3MDUiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU4NzQ2MjU4fQ.0JMntzPKJRVpF80nqyxvxtnPB4F5W-AhyA0iz_tVgro")
+
+# Optional login fallback if API key fails (provide via env if needed)
+SOURCE_EMAIL = os.getenv("SOURCE_EMAIL")
+SOURCE_PASS = os.getenv("SOURCE_PASS")
+DEST_EMAIL = os.getenv("DEST_EMAIL")
+DEST_PASS = os.getenv("DEST_PASS")
+
+VERIFY_SSL = os.getenv("VERIFY_SSL", "false").lower() in ("1", "true", "yes")
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
+SLEEP_BETWEEN = float(os.getenv("SLEEP_BETWEEN", "0.2"))
+
+# -------- helpers ----------
+def try_api_key_session(host, api_key):
+    s = requests.Session()
+    s.verify = VERIFY_SSL
+    s.headers.update({"X-N8N-API-KEY": api_key, "Accept": "application/json"})
+    try:
+        r = s.get(f"{host}/api/v1/workflows?active=true", timeout=REQUEST_TIMEOUT)
+        if r.status_code == 200:
+            return s
+    except requests.RequestException:
+        pass
+    return None
+
+def try_bearer_session(host, api_key):
+    s = requests.Session()
+    s.verify = VERIFY_SSL
+    s.headers.update({"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
+    try:
+        r = s.get(f"{host}/api/v1/workflows?active=true", timeout=REQUEST_TIMEOUT)
+        if r.status_code == 200:
+            return s
+    except requests.RequestException:
+        pass
+    return None
+
+def try_login_session(host, email, password):
+    if not (email and password):
+        return None
+    s = requests.Session()
+    s.verify = VERIFY_SSL
+    try:
+        r = s.post(f"{host}/rest/login", json={"email": email, "password": password}, timeout=REQUEST_TIMEOUT)
+        if r.status_code in (200, 201):
+            # test
+            r2 = s.get(f"{host}/api/v1/workflows?active=true", timeout=REQUEST_TIMEOUT)
+            if r2.status_code == 200:
+                return s
+    except requests.RequestException:
+        pass
+    return None
+
+def build_session(host, api_key, email=None, password=None):
+    # 1) X-N8N-API-KEY
+    s = try_api_key_session(host, api_key)
+    if s:
+        print(f"Authenticated to {host} using X-N8N-API-KEY")
+        return s, "X-N8N-API-KEY"
+    # 2) Authorization: Bearer fallback
+    s = try_bearer_session(host, api_key)
+    if s:
+        print(f"Authenticated to {host} using Authorization: Bearer")
+        return s, "Bearer"
+    # 3) login via /rest/login
+    s = try_login_session(host, email, password)
+    if s:
+        print(f"Authenticated to {host} via /rest/login session")
+        return s, "session"
+    return None, None
+
+def safe_json(resp):
+    try:
+        return resp.json()
+    except ValueError:
+        return None
+
+# -------- API helpers (v1 endpoints) ----------
+def list_workflows(session, host):
+    r = session.get(f"{host}/api/v1/workflows?active=true", timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    j = safe_json(r)
+    if isinstance(j, dict) and "data" in j:
+        return j["data"]
+    if isinstance(j, list):
+        return j
+    return []
+
+def get_workflow_detail(session, host, wf_id):
+    r = session.get(f"{host}/api/v1/workflows/{wf_id}", timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    j = safe_json(r)
+    # some installations return { data: { ... } }
+    if isinstance(j, dict) and "data" in j:
+        return j["data"]
+    return j
+
+def create_workflow(session, host, wf_payload):
+    payload = dict(wf_payload)
+    payload.pop("id", None)
+    r = session.post(f"{host}/api/v1/workflows", json=payload, timeout=REQUEST_TIMEOUT)
+    return r
+
+def list_credentials(session, host):
+    r = session.get(f"{host}/api/v1/credentials", timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    j = safe_json(r)
+    if isinstance(j, dict) and "data" in j:
+        return j["data"]
+    if isinstance(j, list):
+        return j
+    return []
+
+def get_credential_detail(session, host, cred_id):
+    r = session.get(f"{host}/api/v1/credentials/{cred_id}", timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    j = safe_json(r)
+    if isinstance(j, dict) and "data" in j:
+        return j["data"]
+    return j
+
+def create_credential(session, host, cred_payload):
+    payload = dict(cred_payload)
+    payload.pop("id", None)
+    r = session.post(f"{host}/api/v1/credentials", json=payload, timeout=REQUEST_TIMEOUT)
+    return r
+
+# -------- migration ----------
+def migrate_all():
+    src_session, src_method = build_session(SOURCE_HOST, SOURCE_KEY, SOURCE_EMAIL, SOURCE_PASS)
+    if not src_session:
+        print("ERROR: could not authenticate to source API", file=sys.stderr)
+        sys.exit(2)
+    dest_session, dest_method = build_session(DEST_HOST, DEST_KEY, DEST_EMAIL, DEST_PASS)
+    if not dest_session:
+        print("ERROR: could not authenticate to destination API", file=sys.stderr)
+        sys.exit(3)
+
+    # Workflows
+    try:
+        workflows = list_workflows(src_session, SOURCE_HOST)
+    except Exception as e:
+        print("ERROR fetching workflows list:", e, file=sys.stderr)
+        sys.exit(4)
+
+    print(f"Found {len(workflows)} workflows on source")
+    for wf in workflows:
+        wf_id = wf.get("id") or wf.get("workflowId") or wf.get("uuid")
+        wf_name = wf.get("name", f"id-{wf_id}")
+        if wf_id is None:
+            print(f"SKIP workflow missing id: {wf}", file=sys.stderr)
+            continue
+        try:
+            detail = get_workflow_detail(src_session, SOURCE_HOST, wf_id)
+        except Exception as e:
+            print(f"SKIP {wf_name}: failed to fetch detail: {e}", file=sys.stderr)
+            continue
+
+        payload = detail if isinstance(detail, dict) else {}
+        payload.pop("id", None)
+        try:
+            res = create_workflow(dest_session, DEST_HOST, payload)
+            if res.status_code in (200, 201):
+                print(f"✅ Workflow migrated: {wf_name}")
+            else:
+                print(f"❌ Workflow {wf_name} -> {res.status_code} : {res.text}")
+        except Exception as e:
+            print(f"❌ Workflow {wf_name} exception: {e}")
+
+        time.sleep(SLEEP_BETWEEN)
+
+    # Credentials
+    try:
+        creds = list_credentials(src_session, SOURCE_HOST)
+    except Exception as e:
+        print("ERROR fetching credentials list:", e, file=sys.stderr)
+        creds = []
+
+    print(f"\nFound {len(creds)} credentials on source")
+    for cred in creds:
+        cred_id = cred.get("id")
+        cred_name = cred.get("name", f"id-{cred_id}")
+        if cred_id is None:
+            print(f"SKIP credential missing id: {cred}", file=sys.stderr)
+            continue
+        try:
+            detail = get_credential_detail(src_session, SOURCE_HOST, cred_id)
+        except Exception as e:
+            print(f"SKIP cred {cred_name}: failed to fetch detail: {e}", file=sys.stderr)
+            continue
+
+        if isinstance(detail, dict):
+            detail.pop("id", None)
+        try:
+            res = create_credential(dest_session, DEST_HOST, detail)
+            if res.status_code in (200, 201):
+                print(f"✅ Credential migrated: {cred_name}")
+            else:
+                print(f"❌ Credential {cred_name} -> {res.status_code} : {res.text}")
+        except Exception as e:
+            print(f"❌ Credential {cred_name} exception: {e}")
+
+        time.sleep(SLEEP_BETWEEN)
+
+if __name__ == "__main__":
+    migrate_all()

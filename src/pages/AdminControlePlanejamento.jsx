@@ -59,8 +59,8 @@ export default function AdminControlePlanejamento() {
   const [addLogin, setAddLogin] = useState('')
   const ymdLocal = (d) => {
     const yyyy = d.getFullYear()
-    const mm = String(d.getMonth()+1).padStart(2,'0')
-    const dd = String(d.getDate()).padStart(2,'0')
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
     return `${yyyy}-${mm}-${dd}`
   }
   const toDateOnly = (value) => {
@@ -117,7 +117,7 @@ export default function AdminControlePlanejamento() {
         map.set(it.codigo, { codigo: it.codigo, empresa: (it.empresa || ''), grupo: (it.grupo || '') })
       }
     }
-    return Array.from(map.values()).sort((a,b) => String(a.codigo).localeCompare(String(b.codigo)))
+    return Array.from(map.values()).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)))
   }, [items])
 
   const cargos = useMemo(() => {
@@ -334,7 +334,7 @@ export default function AdminControlePlanejamento() {
   }, [filtered])
 
   const downloadCsv = () => {
-    const header = ['ID','AGENCIA','LOGIN','EMPRESA','GRUPO','DATA RENOVACAO','DATA VENCIMENTO','STATUS']
+    const header = ['ID', 'AGENCIA', 'LOGIN', 'EMPRESA', 'GRUPO', 'DATA RENOVACAO', 'DATA VENCIMENTO', 'STATUS']
     const rows = filtered.map(i => [
       i.id,
       i.codigo,
@@ -345,13 +345,13 @@ export default function AdminControlePlanejamento() {
       formatDateDisplay(i.vencimento),
       (i.status || '')
     ])
-    const lines = [header, ...rows].map(r => r.map(v => String(v).replaceAll('"','""')).map(v => `"${v}"`).join(';'))
+    const lines = [header, ...rows].map(r => r.map(v => String(v).replaceAll('"', '""')).map(v => `"${v}"`).join(';'))
     const csv = '\ufeff' + lines.join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
     a.download = `controle-planejamento-${stamp}.csv`
     a.click()
     URL.revokeObjectURL(url)
@@ -498,7 +498,7 @@ export default function AdminControlePlanejamento() {
               <table className="table table-dark table-hover align-middle mb-0">
                 <thead>
                   <tr>
-                    <th style={{width:80}}>ID</th>
+                    <th style={{ width: 80 }}>ID</th>
                     <th>AGENCIA</th>
                     <th>LOGIN</th>
                     <th>EMPRESA</th>
@@ -527,8 +527,8 @@ export default function AdminControlePlanejamento() {
                         <div className="d-flex gap-2">
                           <button
                             className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center"
-                            disabled={!isMaster || renewingId === i.id || String(i.status || '').toLowerCase() !== 'inativo'}
-                            title={isMaster ? (String(i.status || '').toLowerCase() === 'inativo' ? 'Renovar' : 'Disponível apenas para Inativo') : 'Apenas Master'}
+                            disabled={!isMaster || renewingId === i.id}
+                            title={isMaster ? 'Renovar' : 'Apenas Master'}
                             aria-label="Renovar"
                             onClick={() => handleRenovar(i)}
                           >
@@ -548,8 +548,8 @@ export default function AdminControlePlanejamento() {
         </div>
       </main>
       {isMaster && showAdd && (
-        <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
-          <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
+        <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 1050 }}>
+          <div className="neo-card neo-lg p-4" style={{ maxWidth: 720, width: '95%' }}>
             <div className="d-flex align-items-center justify-content-between mb-2">
               <h5 className="mb-0">Adicionar Novo Usuário</h5>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowAdd(false)} aria-label="Fechar">
