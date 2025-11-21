@@ -60,29 +60,31 @@ export default function ConsultaIN100() {
     return payload
   }
   // Carrega saldos do usuÃ¡rio para preencher os cards
-  useEffect(() => {
-    const fetchSaldoUsuario = async () => {
-      if (!user || !user.id) return
-      try {
-        const url = 'https://webhook.sistemavieira.com.br/webhook/saldo'
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildSaldoPayload()),
-        })
-        if (!res.ok) return
-        const data = await res.json().catch(() => null)
-        if (!data) return
-        const item = Array.isArray(data) ? (data[0] || {}) : data
-        setMetrics({
-          totalCarregado: Number(item.total_carregado ?? 0),
-          disponivel: Number(item.limite_disponivel ?? 0),
-          realizadas: Number(item.consultas_realizada ?? 0),
-        })
-      } catch (_) {
-        // silencia erros para nÃ£o travar a UI
-      }
+  // Carrega saldos do usuÃ¡rio para preencher os cards
+  const fetchSaldoUsuario = async () => {
+    if (!user || !user.id) return
+    try {
+      const url = 'https://webhook.sistemavieira.com.br/webhook/get-saldos'
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildSaldoPayload()),
+      })
+      if (!res.ok) return
+      const data = await res.json().catch(() => null)
+      if (!data) return
+      const item = Array.isArray(data) ? (data[0] || {}) : data
+      setMetrics({
+        totalCarregado: Number(item.total_carregado ?? 0),
+        disponivel: Number(item.limite_disponivel ?? 0),
+        realizadas: Number(item.consultas_realizada ?? 0),
+      })
+    } catch (_) {
+      // silencia erros para nÃ£o travar a UI
     }
+  }
+
+  useEffect(() => {
     fetchSaldoUsuario()
   }, [user])
 
@@ -129,7 +131,7 @@ export default function ConsultaIN100() {
     const m = String(value || '').match(/(\d{4})-(\d{2})-(\d{2})/)
     return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null
   }
-  const partsToBR = (p) => `${String(p.d).padStart(2,'0')}/${String(p.m).padStart(2,'0')}/${String(p.y)}`
+  const partsToBR = (p) => `${String(p.d).padStart(2, '0')}/${String(p.m).padStart(2, '0')}/${String(p.y)}`
   const formatDate = (iso) => {
     if (!iso) return '-'
     const p = parseISODateParts(iso)
@@ -293,13 +295,13 @@ export default function ConsultaIN100() {
         }
         const makeRow = (source) => {
           const findVal = (keys) => extractAny(source, keys)
-          const nbDigits = String(findVal(['nb', 'numero_beneficio', 'beneficio', 'nr_beneficio', 'num_beneficio']) ?? '').replace(/\D/g,'')
-          const cpfDigits = String(findVal(['nu_cpf', 'cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) ?? '').replace(/\D/g,'')
+          const nbDigits = String(findVal(['nb', 'numero_beneficio', 'beneficio', 'nr_beneficio', 'num_beneficio']) ?? '').replace(/\D/g, '')
+          const cpfDigits = String(findVal(['nu_cpf', 'cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) ?? '').replace(/\D/g, '')
           const nome = findVal(['nome_segurado', 'nome', 'nome_beneficiario', 'nome_cliente']) || ''
           const nascimentoRaw = findVal(['dt_nascimento', 'data_nascimento', 'nascimento']) || null
           const parts = parseISODateParts(nascimentoRaw)
           const nascStr = parts ? partsToBR(parts) : (nascimentoRaw ? formatDate(nascimentoRaw) : '')
-          const idadeCalc = parts ? idadeFrom(`${parts.y}-${String(parts.m).padStart(2,'0')}-${String(parts.d).padStart(2,'0')}`) : (nascimentoRaw ? idadeFrom(nascimentoRaw) : '')
+          const idadeCalc = parts ? idadeFrom(`${parts.y}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`) : (nascimentoRaw ? idadeFrom(nascimentoRaw) : '')
           return { nbDigits, cpfDigits, nome: String(nome || ''), nascStr, idade: idadeCalc }
         }
         const list = Array.isArray(obj) ? obj.map(makeRow) : [makeRow(obj)]
@@ -350,259 +352,254 @@ export default function ConsultaIN100() {
     e.preventDefault()
     loader.begin()
     try {
-    if (Number(metrics.disponivel) <= 0) {
-      notify.warn('Sem saldo disponivel para realizar consultas.')
-      return
-    }
-    const digits = cpf.replace(/\D/g, '')
-    const benDigits = beneficio.replace(/\D/g, '')
-    if (digits.length !== 11) return notify.warn('Informe um CPF valido (11 digitos).')
-    if (benDigits.length !== 10) return notify.warn('Informe um Beneficio valido (10 digitos).')
-    loader.begin()
-    try {
-      if (online) {
-        // 1) Dispara consulta online
-        const urlConsulta = 'https://webhook.sistemavieira.com.br/webhook/consulta-online'
-        const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
-        const consultaPayload = {
-          id: (typeof user?.id !== 'undefined' ? user.id : user),
-          cpf: digits,
-          nb: benDigits,
-        }
-        if (equipeId != null) {
-          consultaPayload.equipe_id = equipeId
-          consultaPayload.team_id = equipeId
-          consultaPayload.id_equipe = equipeId
-        }
-        const resConsulta = await fetch(urlConsulta, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(consultaPayload)
-        })
-        if (!resConsulta.ok) throw new Error('Falha na consulta online')
-
-        // 2) Buscar resposta final no n8n com os dados completos para o front
-        const urlResposta = 'https://n8n.sistemavieira.com.br/webhook/resposta-api'
-        // Aguarda 5s antes da primeira consulta de resposta
-        await new Promise(r => setTimeout(r, 5000))
-        const isValidResposta = (d) => {
-          if (!Array.isArray(d) || d.length === 0) return false
-          const o = d[0] || {}
-          return (
-            typeof o.id !== 'undefined' &&
-            !!o.numero_beneficio &&
-            !!o.numero_documento &&
-            hasValidName(o.nome) &&
-            isStatusSuccess(o.status_api) &&
-            isResponseFinished(o.resposta_api)
-          )
-        }
-        let arr = null
-        let respostaTries = 0
-        while (true) {
-          respostaTries++
-          const resResposta = await fetch(urlResposta, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
-          })
-          if (resResposta.ok) {
-            const dataTry = await resResposta.json().catch(() => null)
-            if (Array.isArray(dataTry) && dataTry.length > 0) {
-              const o = dataTry[0] || {}
-              if (isResponseFinished(o.resposta_api)) {
-                if (!hasValidName(o.nome) || !isStatusSuccess(o.status_api)) {
-                  loader.end()
-                  notify.error((o.status_api || '').trim() || 'Erro na consulta online')
-                  return
-                }
-              }
-              if (isValidResposta(dataTry)) { arr = dataTry; break }
-            }
-          }
-          if (respostaTries >= 5 && (respostaTries % 5) === 0) {
-            notify.warn(
-              'Devido a instabilidade na AWS o tempo de consultas pode levar mais de 5min para trazer o resultado. Qualibanking API',
-              { autoClose: 15000, toastId: 'aws-qualibanking-delay' }
-            )
-          }
-          await new Promise(r => setTimeout(r, 30000))
-        }
-        const d = Array.isArray(arr) ? (arr[0] || {}) : (arr || {})
-
-        const mapped = {
-          id: d.id || null,
-          id_usuario: d.id_usuario || d.usuarioId || user?.id || null,
-          numero_beneficio: d.numero_beneficio || benDigits,
-          numero_documento: d.numero_documento || digits,
-          nome: d.nome || '',
-          estado: d.estado || '',
-          pensao: d.pensao || 'not_payer',
-          data_nascimento: d.data_nascimento || null,
-          tipo_bloqueio: d.tipo_bloqueio || 'not_blocked',
-          data_concessao: d.data_concessao || null,
-          data_final_beneficio: d.data_final_beneficio || null,
-          tipo_credito: d.tipo_credito || 'magnetic_card',
-          situacao_beneficio: d.situacao_beneficio || 'elegible',
-          limite_cartao_beneficio: d.limite_cartao_beneficio ?? null,
-          saldo_cartao_beneficio: d.saldo_cartao_beneficio ?? 0,
-          limite_cartao_consignado: d.limite_cartao_consignado ?? null,
-          saldo_cartao_consignado: d.saldo_cartao_consignado ?? 0,
-          saldo_credito_consignado: d.saldo_credito_consignado ?? 0,
-          saldo_total_maximo: d.saldo_total_maximo ?? 0,
-          saldo_total_utilizado: d.saldo_total_utilizado ?? 0,
-          saldo_total_disponivel: d.saldo_total_disponivel ?? 0,
-          data_consulta: d.data_consulta || new Date().toISOString(),
-          data_retorno_consulta: d.data_retorno_consulta || new Date().toISOString(),
-          nome_representante_legal: d.nome_representante_legal || null,
-          banco_desembolso: d.banco_desembolso || null,
-          agencia_desembolso: d.agencia_desembolso || null,
-          conta_desembolso: d.conta_desembolso || null,
-          digito_desembolso: d.digito_desembolso || null,
-          numero_portabilidades: d.numero_portabilidades ?? 0,
-          resposta_api: d.resposta_api || 'Concluido',
-          status_api: d.status_api || 'Sucesso',
-          tipo: 'online',
-        }
-
-        setResultado(mapped)
-        if (mapped.banco_desembolso) {
-          try { setBancoInfo(await fetchBanco(mapped.banco_desembolso)) } catch { setBancoInfo(null) }
-        }
-
-        // 3) ApÃ³s a resposta final, atualiza os saldos agregados (cards)
-        try {
-          const urlSaldo = 'https://webhook.sistemavieira.com.br/webhook/saldo'
-          const resSaldo = await fetch(urlSaldo, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(buildSaldoPayload())
-          })
-          if (resSaldo.ok) {
-            const dataSaldo = await resSaldo.json().catch(() => null)
-            const item = Array.isArray(dataSaldo) ? (dataSaldo?.[0] || {}) : (dataSaldo || {})
-            setMetrics({
-              totalCarregado: Number(item.total_carregado ?? 0),
-              disponivel: Number(item.limite_disponivel ?? 0),
-              realizadas: Number(item.consultas_realizada ?? 0),
-            })
-          }
-        } catch { /* silencioso */ }
-        loader.end()
-        notify.success('Consulta online concluida', { autoClose: 15000 })
-        if (document.hidden) playNotifyBeep(1200)
+      if (Number(metrics.disponivel) <= 0) {
+        notify.warn('Sem saldo disponivel para realizar consultas.')
         return
       }
-      // Fluxo OFFLINE: chamada direta para webhook resposta-api
-      const urlRespostaOffline = 'https://webhook.sistemavieira.com.br/webhook/resposta-api'
-      // Aguarda 5s antes de buscar a resposta offline
-      await new Promise(r => setTimeout(r, 5000))
-      const resOff = await fetch(urlRespostaOffline, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
-      })
-      if (!resOff.ok) throw new Error('Falha na consulta (offline)')
-      const dataOff = await resOff.json().catch(() => null)
-      if (!Array.isArray(dataOff) || dataOff.length === 0) throw new Error('Resposta invalida (offline)')
-      const o = dataOff[0] || {}
-      if (isResponseFinished(o.resposta_api)) {
-        if (!hasValidName(o.nome) || !isStatusSuccess(o.status_api)) {
+      const digits = cpf.replace(/\D/g, '')
+      const benDigits = beneficio.replace(/\D/g, '')
+      if (digits.length !== 11) return notify.warn('Informe um CPF valido (11 digitos).')
+      if (benDigits.length !== 10) return notify.warn('Informe um Beneficio valido (10 digitos).')
+      loader.begin()
+      try {
+        if (online) {
+          // 1) Dispara consulta online
+          const urlConsulta = 'https://webhook.sistemavieira.com.br/webhook/consulta-online'
+          const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
+          const consultaPayload = {
+            id: (typeof user?.id !== 'undefined' ? user.id : user),
+            cpf: digits,
+            nb: benDigits,
+          }
+          if (equipeId != null) {
+            consultaPayload.equipe_id = equipeId
+            consultaPayload.team_id = equipeId
+            consultaPayload.id_equipe = equipeId
+          }
+          const resConsulta = await fetch(urlConsulta, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(consultaPayload)
+          })
+          if (!resConsulta.ok) throw new Error('Falha na consulta online')
+
+          // 2) Buscar resposta final no n8n com os dados completos para o front
+          const urlResposta = 'https://n8n.sistemavieira.com.br/webhook/resposta-api'
+          // Aguarda 5s antes da primeira consulta de resposta
+          await new Promise(r => setTimeout(r, 5000))
+          const isValidResposta = (d) => {
+            if (!Array.isArray(d) || d.length === 0) return false
+            const o = d[0] || {}
+            return (
+              typeof o.id !== 'undefined' &&
+              !!o.numero_beneficio &&
+              !!o.numero_documento &&
+              hasValidName(o.nome) &&
+              isStatusSuccess(o.status_api) &&
+              isResponseFinished(o.resposta_api)
+            )
+          }
+          let arr = null
+          let respostaTries = 0
+          while (true) {
+            respostaTries++
+            const resResposta = await fetch(urlResposta, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
+            })
+            if (resResposta.ok) {
+              const dataTry = await resResposta.json().catch(() => null)
+              if (Array.isArray(dataTry) && dataTry.length > 0) {
+                const o = dataTry[0] || {}
+                if (isResponseFinished(o.resposta_api)) {
+                  if (!hasValidName(o.nome)) {
+                    loader.end()
+                    notify.warn('A consulta foi concluída, mas os dados do beneficiário (Nome) não foram retornados pela API.')
+                    return
+                  }
+                  if (!isStatusSuccess(o.status_api)) {
+                    loader.end()
+                    notify.error((o.status_api || '').trim() || 'Erro na consulta online')
+                    return
+                  }
+                }
+                if (isValidResposta(dataTry)) { arr = dataTry; break }
+              }
+            }
+            if (respostaTries >= 5 && (respostaTries % 5) === 0) {
+              notify.warn(
+                'Devido a instabilidade na AWS o tempo de consultas pode levar mais de 5min para trazer o resultado. Qualibanking API',
+                { autoClose: 15000, toastId: 'aws-qualibanking-delay' }
+              )
+            }
+            await new Promise(r => setTimeout(r, 30000))
+          }
+          const d = Array.isArray(arr) ? (arr[0] || {}) : (arr || {})
+
+          const mapped = {
+            id: d.id || null,
+            id_usuario: d.id_usuario || d.usuarioId || user?.id || null,
+            numero_beneficio: d.numero_beneficio || benDigits,
+            numero_documento: d.numero_documento || digits,
+            nome: d.nome || '',
+            estado: d.estado || '',
+            pensao: d.pensao || 'not_payer',
+            data_nascimento: d.data_nascimento || null,
+            tipo_bloqueio: d.tipo_bloqueio || 'not_blocked',
+            data_concessao: d.data_concessao || null,
+            data_final_beneficio: d.data_final_beneficio || null,
+            tipo_credito: d.tipo_credito || 'magnetic_card',
+            situacao_beneficio: d.situacao_beneficio || 'elegible',
+            limite_cartao_beneficio: d.limite_cartao_beneficio ?? null,
+            saldo_cartao_beneficio: d.saldo_cartao_beneficio ?? 0,
+            limite_cartao_consignado: d.limite_cartao_consignado ?? null,
+            saldo_cartao_consignado: d.saldo_cartao_consignado ?? 0,
+            saldo_credito_consignado: d.saldo_credito_consignado ?? 0,
+            saldo_total_maximo: d.saldo_total_maximo ?? 0,
+            saldo_total_utilizado: d.saldo_total_utilizado ?? 0,
+            saldo_total_disponivel: d.saldo_total_disponivel ?? 0,
+            data_consulta: d.data_consulta || new Date().toISOString(),
+            data_retorno_consulta: d.data_retorno_consulta || new Date().toISOString(),
+            nome_representante_legal: d.nome_representante_legal || null,
+            banco_desembolso: d.banco_desembolso || null,
+            agencia_desembolso: d.agencia_desembolso || null,
+            conta_desembolso: d.conta_desembolso || null,
+            digito_desembolso: d.digito_desembolso || null,
+            numero_portabilidades: d.numero_portabilidades ?? 0,
+            resposta_api: d.resposta_api || 'Concluido',
+            status_api: d.status_api || 'Sucesso',
+            tipo: 'online',
+          }
+
+          setResultado(mapped)
+          if (mapped.banco_desembolso) {
+            try { setBancoInfo(await fetchBanco(mapped.banco_desembolso)) } catch { setBancoInfo(null) }
+          }
+
+          // 3) ApÃ³s a resposta final, atualiza os saldos agregados (cards)
+          await fetchSaldoUsuario()
           loader.end()
-          notify.error((o.status_api || '').trim() || 'Erro na consulta (offline)')
+          notify.success('Consulta online concluida', { autoClose: 15000 })
+          if (document.hidden) playNotifyBeep(1200)
           return
         }
+        // Fluxo OFFLINE: chamada direta para webhook resposta-api
+        const urlRespostaOffline = 'https://webhook.sistemavieira.com.br/webhook/resposta-api'
+        // Aguarda 5s antes de buscar a resposta offline
+        await new Promise(r => setTimeout(r, 5000))
+        const resOff = await fetch(urlRespostaOffline, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
+        })
+        if (!resOff.ok) throw new Error('Falha na consulta (offline)')
+        const dataOff = await resOff.json().catch(() => null)
+        if (!Array.isArray(dataOff) || dataOff.length === 0) throw new Error('Resposta invalida (offline)')
+        const o = dataOff[0] || {}
+        if (isResponseFinished(o.resposta_api)) {
+          if (!hasValidName(o.nome)) {
+            loader.end()
+            notify.warn('A consulta foi concluída, mas os dados do beneficiário (Nome) não foram retornados pela API.')
+            return
+          }
+          if (!isStatusSuccess(o.status_api)) {
+            loader.end()
+            notify.error((o.status_api || '').trim() || 'Erro na consulta (offline)')
+            return
+          }
+        }
+        // validar formato mÃ­nimo esperado
+        if (!(typeof o.id !== 'undefined' && o.numero_beneficio && o.numero_documento && o.nome)) {
+          throw new Error('Resposta incompleta (offline)')
+        }
+        const mappedOff = {
+          id: o.id || null,
+          id_usuario: o.id_usuario || o.usuarioId || user?.id || null,
+          numero_beneficio: o.numero_beneficio || benDigits,
+          numero_documento: o.numero_documento || digits,
+          nome: o.nome || '',
+          estado: o.estado || '',
+          pensao: o.pensao || 'not_payer',
+          data_nascimento: o.data_nascimento || null,
+          tipo_bloqueio: o.tipo_bloqueio || 'not_blocked',
+          data_concessao: o.data_concessao || null,
+          data_final_beneficio: o.data_final_beneficio || null,
+          tipo_credito: o.tipo_credito || 'magnetic_card',
+          situacao_beneficio: o.situacao_beneficio || 'elegible',
+          limite_cartao_beneficio: o.limite_cartao_beneficio ?? null,
+          saldo_cartao_beneficio: o.saldo_cartao_beneficio ?? 0,
+          limite_cartao_consignado: o.limite_cartao_consignado ?? null,
+          saldo_cartao_consignado: o.saldo_cartao_consignado ?? 0,
+          saldo_credito_consignado: o.saldo_credito_consignado ?? 0,
+          saldo_total_maximo: o.saldo_total_maximo ?? 0,
+          saldo_total_utilizado: o.saldo_total_utilizado ?? 0,
+          saldo_total_disponivel: o.saldo_total_disponivel ?? 0,
+          data_consulta: o.data_consulta || new Date().toISOString(),
+          data_retorno_consulta: o.data_retorno_consulta || new Date().toISOString(),
+          nome_representante_legal: o.nome_representante_legal || null,
+          banco_desembolso: o.banco_desembolso || null,
+          agencia_desembolso: o.agencia_desembolso || null,
+          conta_desembolso: o.conta_desembolso || null,
+          digito_desembolso: o.digito_desembolso || null,
+          numero_portabilidades: o.numero_portabilidades ?? 0,
+          resposta_api: o.resposta_api || 'Concluido',
+          status_api: o.status_api || 'Sucesso',
+          tipo: 'offline',
+        }
+        setResultado(mappedOff)
+        if (mappedOff.banco_desembolso) {
+          try { setBancoInfo(await fetchBanco(mappedOff.banco_desembolso)) } catch { setBancoInfo(null) }
+        }
+        await fetchSaldoUsuario()
+        loader.end()
+        notify.success('Consulta concluida', { autoClose: 15000 })
+        return
+      } catch (err) {
+        loader.end()
+        notify.error(err?.message || 'Erro na consulta online')
+        return
       }
-      // validar formato mÃ­nimo esperado
-      if (!(typeof o.id !== 'undefined' && o.numero_beneficio && o.numero_documento && o.nome)) {
-        throw new Error('Resposta incompleta (offline)')
+      const mock = {
+        id: 3054,
+        id_usuario: 1,
+        numero_beneficio: benDigits,
+        numero_documento: digits,
+        nome: 'MARTA ANDRADE DA SILVA',
+        estado: 'RJ',
+        pensao: 'not_payer',
+        data_nascimento: '1962-08-21T00:00:00.000Z',
+        tipo_bloqueio: 'not_blocked',
+        data_concessao: '2025-04-01T00:00:00.000Z',
+        data_final_beneficio: null,
+        tipo_credito: 'magnetic_card',
+        situacao_beneficio: 'elegible',
+        saldo_cartao_beneficio: 0,
+        saldo_cartao_consignado: 0,
+        saldo_credito_consignado: 0.01,
+        saldo_total_disponivel: 0.01,
+        saldo_total_maximo: 807.92,
+        saldo_total_utilizado: 807.91,
+        numero_portabilidades: 5,
+        banco_desembolso: '069',
+        agencia_desembolso: '0001',
+        conta_desembolso: null,
+        digito_desembolso: null,
+        status_api: 'Sucesso',
+        resposta_api: 'Concluido',
+        data_consulta: '2025-09-22T11:20:00.000Z',
+        data_retorno_consulta: '2025-09-22T11:20:00.000Z',
+        nome_representante_legal: null,
+        tipo: online ? 'online' : 'offline',
       }
-      const mappedOff = {
-        id: o.id || null,
-        id_usuario: o.id_usuario || o.usuarioId || user?.id || null,
-        numero_beneficio: o.numero_beneficio || benDigits,
-        numero_documento: o.numero_documento || digits,
-        nome: o.nome || '',
-        estado: o.estado || '',
-        pensao: o.pensao || 'not_payer',
-        data_nascimento: o.data_nascimento || null,
-        tipo_bloqueio: o.tipo_bloqueio || 'not_blocked',
-        data_concessao: o.data_concessao || null,
-        data_final_beneficio: o.data_final_beneficio || null,
-        tipo_credito: o.tipo_credito || 'magnetic_card',
-        situacao_beneficio: o.situacao_beneficio || 'elegible',
-        limite_cartao_beneficio: o.limite_cartao_beneficio ?? null,
-        saldo_cartao_beneficio: o.saldo_cartao_beneficio ?? 0,
-        limite_cartao_consignado: o.limite_cartao_consignado ?? null,
-        saldo_cartao_consignado: o.saldo_cartao_consignado ?? 0,
-        saldo_credito_consignado: o.saldo_credito_consignado ?? 0,
-        saldo_total_maximo: o.saldo_total_maximo ?? 0,
-        saldo_total_utilizado: o.saldo_total_utilizado ?? 0,
-        saldo_total_disponivel: o.saldo_total_disponivel ?? 0,
-        data_consulta: o.data_consulta || new Date().toISOString(),
-        data_retorno_consulta: o.data_retorno_consulta || new Date().toISOString(),
-        nome_representante_legal: o.nome_representante_legal || null,
-        banco_desembolso: o.banco_desembolso || null,
-        agencia_desembolso: o.agencia_desembolso || null,
-        conta_desembolso: o.conta_desembolso || null,
-        digito_desembolso: o.digito_desembolso || null,
-        numero_portabilidades: o.numero_portabilidades ?? 0,
-        resposta_api: o.resposta_api || 'Concluido',
-        status_api: o.status_api || 'Sucesso',
-        tipo: 'offline',
-      }
-      setResultado(mappedOff)
-      if (mappedOff.banco_desembolso) {
-        try { setBancoInfo(await fetchBanco(mappedOff.banco_desembolso)) } catch { setBancoInfo(null) }
-      }
+      setResultado(mock)
+      try { setBancoInfo(await fetchBanco(mock.banco_desembolso)) } catch { setBancoInfo(null) }
       loader.end()
-      notify.success('Consulta concluida', { autoClose: 15000 })
-      return
-    } catch (err) {
+      notify.success('Consulta concluida', { autoClose: 15000 }); if (document.hidden) playNotifyBeep(1200)
+    } finally {
       loader.end()
-      notify.error(err?.message || 'Erro na consulta online')
-      return
     }
-    const mock = {
-      id: 3054,
-      id_usuario: 1,
-      numero_beneficio: benDigits,
-      numero_documento: digits,
-      nome: 'MARTA ANDRADE DA SILVA',
-      estado: 'RJ',
-      pensao: 'not_payer',
-      data_nascimento: '1962-08-21T00:00:00.000Z',
-      tipo_bloqueio: 'not_blocked',
-      data_concessao: '2025-04-01T00:00:00.000Z',
-      data_final_beneficio: null,
-      tipo_credito: 'magnetic_card',
-      situacao_beneficio: 'elegible',
-      saldo_cartao_beneficio: 0,
-      saldo_cartao_consignado: 0,
-      saldo_credito_consignado: 0.01,
-      saldo_total_disponivel: 0.01,
-      saldo_total_maximo: 807.92,
-      saldo_total_utilizado: 807.91,
-      numero_portabilidades: 5,
-      banco_desembolso: '069',
-      agencia_desembolso: '0001',
-      conta_desembolso: null,
-      digito_desembolso: null,
-      status_api: 'Sucesso',
-      resposta_api: 'Concluido',
-      data_consulta: '2025-09-22T11:20:00.000Z',
-      data_retorno_consulta: '2025-09-22T11:20:00.000Z',
-      nome_representante_legal: null,
-      tipo: online ? 'online' : 'offline',
-    }
-    setResultado(mock)
-    try { setBancoInfo(await fetchBanco(mock.banco_desembolso)) } catch { setBancoInfo(null) }
-    loader.end()
-    notify.success('Consulta concluida', { autoClose: 15000 }); if (document.hidden) playNotifyBeep(1200)
-  } finally {
-    loader.end()
-  }
-  
+
   }
 
   return (
@@ -708,7 +705,7 @@ export default function ConsultaIN100() {
               </div>
             </form>
           </div>
-          </div>
+        </div>
 
         {/* Modal de Acompanhamento da Busca CPF/NB */}
         {lookupOpen && (
@@ -757,7 +754,7 @@ export default function ConsultaIN100() {
                               {(lookup.curatedList && lookup.curatedList.length > 0 ? lookup.curatedList : [{ nbDigits: null, nome: null, nascStr: null, cpfDigits: null, idade: null }]).map((row, idx) => (
                                 <tr key={idx}>
                                   <td className="small">{row.nbDigits ? formatBeneficio(row.nbDigits) : '-'}</td>
-                                  <td className="small" style={{maxWidth: '28ch', overflow: 'hidden', textOverflow: 'ellipsis'}} title={row.nome || ''}>{row.nome || '-'}</td>
+                                  <td className="small" style={{ maxWidth: '28ch', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.nome || ''}>{row.nome || '-'}</td>
                                   <td className="small">{row.nascStr || '-'}</td>
                                   <td className="small">{row.cpfDigits ? formatCpf(row.cpfDigits) : '-'}</td>
                                   <td className="small">{row.idade !== '' && row.idade != null ? String(row.idade) : '-'}</td>
@@ -803,7 +800,7 @@ export default function ConsultaIN100() {
                               <table className="table table-sm table-lookup align-middle mb-0">
                                 <thead>
                                   <tr>
-                                    <th style={{width:'40%'}}>Campo</th>
+                                    <th style={{ width: '40%' }}>Campo</th>
                                     <th>Valor</th>
                                   </tr>
                                 </thead>
@@ -811,7 +808,7 @@ export default function ConsultaIN100() {
                                   {lookup.pairs.slice(0, 25).map(([k, v], idx) => (
                                     <tr key={idx}>
                                       <td className="text-muted small">{k}</td>
-                                      <td className="small" style={{wordBreak:'break-word'}}>{String(v)}</td>
+                                      <td className="small" style={{ wordBreak: 'break-word' }}>{String(v)}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -848,107 +845,107 @@ export default function ConsultaIN100() {
 
         {resultado && (
           <>
-          <section className="mt-4 result-section" ref={resultRef} id="result-print">
-            <div className="neo-card neo-lg p-4 d-none">
+            <section className="mt-4 result-section" ref={resultRef} id="result-print">
+              <div className="neo-card neo-lg p-4 d-none">
+                <div className="d-flex align-items-center justify-content-between mb-3">
+                  <h5 className="mb-0">Resultados da Consulta</h5>
+                  <div className="small opacity-75">Ultima Atualizacao: {formatDate(resultado.data_retorno_consulta)} as {formatTime(resultado.data_retorno_consulta)}</div>
+                </div>
+
+                <div className="row g-3">
+                  <div className="col-12 col-md-6">
+                    <div className="neo-card p-3 h-100">
+                      <div className="fw-semibold mb-2">Informacoes Basicas</div>
+                      <div className="small opacity-75">Beneficio:</div>
+                      <div className="mb-2">{resultado.numero_beneficio}</div>
+                      <div className="small opacity-75">CPF:</div>
+                      <div className="mb-2">{resultado.numero_documento}</div>
+                      <div className="small opacity-75">Nome:</div>
+                      <div className="mb-2">{resultado.nome}</div>
+                      <div className="small opacity-75">Estado:</div>
+                      <div>{resultado.estado}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <div className="neo-card p-3 h-100">
+                      <div className="fw-semibold mb-2">Informacoes Pessoais</div>
+                      <div className="small opacity-75">Pensao:</div>
+                      <div className="mb-2">{mapPensao(resultado.pensao)}</div>
+                      <div className="small opacity-75">Data de Nascimento:</div>
+                      <div className="mb-2">{formatDate(resultado.data_nascimento)}</div>
+                      <div className="small opacity-75">Idade:</div>
+                      <div className="mb-2">{idadeFrom(resultado.data_nascimento)}</div>
+                      <div className="small opacity-75">Tipo de Bloqueio:</div>
+                      <div>{mapBloqueio(resultado.tipo_bloqueio)}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <div className="neo-card p-3 h-100">
+                      <div className="fw-semibold mb-2">Informacoes do Beneficio</div>
+                      <div className="small opacity-75">Data de Concessao:</div>
+                      <div className="mb-2">{formatDate(resultado.data_concessao)}</div>
+                      <div className="small opacity-75">Termino do Beneficio:</div>
+                      <div className="mb-2">{resultado.data_final_beneficio ? formatDate(resultado.data_final_beneficio) : '-'}</div>
+                      <div className="small opacity-75">Tipo de Credito:</div>
+                      <div className="mb-2">{mapTipoCredito(resultado.tipo_credito)}</div>
+                      <div className="small opacity-75">Status do Beneficio:</div>
+                      <div>{mapSituacao(resultado.situacao_beneficio)}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <div className="neo-card p-3 h-100">
+                      <div className="fw-semibold mb-2">Informacoes Financeiras</div>
+                      <div className="small opacity-75">Saldo Cartao Beneficio:</div>
+                      <div className="mb-2">{brCurrency(resultado.saldo_cartao_beneficio)}</div>
+                      <div className="small opacity-75">Saldo Cartao Consignado:</div>
+                      <div className="mb-2">{brCurrency(resultado.saldo_cartao_consignado)}</div>
+                      <div className="small opacity-75">{'Margem Disponivel'}:</div>
+                      <div className="mb-2">{brCurrency(resultado.saldo_total_disponivel)}</div>
+                      <div className="small opacity-75">Emprestimos Ativos:</div>
+                      <div>{resultado.numero_portabilidades}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <div className="neo-card p-3 h-100">
+                      <div className="fw-semibold mb-2">Informacoes Bancarias</div>
+                      <div className="small opacity-75">Banco de Desembolso:</div>
+                      <div className="mb-2">{resultado.banco_desembolso}</div>
+                      <div className="small opacity-75">Nome do Banco:</div>
+                      <div className="mb-2">{bancoInfo?.name || '-'}</div>
+                      <div className="small opacity-75">Agencia:</div>
+                      <div className="mb-2">{resultado.agencia_desembolso || '-'}</div>
+                      <div className="small opacity-75">Conta:</div>
+                      <div className="mb-2">{resultado.conta_desembolso || '-'}</div>
+                      <div className="small opacity-75">digito:</div>
+                      <div>{resultado.digito_desembolso || '-'}</div>
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <div className="neo-card p-3 h-100">
+                      <div className="fw-semibold mb-2">Representante Legal</div>
+                      <div className="small opacity-75">Nome:</div>
+                      <div>{resultado.nome_representante_legal || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            {/* Novo layout de resposta */}
+            <div className="neo-card result-hero p-4 mb-3">
               <div className="d-flex align-items-center justify-content-between mb-3">
-                <h5 className="mb-0">Resultados da Consulta</h5>
-                <div className="small opacity-75">Ultima Atualizacao: {formatDate(resultado.data_retorno_consulta)} as {formatTime(resultado.data_retorno_consulta)}</div>
+                <h5 className="mb-0 d-flex align-items-center gap-2"><FiUser /> Dados Pessoais</h5>
+                <div className="small opacity-75">Atualizado: {formatDate(resultado.data_retorno_consulta)} as {formatTime(resultado.data_retorno_consulta)}</div>
               </div>
-
               <div className="row g-3">
-                <div className="col-12 col-md-6">
-                  <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informacoes Basicas</div>
-                    <div className="small opacity-75">Beneficio:</div>
-                    <div className="mb-2">{resultado.numero_beneficio}</div>
-                    <div className="small opacity-75">CPF:</div>
-                    <div className="mb-2">{resultado.numero_documento}</div>
-                    <div className="small opacity-75">Nome:</div>
-                    <div className="mb-2">{resultado.nome}</div>
-                    <div className="small opacity-75">Estado:</div>
-                    <div>{resultado.estado}</div>
-                  </div>
+                <div className="col-12 col-lg-4">
+                  <div className="label">Nome</div>
+                  <div className="value fw-semibold">{resultado.nome || '-'}</div>
                 </div>
-
-                <div className="col-12 col-md-6">
-                  <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informacoes Pessoais</div>
-                    <div className="small opacity-75">Pensao:</div>
-                    <div className="mb-2">{mapPensao(resultado.pensao)}</div>
-                    <div className="small opacity-75">Data de Nascimento:</div>
-                    <div className="mb-2">{formatDate(resultado.data_nascimento)}</div>
-                    <div className="small opacity-75">Idade:</div>
-                    <div className="mb-2">{idadeFrom(resultado.data_nascimento)}</div>
-                    <div className="small opacity-75">Tipo de Bloqueio:</div>
-                    <div>{mapBloqueio(resultado.tipo_bloqueio)}</div>
-                  </div>
-                </div>
-
-                <div className="col-12 col-md-6">
-                  <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informacoes do Beneficio</div>
-                    <div className="small opacity-75">Data de Concessao:</div>
-                    <div className="mb-2">{formatDate(resultado.data_concessao)}</div>
-                    <div className="small opacity-75">Termino do Beneficio:</div>
-                    <div className="mb-2">{resultado.data_final_beneficio ? formatDate(resultado.data_final_beneficio) : '-'}</div>
-                    <div className="small opacity-75">Tipo de Credito:</div>
-                    <div className="mb-2">{mapTipoCredito(resultado.tipo_credito)}</div>
-                    <div className="small opacity-75">Status do Beneficio:</div>
-                    <div>{mapSituacao(resultado.situacao_beneficio)}</div>
-                  </div>
-                </div>
-
-                <div className="col-12 col-md-6">
-                  <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informacoes Financeiras</div>
-                    <div className="small opacity-75">Saldo Cartao Beneficio:</div>
-                    <div className="mb-2">{brCurrency(resultado.saldo_cartao_beneficio)}</div>
-                    <div className="small opacity-75">Saldo Cartao Consignado:</div>
-                    <div className="mb-2">{brCurrency(resultado.saldo_cartao_consignado)}</div>
-                    <div className="small opacity-75">{'Margem Disponivel'}:</div>
-                    <div className="mb-2">{brCurrency(resultado.saldo_total_disponivel)}</div>
-                    <div className="small opacity-75">Emprestimos Ativos:</div>
-                    <div>{resultado.numero_portabilidades}</div>
-                  </div>
-                </div>
-
-                <div className="col-12 col-md-6">
-                  <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Informacoes Bancarias</div>
-                    <div className="small opacity-75">Banco de Desembolso:</div>
-                    <div className="mb-2">{resultado.banco_desembolso}</div>
-                    <div className="small opacity-75">Nome do Banco:</div>
-                    <div className="mb-2">{bancoInfo?.name || '-'}</div>
-                    <div className="small opacity-75">Agencia:</div>
-                    <div className="mb-2">{resultado.agencia_desembolso || '-'}</div>
-                    <div className="small opacity-75">Conta:</div>
-                    <div className="mb-2">{resultado.conta_desembolso || '-'}</div>
-                    <div className="small opacity-75">digito:</div>
-                    <div>{resultado.digito_desembolso || '-'}</div>
-                  </div>
-                </div>
-
-                <div className="col-12 col-md-6">
-                  <div className="neo-card p-3 h-100">
-                    <div className="fw-semibold mb-2">Representante Legal</div>
-                    <div className="small opacity-75">Nome:</div>
-                    <div>{resultado.nome_representante_legal || '-'}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-          {/* Novo layout de resposta */}
-          <div className="neo-card result-hero p-4 mb-3">
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <h5 className="mb-0 d-flex align-items-center gap-2"><FiUser /> Dados Pessoais</h5>
-              <div className="small opacity-75">Atualizado: {formatDate(resultado.data_retorno_consulta)} as {formatTime(resultado.data_retorno_consulta)}</div>
-            </div>
-            <div className="row g-3">
-              <div className="col-12 col-lg-4">
-                <div className="label">Nome</div>
-                <div className="value fw-semibold">{resultado.nome || '-'}</div>
-              </div>
                 <div className="col-6 col-lg-2">
                   <div className="label d-flex align-items-center gap-1"><FiHash /> CPF</div>
                   <div className="value d-flex align-items-center gap-2">
@@ -965,25 +962,25 @@ export default function ConsultaIN100() {
                     )}
                   </div>
                 </div>
-              <div className="col-6 col-lg-2">
-                <div className="label d-flex align-items-center gap-1"><FiCalendar /> Idade</div>
-                <div className="value">{resultado.data_nascimento ? `${formatDate(resultado.data_nascimento)} (${idadeFrom(resultado.data_nascimento)} anos)` : '-'}</div>
-              </div>
-              
-              <div className="col-6 col-lg-2">
-                <div className="label">UF</div>
-                <div className="value">{resultado.estado || '-'}</div>
-              </div>
-            </div>
-          </div>
+                <div className="col-6 col-lg-2">
+                  <div className="label d-flex align-items-center gap-1"><FiCalendar /> Idade</div>
+                  <div className="value">{resultado.data_nascimento ? `${formatDate(resultado.data_nascimento)} (${idadeFrom(resultado.data_nascimento)} anos)` : '-'}</div>
+                </div>
 
-          <div className="neo-card p-0 mb-3">
-            <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
-              <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Informacoes da Matricula</h6>
+                <div className="col-6 col-lg-2">
+                  <div className="label">UF</div>
+                  <div className="value">{resultado.estado || '-'}</div>
+                </div>
+              </div>
             </div>
-            <div className="kv-list p-3 p-md-4">
-              <div className="kv-line">
-                <div className="kv-label">NB:</div>
+
+            <div className="neo-card p-0 mb-3">
+              <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Informacoes da Matricula</h6>
+              </div>
+              <div className="kv-list p-3 p-md-4">
+                <div className="kv-line">
+                  <div className="kv-label">NB:</div>
                   <div className="kv-value d-flex align-items-center gap-2">
                     <span>{resultado.numero_beneficio ? formatBeneficio(String(resultado.numero_beneficio)) : '-'}</span>
                     {resultado.numero_beneficio && (
@@ -997,19 +994,19 @@ export default function ConsultaIN100() {
                       </button>
                     )}
                   </div>
-              </div>
-              <div className="kv-line">
-                <div className="kv-label">Especie:</div>
-                <div className="kv-value">-</div>
-                <div className="kv-label">Situacao:</div>
-                <div className="kv-value">{resultado.situacao_beneficio ? mapSituacao(resultado.situacao_beneficio) : '-'}</div>
-              </div>
-              <div className="kv-line">
-                <div className="kv-label">Data de Concessao:</div>
-                <div className="kv-value">{resultado.data_concessao ? formatDate(resultado.data_concessao) : '-'}</div>
-                <div className="kv-label">UF:</div>
-                <div className="kv-value">{resultado.estado || '-'}</div>
-              </div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Especie:</div>
+                  <div className="kv-value">-</div>
+                  <div className="kv-label">Situacao:</div>
+                  <div className="kv-value">{resultado.situacao_beneficio ? mapSituacao(resultado.situacao_beneficio) : '-'}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Data de Concessao:</div>
+                  <div className="kv-value">{resultado.data_concessao ? formatDate(resultado.data_concessao) : '-'}</div>
+                  <div className="kv-label">UF:</div>
+                  <div className="kv-value">{resultado.estado || '-'}</div>
+                </div>
                 <div className="kv-line">
                   <div className="kv-label">Data Despacho Beneficio:</div>
                   <div className="kv-value">-</div>
@@ -1023,37 +1020,37 @@ export default function ConsultaIN100() {
               </div>
             </div>
 
-          <div className="row g-3 mb-3">
-            <div className="col-12 col-lg-4">
-              <div className="neo-card stat-card h-100">
-                <div className="p-4">
-                  <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartao Beneficio:</div>
-                  <div className="stat-value">{resultado.saldo_cartao_beneficio != null ? brCurrency(resultado.saldo_cartao_beneficio) : '-'}</div>
+            <div className="row g-3 mb-3">
+              <div className="col-12 col-lg-4">
+                <div className="neo-card stat-card h-100">
+                  <div className="p-4">
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartao Beneficio:</div>
+                    <div className="stat-value">{resultado.saldo_cartao_beneficio != null ? brCurrency(resultado.saldo_cartao_beneficio) : '-'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-12 col-lg-4">
+                <div className="neo-card stat-card h-100">
+                  <div className="p-4">
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartao Consignado:</div>
+                    <div className="stat-value">{resultado.saldo_cartao_consignado != null ? brCurrency(resultado.saldo_cartao_consignado) : '-'}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-12 col-lg-4">
+                <div className="neo-card stat-card h-100">
+                  <div className="p-4">
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem Disponivel:</div>
+                    <div className="stat-value">{resultado.saldo_total_disponivel != null ? brCurrency(resultado.saldo_total_disponivel) : '-'}</div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="col-12 col-lg-4">
-              <div className="neo-card stat-card h-100">
-                <div className="p-4">
-                  <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartao Consignado:</div>
-                  <div className="stat-value">{resultado.saldo_cartao_consignado != null ? brCurrency(resultado.saldo_cartao_consignado) : '-'}</div>
-                </div>
-              </div>
-            </div>
-            <div className="col-12 col-lg-4">
-              <div className="neo-card stat-card h-100">
-                <div className="p-4">
-                  <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem Disponivel:</div>
-                  <div className="stat-value">{resultado.saldo_total_disponivel != null ? brCurrency(resultado.saldo_total_disponivel) : '-'}</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="neo-card p-0 mb-4">
-            <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
-              <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados Bancarios</h6>
-            </div>
+            <div className="neo-card p-0 mb-4">
+              <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados Bancarios</h6>
+              </div>
               <div className="kv-list p-3 p-md-4">
                 <div className="kv-line">
                   <div className="kv-label">Banco:</div>

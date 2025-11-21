@@ -21,25 +21,25 @@ function fmtDate(iso) {
 function fmtCPF(v) {
   const d = String(v ?? '').replace(/\D/g, '')
   if (!d) return 'xxx.xxx.xxx-xx'
-  if (d.length === 11) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9,11)}`
+  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9, 11)}`
   return d
 }
 function fmtNB(v) {
   const d = String(v ?? '').replace(/\D/g, '')
   if (!d) return 'xxx.xxx.xxx-x'
-  if (d.length === 10) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9,10)}`
+  if (d.length === 10) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9, 10)}`
   return d
 }
 
 function parseLooseList(text) {
   const t = String(text || '').trim()
   if (!t) return []
-  try { return JSON.parse(t) } catch {}
+  try { return JSON.parse(t) } catch { }
   const wrapped = '[' + t
     .replace(/}\s*,\s*{/g, '},{')
     .replace(/}\s*[\r\n]+\s*{/g, '},{')
-    .replace(/,\s*$/,'') + ']'
-  try { return JSON.parse(wrapped) } catch {}
+    .replace(/,\s*$/, '') + ']'
+  try { return JSON.parse(wrapped) } catch { }
   return []
 }
 
@@ -52,33 +52,40 @@ export default function HistoricoConsultas() {
 
   useEffect(() => {
     if (!user?.id) return
-    (async () => {
-      try {
-        setError('')
-        const equipeId = (user?.equipe_id ?? null)
-        const role = user?.role
-        const nivel = role === Roles.Master ? 'master' : role === Roles.Administrador ? 'adm' : role === Roles.Supervisor ? 'super' : 'operador'
-        const payload = { id: user.id, equipe_id: equipeId, nivel }
-        const res = await fetch('https://webhook.sistemavieira.com.br/webhook/consulta-logs-in100', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-          body: JSON.stringify(payload),
-        })
-        const raw = await res.text().catch(() => '')
-        if (!res.ok) throw new Error(raw || ('HTTP ' + res.status))
-        let data
-        try { data = JSON.parse(raw) } catch { data = parseLooseList(raw) }
-        let arr = []
-        if (Array.isArray(data)) arr = data
-        else if (Array.isArray(data?.data)) arr = data.data
-        else if (Array.isArray(data?.rows)) arr = data.rows
-        else if (data && typeof data === 'object') arr = [data]
-        setRows(arr)
-      } catch (e) {
-        setRows([])
-        setError(e?.message || 'Erro ao carregar')
-      }
-    })()
+    const controller = new AbortController()
+    const signal = controller.signal
+
+      ; (async () => {
+        try {
+          setError('')
+          const equipeId = (user?.equipe_id ?? null)
+          const role = user?.role
+          const nivel = role === Roles.Master ? 'master' : role === Roles.Administrador ? 'adm' : role === Roles.Supervisor ? 'super' : 'operador'
+          const payload = { id: user.id, equipe_id: equipeId, nivel }
+          const res = await fetch('https://webhook.sistemavieira.com.br/webhook/consulta-logs-in100', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+            body: JSON.stringify(payload),
+            signal
+          })
+          const raw = await res.text().catch(() => '')
+          if (!res.ok) throw new Error(raw || ('HTTP ' + res.status))
+          let data
+          try { data = JSON.parse(raw) } catch { data = parseLooseList(raw) }
+          let arr = []
+          if (Array.isArray(data)) arr = data
+          else if (Array.isArray(data?.data)) arr = data.data
+          else if (Array.isArray(data?.rows)) arr = data.rows
+          else if (data && typeof data === 'object') arr = [data]
+          if (!signal.aborted) setRows(arr)
+        } catch (e) {
+          if (signal.aborted) return
+          setRows([])
+          setError(e?.message || 'Erro ao carregar')
+        }
+      })()
+
+    return () => controller.abort()
   }, [user?.id])
 
   const items = Array.isArray(rows) ? rows : []
@@ -109,7 +116,7 @@ export default function HistoricoConsultas() {
   }, [items])
 
   const exportCSV = () => {
-    const headers = ['Data/Hora','Status','Pesquisa','Nome','CPF','NB','Data Nascimento','UF','Login']
+    const headers = ['Data/Hora', 'Status', 'Pesquisa', 'Nome', 'CPF', 'NB', 'Data Nascimento', 'UF', 'Login']
     const out = items.map(r => [
       fmtDateTime(r?.data_hora_registro),
       r?.status_api ?? '',
@@ -119,7 +126,7 @@ export default function HistoricoConsultas() {
       r?.numero_beneficio ?? '',
       fmtDate(r?.data_nascimento),
       r?.estado ?? '',
-      r?.usuario_nome ?? '',
+      r?.login || r?.usuario_nome || '',
     ])
     const csv = [headers, ...out]
       .map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(';'))
@@ -191,7 +198,7 @@ export default function HistoricoConsultas() {
                 <button type="button" className="btn btn-outline-light btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>‹</button>
                 <button type="button" className={`btn btn-sm ${currentPage === 1 ? 'btn-primary' : 'btn-outline-light'}`} onClick={() => setPage(1)}>1</button>
                 {currentPage > 3 && <span className="opacity-50">...</span>}
-                {Array.from({length: 5}, (_,i) => currentPage - 2 + i)
+                {Array.from({ length: 5 }, (_, i) => currentPage - 2 + i)
                   .filter(p => p > 1 && p < pages)
                   .map(p => (
                     <button key={p} type="button" className={`btn btn-sm ${currentPage === p ? 'btn-primary' : 'btn-outline-light'}`} onClick={() => setPage(p)}>{p}</button>
@@ -208,15 +215,15 @@ export default function HistoricoConsultas() {
             <table className="table table-dark table-hover align-middle mb-0">
               <thead>
                 <tr>
-                  <th style={{minWidth: '150px'}}>Data/Hora</th>
-                  <th style={{minWidth: '110px'}}>Status</th>
-                  <th style={{minWidth: '160px'}}>Pesquisa</th>
-                  <th style={{minWidth: '200px'}}>Nome</th>
-                  <th style={{minWidth: '140px'}}>CPF</th>
-                  <th style={{minWidth: '140px'}}>NB</th>
-                  <th style={{minWidth: '140px'}}>Data Nasc.</th>
-                  <th style={{minWidth: '80px'}}>UF</th>
-                  <th style={{minWidth: '160px'}}>Login</th>
+                  <th style={{ minWidth: '150px' }}>Data/Hora</th>
+                  <th style={{ minWidth: '110px' }}>Status</th>
+                  <th style={{ minWidth: '160px' }}>Pesquisa</th>
+                  <th style={{ minWidth: '200px' }}>Nome</th>
+                  <th style={{ minWidth: '140px' }}>CPF</th>
+                  <th style={{ minWidth: '140px' }}>NB</th>
+                  <th style={{ minWidth: '140px' }}>Data Nasc.</th>
+                  <th style={{ minWidth: '80px' }}>UF</th>
+                  <th style={{ minWidth: '160px' }}>Login</th>
                 </tr>
               </thead>
               <tbody>
@@ -235,7 +242,7 @@ export default function HistoricoConsultas() {
                 ) : (
                   pageItems.map((r, idx) => (
                     <tr key={(r?.id_usuario ?? idx) + '-' + (r?.numero_beneficio ?? '') + '-' + idx}>
-                      <td style={{whiteSpace: 'nowrap'}}>{fmtDateTime(r?.data_hora_registro)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(r?.data_hora_registro)}</td>
                       <td>
                         {(() => {
                           const status = r?.status_api
@@ -252,7 +259,7 @@ export default function HistoricoConsultas() {
                       <td>{fmtNB(r?.numero_beneficio)}</td>
                       <td>{fmtDate(r?.data_nascimento)}</td>
                       <td>{r?.estado || '-'}</td>
-                      <td className="text-nowrap">{r?.usuario_nome || ''}</td>
+                      <td className="text-nowrap">{r?.login || r?.usuario_nome || ''}</td>
                     </tr>
                   ))
                 )}
