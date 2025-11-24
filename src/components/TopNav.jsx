@@ -20,7 +20,7 @@ export default function TopNav() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
-  
+
   // Status API temporariamente desativado
   // const [statusMajor, setStatusMajor] = useState(null) // 'ok' | 'lenta' | 'falha' | null
   // useEffect(() => {
@@ -170,110 +170,109 @@ export default function TopNav() {
 
   return (
     <>
-    <nav className="navbar navbar-expand-lg navbar-dark glass-nav">
-      <div className="container">
-        <div className="d-flex align-items-center gap-3">
-          <Link to="/" className="navbar-brand fw-semibold">
-            <span className="d-inline-flex align-items-center gap-2">
-              <img src="/neo-logo.svg" alt="Nova Europa 4" className="brand-logo" />
-              <span>Nova Europa 4</span>
-            </span>
-          </Link>
-          
-          {/* Botão Novidades ao lado da logo */}
-          <button 
-            onClick={() => setIsNovidadesModalOpen(true)}
-            className="btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2"
-            style={{
-              fontSize: '0.875rem',
-              border: '1px solid #1E40AF',
-              transition: 'transform 0.15s ease, filter 0.2s ease, border-color 0.2s ease',
-              backgroundColor: '#2563EB',
-              color: '#fff'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#2563EB';
-              e.currentTarget.style.borderColor = '#1E40AF';
-              e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#2563EB';
-              e.currentTarget.style.borderColor = '#1E40AF';
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            <FiStar size={14} className="opacity-75" />
-            <span>Novidades</span>
-          </button>
-        </div>
-        <button
-          className="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarsExample"
-          aria-controls="navbarsExample"
-          aria-expanded="false"
-          aria-label="Toggle navigation"
-        >
-          <span className="navbar-toggler-icon"></span>
-        </button>
-        <div className="collapse navbar-collapse" id="navbarsExample">
-          <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-            {isAuthenticated && (
-              <>
-                <li className="nav-item">
-                  <Link to="/dashboard" className="nav-link d-inline-flex align-items-center gap-2">
-                    <FiBarChart2 />
-                    <span>Dashboard</span>
-                  </Link>
-                </li>
-                {/* Link de Status temporariamente desativado */}
-              </>
-            )}
-          </ul>
-          <div className="d-flex align-items-center gap-2">
-            <ThemeToggle />
-            {isAuthenticated ? (
-              <>
-                <span className="text-light small opacity-75">{user?.name}</span>
-                <button
-                  type="button"
-                  className="btn btn-outline-warning btn-sm"
-                  title="Alterar senha"
-                  aria-label="Alterar senha"
-                  onClick={openPasswordModal}
-                  disabled={changingPassword}
-                >
-                  <FiKey />
-                </button>
-                <button
-                  className="btn btn-outline-light btn-sm"
-                  onClick={() => {
-                    loader.showFor(400)
-                    logout()
-                    notify.info('Sessao encerrada')
-                  }}
-                >
-                  Sair
-                </button>
-              </>
-            ) : (
-              !isDashboard && (
-                <Link to="/login" className="btn btn-primary btn-sm">Entrar</Link>
-              )
-            )}
+      <nav className="navbar navbar-expand-lg navbar-dark glass-nav">
+        <div className="container">
+          <div className="d-flex align-items-center gap-3">
+            <Link to="/" className="navbar-brand fw-semibold">
+              <span className="d-inline-flex align-items-center gap-2">
+                <img src="/neo-logo.svg" alt="Nova Europa 4" className="brand-logo" />
+                <span>Nova Europa 4</span>
+              </span>
+            </Link>
+
+            {/* Botão Novidades ao lado da logo */}
+            <button
+              onClick={() => setIsNovidadesModalOpen(true)}
+              className="btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2"
+              style={{
+                fontSize: '0.875rem',
+                border: '1px solid #1E40AF',
+                transition: 'transform 0.15s ease, filter 0.2s ease, border-color 0.2s ease',
+                backgroundColor: '#2563EB',
+                color: '#fff'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#2563EB';
+                e.currentTarget.style.borderColor = '#1E40AF';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#2563EB';
+                e.currentTarget.style.borderColor = '#1E40AF';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <FiStar size={14} className="opacity-75" />
+              <span>Novidades</span>
+            </button>
           </div>
+          <button
+            className="navbar-toggler"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#navbarsExample"
+            aria-controls="navbarsExample"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+          >
+            <span className="navbar-toggler-icon"></span>
+          </button>
+          <div className="collapse navbar-collapse" id="navbarsExample">
+            <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+              {isAuthenticated && (
+                <>
+                  <li className="nav-item">
+                    <Link to="/dashboard" className="nav-link d-inline-flex align-items-center gap-2">
+                      <FiBarChart2 />
+                      <span>Dashboard</span>
+                    </Link>
+                  </li>
+                </>
+              )}
+            </ul>
+            <div className="d-flex align-items-center gap-2">
+              <ThemeToggle />
+              {isAuthenticated ? (
+                <>
+                  <span className="text-light small opacity-75">{user?.name}</span>
+                  <button
+                    type="button"
+                    className="btn btn-outline-warning btn-sm"
+                    title="Alterar senha"
+                    aria-label="Alterar senha"
+                    onClick={openPasswordModal}
+                    disabled={changingPassword}
+                  >
+                    <FiKey />
+                  </button>
+                  <button
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => {
+                      loader.showFor(400)
+                      logout()
+                      notify.info('Sessao encerrada')
+                    }}
+                  >
+                    Sair
+                  </button>
+                </>
+              ) : (
+                !isDashboard && (
+                  <Link to="/login" className="btn btn-primary btn-sm">Entrar</Link>
+                )
+              )}
+            </div>
+          </div>
+
         </div>
-      </div>
-      
-    </nav>
-    {/* Modal de Novidades */}
-    <NovidadesModal 
-      isOpen={isNovidadesModalOpen} 
-      onClose={() => setIsNovidadesModalOpen(false)} 
-    />
-    {isAuthenticated && isPasswordModalOpen && (
-      <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
+      </nav>
+      {/* Modal de Novidades */}
+      <NovidadesModal
+        isOpen={isNovidadesModalOpen}
+        onClose={() => setIsNovidadesModalOpen(false)}
+      />
+      {isAuthenticated && isPasswordModalOpen && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">

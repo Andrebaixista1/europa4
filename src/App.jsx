@@ -13,7 +13,7 @@ import GeradorSites from './pages/GeradorSites.jsx'
 import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 import FilaMilvus from './pages/FilaMilvus.jsx'
-// import Status from './pages/Status.jsx' // Temporariamente desativado
+import Status from './pages/Status.jsx'
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
@@ -32,24 +32,15 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/status/whatsapp"
         element={
           <ProtectedRoute teamIds={[1014]}>
             <StatusWhatsapp />
           </ProtectedRoute>
         }
-      />
-      {/* Rota Status temporariamente desativada */}
+      /> */}
       {/* <Route path="/status" element={<Status />} /> */}
-      <Route
-        path="/multiplos-disparos"
-        element={
-          <ProtectedRoute teamIds={[1, 1014]}>
-            <MultiploDisparos />
-          </ProtectedRoute>
-        }
-      />
       <Route
         path="/recargas"
         element={
@@ -106,14 +97,14 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/fila-milvus"
         element={
           <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
             <FilaMilvus />
           </ProtectedRoute>
         }
-      />
+      /> */}
       <Route
         path="/operacao"
         element={
@@ -125,7 +116,7 @@ function App() {
       <Route
         path="/consultas/in100"
         element={
-          <ProtectedRoute roles={["Master","Administrador","Supervisor","Operador"]}>
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor", "Operador"]}>
             <ConsultaIN100 />
           </ProtectedRoute>
         }
@@ -133,27 +124,27 @@ function App() {
       <Route
         path="/consultas/historico"
         element={
-          <ProtectedRoute roles={["Master","Administrador","Supervisor","Operador"]}>
+          <ProtectedRoute roles={["Master", "Administrador", "Supervisor", "Operador"]}>
             <HistoricoConsultas />
           </ProtectedRoute>
         }
       />
-      <Route
+      {/* <Route
         path="/disparos/multiplos"
         element={
           <ProtectedRoute teamIds={[1, 1014]}>
             <MultiploDisparos />
           </ProtectedRoute>
         }
-      />
-      <Route
+      /> */}
+      {/* <Route
         path="/disparos/acompanhamento"
         element={
           <ProtectedRoute teamIds={[1, 1014]}>
             <AcompanhamentoDisparos />
           </ProtectedRoute>
         }
-      />
+      /> */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

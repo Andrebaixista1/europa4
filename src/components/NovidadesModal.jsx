@@ -4,13 +4,7 @@ import { Sparkles, X, Calendar, Rocket } from 'lucide-react'
 import '../styles/novidades-modal.css'
 
 export const novidadesList = [
-  {
-    data: '17/11/2025',
-    titulo: 'Fila Milvus integrada',
-    descricao:
-      'Supervisão agora conta com o card Fila Milvus, exibindo a fila real do Setor Planejamento com filtros, auto-atualização a cada 60s e atalho para o portal Vieira Tech.',
-  },
-  {
+ {
     data: '13/11/2025',
     titulo: 'Cards no Gerador de Sites e Status BM',
     descricao:
@@ -22,12 +16,6 @@ export const novidadesList = [
     descricao:
       'Sistema completo de geração de sites com modais de status e proxy, cards de estatísticas (Aguardando, Pendentes, Concluídos, Encerrados), botões de copiar campos, upload em lote via CSV e controle total de cadastros.',
   },
-  {
-    data: '30/10/2025',
-    titulo: 'Status Ferramentas',
-    descricao:
-      'Agora você pode verificar o status das ferramentas diretamente no dashboard, garantindo que tudo esteja funcionando perfeitamente.',
-  },  
   {
     data: '28/10/2025',
     titulo: 'Histórico de Consultas (IN100)',
@@ -45,53 +33,6 @@ export const novidadesList = [
     titulo: 'Usuários Vanguard Real-Time',
     descricao:
       'Agora o controle de usuários no Vanguard é real-time conectado e 100% atualizado.',
-  },
-  {
-    data: '23/10/2025',
-    titulo: 'Gestão de usuários expandida',
-    descricao:
-      'Supervisores e Administradores agora podem adicionar novos usuários diretamente em suas equipes, facilitando o gerenciamento de membros.',
-  },
-  {
-    data: '23/10/2025',
-    titulo: 'Fim do Nova Europa 3.8',
-    descricao:
-      'O Europa 3.8 será descontinuado. Todas as equipes devem migrar para o Europa 4.0 o quanto antes para continuar usufruindo dos benefícios do sistema. Essa migração será feita a partir de Janeiro de 2026.',
-  },
-  {
-    data: '21/10/2025',
-    titulo: 'Correção no acompanhamento de disparos',
-    descricao: 'Removido erro que aparecia quando não havia campanhas disponíveis.',
-  },
-  {
-    data: '14/10/2025',
-    titulo: 'Gestão de saldos e recargas',
-    descricao: 'Adicionado novo card para gestão de saldos e recargas.',
-  },
-  {
-    data: '14/10/2025',
-    titulo: 'Cards inteligentes',
-    descricao: 'Cards alinhados com a sua hierarquia para exibir apenas o que é relevante.',
-  },
-  {
-    data: '14/10/2025',
-    titulo: 'Sistema de hierarquias',
-    descricao: 'Cada usuário conta com níveis de acesso personalizados.',
-  },
-  {
-    data: '06/10/2025',
-    titulo: 'Estrutura de autenticação renovada',
-    descricao: 'Login redesenhado com foco em segurança e performance.',
-  },
-  {
-    data: '06/10/2025',
-    titulo: 'Dashboard Master atualizado',
-    descricao: 'Interface aprimorada com novos controles e funções.',
-  },
-  {
-    data: '06/10/2025',
-    titulo: 'Correções de bugs',
-    descricao: 'Diversos ajustes para manter o sistema estável.',
   },
 ]
 

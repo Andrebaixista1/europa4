@@ -117,17 +117,27 @@ export default function HistoricoConsultas() {
 
   const exportCSV = () => {
     const headers = ['Data/Hora', 'Status', 'Pesquisa', 'Nome', 'CPF', 'NB', 'Data Nascimento', 'UF', 'Login']
-    const out = items.map(r => [
-      fmtDateTime(r?.data_hora_registro),
-      r?.status_api ?? '',
-      r?.resposta_api ?? '',
-      r?.nome ?? '',
-      r?.numero_documento ?? '',
-      r?.numero_beneficio ?? '',
-      fmtDate(r?.data_nascimento),
-      r?.estado ?? '',
-      r?.login || r?.usuario_nome || '',
-    ])
+    const out = items.map(r => {
+      const login = String(r?.login || r?.usuario_nome || '')
+      let nome = String(r?.nome || '')
+      if (login && nome.endsWith(login)) {
+        nome = nome.slice(0, -login.length)
+      }
+      // Remove trailing commas and whitespace
+      nome = nome.replace(/[, ]+$/, '')
+      if (!nome) nome = '-'
+      return [
+        fmtDateTime(r?.data_hora_registro),
+        r?.status_api ?? '',
+        r?.resposta_api ?? '',
+        nome,
+        r?.numero_documento ?? '',
+        r?.numero_beneficio ?? '',
+        fmtDate(r?.data_nascimento),
+        r?.estado ?? '',
+        login,
+      ]
+    })
     const csv = [headers, ...out]
       .map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(';'))
       .join('\n')
@@ -240,28 +250,38 @@ export default function HistoricoConsultas() {
                     <td colSpan={9} className="text-center opacity-75 py-4">Nenhuma consulta encontrada.</td>
                   </tr>
                 ) : (
-                  pageItems.map((r, idx) => (
-                    <tr key={(r?.id_usuario ?? idx) + '-' + (r?.numero_beneficio ?? '') + '-' + idx}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(r?.data_hora_registro)}</td>
-                      <td>
-                        {(() => {
-                          const status = r?.status_api
-                          const cls = status === 'Sucesso' ? 'text-bg-success' : (status == null ? 'text-bg-warning' : 'text-bg-danger')
-                          const titleTxt = String(status ?? '')
-                          return (
-                            <span className={`badge rounded-pill px-2 status-badge ${cls}`} title={titleTxt} aria-label={titleTxt}>i</span>
-                          )
-                        })()}
-                      </td>
-                      <td>{r?.resposta_api || ''}</td>
-                      <td className="text-nowrap">{r?.nome || '-'}</td>
-                      <td>{fmtCPF(r?.numero_documento)}</td>
-                      <td>{fmtNB(r?.numero_beneficio)}</td>
-                      <td>{fmtDate(r?.data_nascimento)}</td>
-                      <td>{r?.estado || '-'}</td>
-                      <td className="text-nowrap">{r?.login || r?.usuario_nome || ''}</td>
-                    </tr>
-                  ))
+                  pageItems.map((r, idx) => {
+                    const login = String(r?.login || r?.usuario_nome || '')
+                    let nome = String(r?.nome || '')
+                    if (login && nome.endsWith(login)) {
+                      nome = nome.slice(0, -login.length)
+                    }
+                    // Remove trailing commas and whitespace
+                    nome = nome.replace(/[, ]+$/, '')
+                    if (!nome) nome = '-'
+                    return (
+                      <tr key={(r?.id_usuario ?? idx) + '-' + (r?.numero_beneficio ?? '') + '-' + idx}>
+                        <td style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(r?.data_hora_registro)}</td>
+                        <td>
+                          {(() => {
+                            const status = r?.status_api
+                            const cls = status === 'Sucesso' ? 'text-bg-success' : (status == null ? 'text-bg-warning' : 'text-bg-danger')
+                            const titleTxt = String(status ?? '')
+                            return (
+                              <span className={`badge rounded-pill px-2 status-badge ${cls}`} title={titleTxt} aria-label={titleTxt}>i</span>
+                            )
+                          })()}
+                        </td>
+                        <td>{r?.resposta_api || ''}</td>
+                        <td className="text-nowrap">{nome || '-'}</td>
+                        <td>{fmtCPF(r?.numero_documento)}</td>
+                        <td>{fmtNB(r?.numero_beneficio)}</td>
+                        <td>{fmtDate(r?.data_nascimento)}</td>
+                        <td>{r?.estado || '-'}</td>
+                        <td className="text-nowrap">{login}</td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

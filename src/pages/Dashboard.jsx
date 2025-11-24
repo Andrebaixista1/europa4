@@ -124,27 +124,9 @@ export default function Dashboard() {
                   Vanguard - Sistema de controle de usuários.
                 </Card>
               </div>
-              {canSeeCard({ teamIds: [1014], allowMaster: true }) && (
-                <div className="col-md-6 col-lg-4 col-xl-3">
-                  <Card title="Status WhatsApp" icon="FiSmartphone" accent="primary" to="/status/whatsapp">
-                    Centralize os textos combinados para manter o status oficial atualizado.
-                  </Card>
-                </div>
-              )}
-              {canSeeCard({ teamIds: [1, 1014], allowMaster: true }) && (
-                <div className="col-md-6 col-lg-4 col-xl-3">
-                  <Card title="Múltiplos Disparos" icon="FiSend" accent="primary" to="/disparos/multiplos">
-                    Configure e agende múltiplos disparos em massa para diferentes canais.
-                  </Card>
-                </div>
-              )}
-              {canSeeCard({ teamIds: [1, 1014], allowMaster: true }) && (
-                <div className="col-md-6 col-lg-4 col-xl-3">
-                  <Card title="Acompanhamento de Disparos" icon="FiActivity" accent="primary" to="/disparos/acompanhamento">
-                    Monitore e acompanhe o status de todos os seus disparos agendados.
-                  </Card>
-                </div>
-              )}
+
+
+
               <div className="col-md-6 col-lg-4 col-xl-3">
                 <Card title="Gerador de Sites" icon="FiGlobe" accent="primary" to="/admin/gerador-sites">
                   Gere sites profissionais de forma automatizada com base em templates predefinidos, apenas fornecendo as informações essenciais.
@@ -173,17 +155,7 @@ export default function Dashboard() {
                   Estruture e visualize sua equipe.
                 </Card>
               </div>
-              <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card
-                  title="Fila Milvus"
-                  iconUrl="https://carreira.inhire.com.br/wp-content/uploads/2025/10/logo_Logo-Milvus-1.png"
-                  iconAlt="Milvus"
-                  accent="primary"
-                  to="/fila-milvus"
-                >
-                  Veja o andamento do seu chamado diretamente na fila do Milvus e saiba quando será respondido.
-                </Card>
-              </div>
+
             </div>
           </section>
         </Can>
