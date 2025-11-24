@@ -414,8 +414,10 @@ export default function ConsultaIN100() {
                 const o = dataTry[0] || {}
                 if (isResponseFinished(o.resposta_api)) {
                   if (!hasValidName(o.nome)) {
+                    setResultado(null)
+                    setBancoInfo(null)
                     loader.end()
-                    notify.warn('A consulta foi concluída, mas os dados do beneficiário (Nome) não foram retornados pela API.')
+                    notify.warn((o.status_api || '').trim() || 'A consulta foi concluída, mas os dados do beneficiário não foram retornados.')
                     return
                   }
                   if (!isStatusSuccess(o.status_api)) {
@@ -498,8 +500,10 @@ export default function ConsultaIN100() {
         const o = dataOff[0] || {}
         if (isResponseFinished(o.resposta_api)) {
           if (!hasValidName(o.nome)) {
+            setResultado(null)
+            setBancoInfo(null)
             loader.end()
-            notify.warn('A consulta foi concluída, mas os dados do beneficiário (Nome) não foram retornados pela API.')
+            notify.warn((o.status_api || '').trim() || 'A consulta foi concluída, mas os dados do beneficiário não foram retornados.')
             return
           }
           if (!isStatusSuccess(o.status_api)) {
