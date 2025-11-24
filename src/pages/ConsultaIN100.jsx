@@ -481,7 +481,6 @@ export default function ConsultaIN100() {
           await fetchSaldoUsuario()
           loader.end()
           notify.success('Consulta online concluida', { autoClose: 15000 })
-          if (document.hidden) playNotifyBeep(1200)
           return
         }
         // Fluxo OFFLINE: chamada direta para webhook resposta-api
@@ -595,7 +594,7 @@ export default function ConsultaIN100() {
       setResultado(mock)
       try { setBancoInfo(await fetchBanco(mock.banco_desembolso)) } catch { setBancoInfo(null) }
       loader.end()
-      notify.success('Consulta concluida', { autoClose: 15000 }); if (document.hidden) playNotifyBeep(1200)
+      notify.success('Consulta concluida', { autoClose: 15000 })
     } finally {
       loader.end()
     }
