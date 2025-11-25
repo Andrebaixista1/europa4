@@ -334,12 +334,13 @@ export default function AdminControlePlanejamento() {
   }, [filtered])
 
   const downloadCsv = () => {
-    const header = ['ID', 'AGENCIA', 'LOGIN', 'EMPRESA', 'GRUPO', 'DATA RENOVACAO', 'DATA VENCIMENTO', 'STATUS']
+    const header = ['ID', 'AGENCIA', 'LOGIN', 'NOME', 'EMPRESA', 'GRUPO', 'DATA RENOVACAO', 'DATA VENCIMENTO', 'STATUS']
     const rows = filtered.map(i => [
       i.id,
       i.codigo,
       i.login,
-      (i.empresa || i.nome || ''),
+      (i.nome || ''),
+      (i.empresa || ''),
       (i.grupo || ''),
       formatDateDisplay(i.renovacao),
       formatDateDisplay(i.vencimento),
