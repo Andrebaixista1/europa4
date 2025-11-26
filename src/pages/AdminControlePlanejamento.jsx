@@ -151,13 +151,13 @@ export default function AdminControlePlanejamento() {
   // Datas derivadas
   const addRenovacao = useMemo(() => addDataCadastro, [addDataCadastro])
   const addVencimento = useMemo(() => {
-    if (!addDataCadastro) return ''
-    const d = new Date(addDataCadastro)
-    if (isNaN(d)) return ''
-    const v = new Date(d)
-    v.setDate(v.getDate() + 30)
+    const baseStr = toDateOnly(addRenovacao)
+    if (!baseStr) return ''
+    const [yyyy, mm, dd] = baseStr.split('-').map(Number)
+    const base = new Date(yyyy, mm - 1, dd)
+    const v = new Date(base.getFullYear(), base.getMonth() + 1, base.getDate())
     return ymdLocal(v)
-  }, [addDataCadastro])
+  }, [addRenovacao])
 
   async function handleAddSubmit(e) {
     e?.preventDefault?.()
