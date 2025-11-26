@@ -55,6 +55,7 @@ export default function AdminControlePlanejamento() {
   const [addNovaAgencia, setAddNovaAgencia] = useState('')
   const [addEmpresa, setAddEmpresa] = useState('')
   const [addGrupo, setAddGrupo] = useState('')
+  const [addNome, setAddNome] = useState('')
   const [addCargo, setAddCargo] = useState('')
   const [addLogin, setAddLogin] = useState('')
   const ymdLocal = (d) => {
@@ -127,7 +128,7 @@ export default function AdminControlePlanejamento() {
     for (const it of (items || [])) {
       if (!it || !it.codigo) continue
       if (!map.has(it.codigo)) {
-        map.set(it.codigo, { codigo: it.codigo, empresa: (it.empresa || ''), grupo: (it.grupo || '') })
+        map.set(it.codigo, { codigo: it.codigo, empresa: (it.empresa || ''), grupo: (it.grupo || ''), nome: (it.nome || '') })
       }
     }
     return Array.from(map.values()).sort((a, b) => String(a.codigo).localeCompare(String(b.codigo)))
@@ -139,11 +140,12 @@ export default function AdminControlePlanejamento() {
 
   // Atualiza empresa/grupo ao escolher agência
   useEffect(() => {
-    if (!addAgencia) { setAddEmpresa(''); setAddGrupo(''); return }
-    if (addAgencia === ADD_NEW_AGENCIA) { setAddEmpresa(''); setAddGrupo(''); return }
+    if (!addAgencia) { setAddEmpresa(''); setAddGrupo(''); setAddNome(''); return }
+    if (addAgencia === ADD_NEW_AGENCIA) { setAddEmpresa(''); setAddGrupo(''); setAddNome(''); return }
     const found = agencias.find(a => String(a.codigo) === String(addAgencia))
     setAddEmpresa(found?.empresa || '')
     setAddGrupo(found?.grupo || '')
+    setAddNome(found?.nome || found?.empresa || '')
   }, [addAgencia, agencias])
 
   const isNewAgencia = useMemo(() => addAgencia === ADD_NEW_AGENCIA, [addAgencia])
@@ -184,7 +186,7 @@ export default function AdminControlePlanejamento() {
       empresa: addEmpresa,
       grupo: addGrupo,
       login: addLogin,
-      nome: addEmpresa,
+      nome: addNome,
       renovacao: addRenovacao,
       status: 'Ativo',
       vencimento: addVencimento,
@@ -202,7 +204,7 @@ export default function AdminControlePlanejamento() {
       notify.success('Usuário adicionado com sucesso')
       setShowAdd(false)
       // limpa form
-      setAddAgencia(''); setAddNovaAgencia(''); setAddEmpresa(''); setAddGrupo(''); setAddCargo(''); setAddLogin(''); setAddDataCadastro(ymdLocal(new Date()))
+      setAddAgencia(''); setAddNovaAgencia(''); setAddEmpresa(''); setAddGrupo(''); setAddNome(''); setAddCargo(''); setAddLogin(''); setAddDataCadastro(ymdLocal(new Date()))
       await load()
     } catch (e) {
       console.error('Falha ao adicionar usuário:', e)
@@ -605,9 +607,13 @@ export default function AdminControlePlanejamento() {
                     <input className="form-control" value={addNovaAgencia} onChange={e => setAddNovaAgencia(e.target.value)} placeholder="Digite o nome da nova agência" required={isNewAgencia} />
                   </div>
                 )}
-                <div className="col-12 col-md-6">
+                <div className="col-12 col-md-6 col-lg-6">
                   <label className="form-label small">Empresa {isNewAgencia ? '*' : ''}</label>
                   <input className="form-control" value={addEmpresa} onChange={e => setAddEmpresa(e.target.value)} disabled={!isNewAgencia} placeholder={isNewAgencia ? 'Digite a empresa' : 'Selecione uma agência'} />
+                </div>
+                <div className="col-12 col-md-6 col-lg-6">
+                  <label className="form-label small">Nome</label>
+                  <input className="form-control" value={addNome} disabled placeholder="Selecione uma agência para carregar o nome" />
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Grupo {isNewAgencia ? '*' : ''}</label>
