@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://webhook.sistemavieira.com.br',
+        target: 'http://85.31.61.242:5679',
         changeOrigin: true,
         secure: true,
       },

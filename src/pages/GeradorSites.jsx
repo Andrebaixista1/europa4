@@ -227,7 +227,7 @@ export default function GeradorSites() {
       setEmpresaListLoading(true)
       setEmpresaListError(null)
       try {
-        const url = 'https://webhook.sistemavieira.com.br/webhook/get-empresas'
+        const url = 'http://85.31.61.242:5679/webhook/get-empresas'
         const res = await fetch(url, { method: 'GET', signal: controller.signal })
         if (!res.ok) throw new Error(`get-empresas ${res.status}`)
         const data = await res.json().catch(() => [])
@@ -268,7 +268,7 @@ export default function GeradorSites() {
       try {
         setDolphinListLoading(true)
         setDolphinListError(null)
-        const url = 'https://webhook.sistemavieira.com.br/webhook/get-dolphin'
+        const url = 'http://85.31.61.242:5679/webhook/get-dolphin'
         const res = await fetch(url, { method: 'GET', signal: controller.signal })
         if (!res.ok) throw new Error(`get-dolphin ${res.status}`)
         const data = await res.json().catch(() => [])
@@ -310,7 +310,7 @@ export default function GeradorSites() {
     setSiteLoading(true)
     setSiteError(null)
     try {
-      const url = 'https://webhook.sistemavieira.com.br/webhook/get-sites'
+      const url = 'http://85.31.61.242:5679/webhook/get-sites'
       const res = await fetch(url, { method: 'GET', signal })
       if (!res.ok) throw new Error(`get-sites ${res.status}`)
       const data = await res.json().catch(() => [])
@@ -377,7 +377,7 @@ export default function GeradorSites() {
       setEmpresaListLoading(true)
       setEmpresaListError(null)
       try {
-        const url = 'https://webhook.sistemavieira.com.br/webhook/get-empresas'
+        const url = 'http://85.31.61.242:5679/webhook/get-empresas'
         const res = await fetch(url, { method: 'GET', signal: controller.signal })
         if (!res.ok) throw new Error(`get-empresas ${res.status}`)
         const data = await res.json().catch(() => [])
@@ -434,7 +434,7 @@ export default function GeradorSites() {
       try {
         setDolphinListLoading(true)
         setDolphinListError(null)
-        const url = 'https://webhook.sistemavieira.com.br/webhook/get-dolphin'
+        const url = 'http://85.31.61.242:5679/webhook/get-dolphin'
         const res = await fetch(url, { method: 'GET', signal: controller.signal })
         if (!res.ok) throw new Error(`get-dolphin ${res.status}`)
         const data = await res.json().catch(() => [])
@@ -546,7 +546,7 @@ export default function GeradorSites() {
         razao_social: toNull(deleteRow.razao_social),
         token: toNull(deleteRow.token),
       }
-      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/delete-site3', {
+      const res = await fetch('http://85.31.61.242:5679/webhook/delete-site3', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1118,7 +1118,7 @@ export default function GeradorSites() {
                             token: toNull(compToken),
                             id_bm: toNull(compVincIdBm),
                           }
-                          const url = 'https://webhook.sistemavieira.com.br/webhook/atualiza-site3'
+                          const url = 'http://85.31.61.242:5679/webhook/atualiza-site3'
                           const res = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1442,7 +1442,7 @@ export default function GeradorSites() {
                             token: toNull(genToken),
                             id_bm: toNull(genVincIdBm),
                           }
-                          const url = 'https://webhook.sistemavieira.com.br/webhook/gerador-sitev3'
+                          const url = 'http://85.31.61.242:5679/webhook/gerador-sitev3'
                           const res = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },

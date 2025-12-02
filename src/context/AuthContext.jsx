@@ -110,7 +110,7 @@ export function AuthProvider({ children }) {
       const dataHoraLogin = formatDateTime7(new Date(), 'America/Sao_Paulo')
       const ultimoIp = await resolveClientIp()
 
-      const webhookResponse = await fetch('https://webhook.sistemavieira.com.br/webhook/login', {
+      const webhookResponse = await fetch('http://85.31.61.242:5679/webhook/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -32,7 +32,7 @@ export default function Status() {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 15000)
-      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/status-workflows', { method: 'GET', signal: controller.signal })
+      const res = await fetch('http://85.31.61.242:5679/webhook/status-workflows', { method: 'GET', signal: controller.signal })
       clearTimeout(timeout)
       ok = res.ok
       statusText = String(res.status)

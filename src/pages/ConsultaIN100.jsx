@@ -64,7 +64,7 @@ export default function ConsultaIN100() {
   const fetchSaldoUsuario = async () => {
     if (!user || !user.id) return
     try {
-      const url = 'https://webhook.sistemavieira.com.br/webhook/get-saldos'
+      const url = 'http://85.31.61.242:5679/webhook/get-saldos'
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -230,7 +230,7 @@ export default function ConsultaIN100() {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 60000)
-      const res = await fetch('https://webhook.sistemavieira.com.br/webhook/consulta-nbcpf', {
+      const res = await fetch('http://85.31.61.242:5679/webhook/consulta-nbcpf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tipo: isCpf ? 'cpf' : 'nb', numero: digits }),
@@ -364,7 +364,7 @@ export default function ConsultaIN100() {
       try {
         if (online) {
           // 1) Dispara consulta online
-          const urlConsulta = 'https://webhook.sistemavieira.com.br/webhook/consulta-online'
+          const urlConsulta = 'http://85.31.61.242:5679/webhook/consulta-online'
           const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
           const consultaPayload = {
             id: (typeof user?.id !== 'undefined' ? user.id : user),
@@ -486,7 +486,7 @@ export default function ConsultaIN100() {
           return
         }
         // Fluxo OFFLINE: chamada direta para webhook resposta-api
-        const urlRespostaOffline = 'https://webhook.sistemavieira.com.br/webhook/resposta-api'
+        const urlRespostaOffline = 'http://85.31.61.242:5679/webhook/resposta-api'
         // Aguarda 5s antes de buscar a resposta offline
         await new Promise(r => setTimeout(r, 5000))
         const resOff = await fetch(urlRespostaOffline, {
