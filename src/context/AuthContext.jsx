@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import users from '../data/users.json'
 import { normalizeRole, Roles } from '../utils/roles.js'
-import { n8nUrl } from '../services/n8nClient.js'
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -104,14 +103,14 @@ export function AuthProvider({ children }) {
 
   const login = async (loginUser, password) => {
     try {
-      console.log('🔐 Iniciando autenticação...');
+      console.log('� Iniciando autenticação...');
       console.log('📊 Dados enviados:', { login: loginUser, senha: password });
       
       // PASSO 1: Autenticar no webhook
       const dataHoraLogin = formatDateTime7(new Date(), 'America/Sao_Paulo')
       const ultimoIp = await resolveClientIp()
 
-      const webhookResponse = await fetch(n8nUrl('/webhook/login'), {
+      const webhookResponse = await fetch('https://n8n.apivieiracred.store/webhook/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -134,27 +133,27 @@ export function AuthProvider({ children }) {
       
       // PASSO 2: Verificar se a resposta tem dados de usuário
       if (!webhookResult) {
-        console.error('❌ Resposta do webhook está vazia ou null');
+        console.error('� Resposta do webhook está vazia ou null');
         throw new Error('Erro na comunicação com o servidor');
       }
       
-      console.log('🔍 Verificando formato da resposta...');
+      console.log('� Verificando formato da resposta...');
       
       // Verificar se é um array vazio
       if (Array.isArray(webhookResult) && webhookResult.length === 0) {
-        console.error('❌ Array vazio - credenciais inválidas');
+        console.error('� Array vazio - credenciais inválidas');
         throw new Error('Credenciais inválidas');
       }
       
       // Verificar se é uma resposta de erro específica (quando vem como objeto)
       if (!Array.isArray(webhookResult) && (webhookResult.sucesso === 0 || webhookResult.sucesso === false)) {
-        console.error('❌ Login rejeitado pelo servidor:', webhookResult.mensagem);
+        console.error('� Login rejeitado pelo servidor:', webhookResult.mensagem);
         throw new Error(webhookResult.mensagem || 'Credenciais inválidas');
       }
 
       // PASSO 3: Processar dados do usuário - CORRIGIDO PARA ARRAY
       let userData;
-      console.log('🔍 Processando dados do usuário...');
+      console.log('� Processando dados do usuário...');
       
       if (Array.isArray(webhookResult) && webhookResult.length > 0) {
         // ✅ RESPOSTA COMO ARRAY - usar primeiro elemento
@@ -165,8 +164,8 @@ export function AuthProvider({ children }) {
         userData = webhookResult;
         console.log('📊 Usando objeto direto:', userData);
       } else {
-        console.error('❌ Formato de resposta inválido');
-        console.error('❌ Resposta recebida:', webhookResult);
+        console.error('� Formato de resposta inválido');
+        console.error('� Resposta recebida:', webhookResult);
         throw new Error('Formato de resposta inválido');
       }
       
@@ -177,7 +176,7 @@ export function AuthProvider({ children }) {
       const userRole = userData.role || userData.Role;
       const userSucesso = userData.sucesso ?? userData.Sucesso;
       
-      console.log('🔍 Dados extraídos:');
+      console.log('� Dados extraídos:');
       console.log('  - ID:', userId);
       console.log('  - Nome:', userName);
       console.log('  - Login:', userLogin);
@@ -185,10 +184,10 @@ export function AuthProvider({ children }) {
       console.log('  - Sucesso:', userSucesso);
       
       if (!userId || !userName || !userLogin) {
-        console.error('❌ Dados de usuário incompletos');
-        console.error('❌ userId:', userId);
-        console.error('❌ userName:', userName);
-        console.error('❌ userLogin:', userLogin);
+        console.error('� Dados de usuário incompletos');
+        console.error('� userId:', userId);
+        console.error('� userName:', userName);
+        console.error('� userLogin:', userLogin);
         throw new Error('Dados de usuário incompletos');
       }
 
@@ -200,7 +199,7 @@ export function AuthProvider({ children }) {
 
       if (!autenticadoComSucesso || ['INVALID', 'BLOQUEADO', 'LOCKED'].includes(statusContaRaw)) {
         const msgSrv = userData.mensagem || userData.Mensagem || 'Credenciais inválidas';
-        console.error('❌ Autenticação rejeitada:', { sucesso: userSucesso, status_conta: statusContaRaw, mensagem: msgSrv });
+        console.error('� Autenticação rejeitada:', { sucesso: userSucesso, status_conta: statusContaRaw, mensagem: msgSrv });
         throw new Error(msgSrv);
       }
 
@@ -248,7 +247,7 @@ export function AuthProvider({ children }) {
       return payload;
       
     } catch (error) {
-      console.error('❌ Erro no login:', error);
+      console.error('� Erro no login:', error);
       throw new Error(error.message || 'Erro na autenticação');
     }
   }

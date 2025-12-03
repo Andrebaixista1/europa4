@@ -3,7 +3,6 @@ import { Upload, MessageSquare, FileText, Send, Download, ArrowLeft, Settings, C
 import { Link } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { n8nUrl } from '../services/n8nClient.js'
 
 const DEFAULT_BATCH_SIZE = 100
 
@@ -69,7 +68,7 @@ export default function MultiploDisparos() {
   const fetchChannels = async () => {
     setLoadingChannels(true)
     try {
-      const response = await fetch(n8nUrl('/webhook/canais'))
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/canais')
       if (response.ok) {
         const data = await response.json()
         setChannels(data)
@@ -89,7 +88,7 @@ export default function MultiploDisparos() {
     if (!accountId) return []
     
     try {
-      const response = await fetch(n8nUrl('/webhook/templates'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/templates', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -524,7 +523,7 @@ export default function MultiploDisparos() {
       console.log('   - intervalos:', formData.intervalMin, 'a', formData.intervalMax)
       console.log('   - contactCount:', csvData.length)
       
-      const response = await fetch(n8nUrl('/webhook/multi-disparos'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/multi-disparos', {
         method: 'POST',
         body: formData_upload
       })
@@ -828,7 +827,7 @@ export default function MultiploDisparos() {
                   <>
                     {csvData.length > 10000 && (
                       <div className="alert alert-warning mt-3">
-                        ⚠️ <strong>Arquivo muito grande!</strong><br />
+                        ⚠� <strong>Arquivo muito grande!</strong><br />
                         Seu arquivo contém <strong>{csvData.length.toLocaleString('pt-BR')} contatos</strong>. 
                         Não é aconselhado usar arquivos tão grandes, pois o processamento pode levar 
                         <strong>mais tempo do que esperado</strong>. Considere dividir em arquivos menores.

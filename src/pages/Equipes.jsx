@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
-import { n8nUrl } from '../services/n8nClient.js'
 
 // Página Equipes: estrutura pronta para integrar API em seguida.
 export default function Equipes() {
@@ -42,7 +41,7 @@ export default function Equipes() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch(n8nUrl('/webhook/user-team'), {
+        const res = await fetch('https://n8n.apivieiracred.store/webhook/user-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: user?.id }),
@@ -221,7 +220,7 @@ export default function Equipes() {
         id_usuario: transferMember.id,
         equipe_id: newTeamNum,
       }
-      const response = await fetch(n8nUrl('/webhook/transfer-team'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -270,7 +269,7 @@ async function handleSaveNomeEquipe() {
         nome: name,
       }
 
-      const response = await fetch(n8nUrl('/webhook/alter-team-name'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-team-name', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -336,7 +335,7 @@ async function handleSaveNomeEquipe() {
     const teamName = selected.nome || 'Equipe'
     try {
       setIsDeletingTeam(true)
-      const response = await fetch(n8nUrl('/webhook/del-team'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/del-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: teamId })
@@ -408,7 +407,7 @@ async function handleSaveNomeEquipe() {
           
           saldo: saldoNum,
         }
-        const resp = await fetch(n8nUrl('/webhook/add-team'), {
+        const resp = await fetch('https://n8n.apivieiracred.store/webhook/add-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -521,7 +520,7 @@ async function handleSaveNomeEquipe() {
     setAddUserSaving(true)
 
     try {
-      const response = await fetch(n8nUrl('/webhook/add-user'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/add-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

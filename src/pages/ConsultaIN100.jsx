@@ -8,7 +8,6 @@ import { notify } from '../utils/notify.js'
 import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Link } from 'react-router-dom'
-import { n8nUrl } from '../services/n8nClient.js'
 
 export default function ConsultaIN100() {
   const { user } = useAuth()
@@ -65,7 +64,7 @@ export default function ConsultaIN100() {
   const fetchSaldoUsuario = async () => {
     if (!user || !user.id) return
     try {
-      const url = n8nUrl('/webhook/get-saldos')
+      const url = 'https://n8n.apivieiracred.store/webhook/get-saldos'
       const payload = buildSaldoPayload()
       const res = await fetch(url, {
         method: 'POST',
@@ -209,7 +208,7 @@ export default function ConsultaIN100() {
 
   async function fetchBanco(code) {
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/banks/v1/${code}`)
+      const res = await fetch(`'https://brasilapi.com.br/api/banks/v1/${code}`')
       if (!res.ok) throw new Error('fail')
       const data = await res.json()
       return { code: data.code || code, name: data.name || data.fullName || String(code) }
@@ -245,7 +244,7 @@ export default function ConsultaIN100() {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 60000)
-      const res = await fetch(n8nUrl('/webhook/consulta-nbcpf'), {
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-nbcpf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tipo: isCpf ? 'cpf' : 'nb', numero: digits }),
@@ -379,7 +378,7 @@ export default function ConsultaIN100() {
       try {
         if (online) {
           // 1) Dispara consulta online
-          const urlConsulta = n8nUrl('/webhook/consulta-online')
+          const urlConsulta = 'https://n8n.apivieiracred.store/webhook/consulta-online'
           const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
           const consultaPayload = {
             id: (typeof user?.id !== 'undefined' ? user.id : user),
@@ -501,7 +500,7 @@ export default function ConsultaIN100() {
           return
         }
         // Fluxo OFFLINE: chamada direta para webhook resposta-api
-        const urlRespostaOffline = n8nUrl('/webhook/resposta-api')
+        const urlRespostaOffline = 'https://n8n.apivieiracred.store/webhook/resposta-api'
         // Aguarda 5s antes de buscar a resposta offline
         await new Promise(r => setTimeout(r, 5000))
         const resOff = await fetch(urlRespostaOffline, {
@@ -1098,5 +1097,4 @@ export default function ConsultaIN100() {
     </div>
   )
 }
-
 

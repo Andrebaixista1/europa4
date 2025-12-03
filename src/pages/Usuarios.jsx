@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
-import { n8nUrl } from '../services/n8nClient.js'
 export default function Usuarios() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -58,7 +57,7 @@ export default function Usuarios() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch(n8nUrl('/webhook/user-team'), {
+        const res = await fetch('https://n8n.apivieiracred.store/webhook/user-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: user?.id }),
@@ -278,7 +277,7 @@ export default function Usuarios() {
         id_usuario: transferUser.id,
         equipe_id: newIdNum,
       }
-      const response = await fetch(n8nUrl('/webhook/transfer-team'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/transfer-team', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -343,7 +342,7 @@ export default function Usuarios() {
     }
     setIsChangingPassword(true)
     try {
-      const response = await fetch(n8nUrl('/webhook/alter-pass'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-pass', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -458,7 +457,7 @@ export default function Usuarios() {
     }
     setIsSavingEdit(true)
     try {
-      const response = await fetch(n8nUrl('/webhook/alter-user'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -538,7 +537,7 @@ export default function Usuarios() {
       console.log('Criando usu�rio via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
       // Chamada para a API de adicionar Usu�rio
-      const response = await fetch(n8nUrl('/webhook/add-user'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/add-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -597,7 +596,7 @@ export default function Usuarios() {
     setDeletingId(targetId)
     setPendingDelete(null)
     try {
-      const response = await fetch(n8nUrl('/webhook/delete-user'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/delete-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -649,7 +648,7 @@ export default function Usuarios() {
     const nextActive = !targetUser.ativo
     setTogglingId(targetId)
     try {
-      const response = await fetch(n8nUrl('/webhook/alter-status'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -840,7 +839,7 @@ export default function Usuarios() {
                   </div>
                 </>
               )}
-              {/* <div className="small mt-3 opacity-75">IntegraAAo com: /api/n8n/webhook/add-user</div> */}
+              {/* <div className="small mt-3 opacity-75">IntegraAAo com: https://n8n.apivieiracred.store/webhook/add-user</div> */}
             </div>
           </div>
         </div>

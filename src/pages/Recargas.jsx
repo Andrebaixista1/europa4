@@ -5,9 +5,8 @@ import * as Fi from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import { notify } from '../utils/notify.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { n8nUrl } from '../services/n8nClient.js'
 
-const endpoint = n8nUrl('/webhook/get-saldos')
+const endpoint = 'https://n8n.apivieiracred.store/webhook/get-saldos'
 
 const ROWS_PER_PAGE = 100
 
@@ -132,7 +131,7 @@ export default function Recargas() {
         equipeId: selectedTeam.id,
         quantidade: addAmountValue,
       }
-      const response = await fetch(n8nUrl('/webhook/adc-saldo'), {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/adc-saldo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
