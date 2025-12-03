@@ -8,11 +8,16 @@ const ensureLeadingSlash = (value = '') => {
   return value.startsWith('/') ? value : `/${value}`
 }
 
-const BASE = 'https://n8n.apivieiracred.store'
+const N8N_PROD_BASE = 'https://n8n.apivieiracred.store'
+const N8N_TEST_BASE = 'https://webhook.apivieiracred.store'
 
-export const n8nUrl = (path = '') => {
-  const cleanPath = ensureLeadingSlash(path)
-  return `${BASE}${cleanPath}`
+const normalizePath = (path = '') => {
+  const clean = ensureLeadingSlash(path)
+  if (clean.startsWith('/webhook')) return clean
+  return `/webhook${clean}`
 }
+
+export const n8nUrl = (path = '') => `${N8N_PROD_BASE}${normalizePath(path)}`
+export const n8nTestUrl = (path = '') => `${N8N_TEST_BASE}${normalizePath(path).replace('/webhook', '/webhook-test')}`
 
 export const fetchN8n = (path, options = {}) => fetch(n8nUrl(path), options)
