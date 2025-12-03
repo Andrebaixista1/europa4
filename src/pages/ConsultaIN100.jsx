@@ -165,7 +165,12 @@ export default function ConsultaIN100() {
   const brCurrency = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n || 0))
   const mapPensao = (v) => (v === 'not_payer' ? 'nao pensionista' : v || '-')
   const mapBloqueio = (v) => (v === 'not_blocked' ? 'nao bloqueado' : v || '-')
-  const mapTipoCredito = (v) => (v === 'magnetic_card' ? 'Cartao magnetico' : v || '-')
+  const mapTipoCredito = (v) => {
+    if (!v) return '-'
+    if (v === 'magnetic_card') return 'Cartao magnetico'
+    if (v === 'checking_account') return 'Conta Corrente'
+    return v
+  }
   const mapSituacao = (v) => (v === 'elegible' ? 'Elegivel' : v || '-')
 
   const copyToClipboard = async (text, successMsg = 'Copiado!') => {
