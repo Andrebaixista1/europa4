@@ -8,16 +8,7 @@ const ensureLeadingSlash = (value = '') => {
   return value.startsWith('/') ? value : `/${value}`
 }
 
-const proxyBaseEnv = (import.meta.env.VITE_N8N_PROXY_BASE || import.meta.env.REACT_APP_N8N_PROXY_BASE || '/api/n8n').trim()
-const directHttpEnv = (import.meta.env.VITE_N8N_DIRECT_HTTP || import.meta.env.REACT_APP_N8N_DIRECT_HTTP || '').trim()
-
-const resolveBase = () => {
-  const isHttp = typeof window !== 'undefined' && window.location?.protocol === 'http:'
-  if (isHttp && directHttpEnv) return trimTrailingSlash(directHttpEnv)
-  return trimTrailingSlash(proxyBaseEnv || '/api/n8n') || '/api/n8n'
-}
-
-const BASE = resolveBase()
+const BASE = 'https://n8n.apivieiracred.store'
 
 export const n8nUrl = (path = '') => {
   const cleanPath = ensureLeadingSlash(path)

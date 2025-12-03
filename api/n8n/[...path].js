@@ -40,14 +40,7 @@ export default async function handler(req, res) {
   const relativePath = pathSegments.join('/')
   const isWebhook = relativePath.startsWith('webhook')
 
-  const upstreamBase = isWebhook ? process.env.N8N_WEBHOOK_URL : process.env.N8N_BASE_URL
-  if (!upstreamBase) {
-    res.status(500)
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
-    res.end('N8N base URL not configured')
-    return
-  }
+  const upstreamBase = 'https://n8n.apivieiracred.store'
 
   const searchIndex = req.url.indexOf('?')
   const search = searchIndex >= 0 ? req.url.slice(searchIndex) : ''
