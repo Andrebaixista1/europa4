@@ -1,24 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import * as Fi from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 
-// Dados fictícios para visualização do layout
-const mockZapUsers = [
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'Planejamento' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (TAI) - 8375' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (TUR) - 0259' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (PET) - 2751' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (BGS) - 1594' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (ZEF) - 7783' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (MAYARA) - 4798' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (MAYARA) - 2046' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (JUH) - 8294' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (JULIANA) - 9738' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (VASC) - 9188' },
-  { usuario_nome: 'William Sanches Fernandes Belo', email: 'william@vieiracred.com.br', atualizado_em: '2025-12-03T09:03:01.603Z', departamento_nome: 'API (VASC) - 7333' },
-]
+const endpoint = 'https://n8n.apivieiracred.store/webhook/get-zapresponder'
 
 const formatDateTime = (value) => {
   if (!value) return '-'
@@ -28,11 +14,36 @@ const formatDateTime = (value) => {
 }
 
 export default function UsuariosZapresponder() {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(endpoint, { method: 'GET' })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
+        setRows(data)
+      } catch (err) {
+        setError(err)
+        setRows([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
   const grouped = useMemo(() => {
+    const source = Array.isArray(rows) && rows.length > 0 ? rows : []
     const map = new Map()
-    mockZapUsers.forEach((row) => {
+    source.forEach((row, idx) => {
       if (!row) return
-      const key = row.email || row.usuario_nome || Math.random().toString(36).slice(2)
+      const key = row.email || row.usuario_nome || `row-${idx}`
       const current = map.get(key) || {
         nome: row.usuario_nome || 'Usuário',
         email: row.email || '-',
@@ -48,7 +59,7 @@ export default function UsuariosZapresponder() {
       map.set(key, current)
     })
     return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome))
-  }, [])
+  }, [rows])
 
   const totals = useMemo(() => {
     const depSet = new Set()
@@ -127,8 +138,19 @@ export default function UsuariosZapresponder() {
                 <Fi.FiUsers />
                 Usuários e departamentos
               </h5>
-              <div className="small opacity-75">Dados de demonstração até receber a API real.</div>
+              <div className="small opacity-75">Dados carregados do Zapresponder.</div>
             </div>
+            {loading && (
+              <div className="d-flex align-items-center gap-2 text-warning small">
+                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                Carregando...
+              </div>
+            )}
+            {error && (
+              <div className="text-danger small">
+                Falha ao carregar: {error.message}
+              </div>
+            )}
           </div>
 
           <div className="table-responsive">
