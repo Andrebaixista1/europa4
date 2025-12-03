@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { FaFacebookF } from 'react-icons/fa'
 import { notify } from '../utils/notify.js'
+import { n8nUrl } from '../services/n8nClient.js'
 
 function formatDateTimeBR(value) {
   if (!value) return '-'
@@ -381,7 +382,7 @@ export default function GeradorSitesV3() {
       setEmpresaListLoading(true)
       setEmpresaListError(null)
       try {
-        const url = 'http://85.31.61.242:5679/webhook/get-empresas'
+        const url = n8nUrl('/webhook/get-empresas')
         const res = await fetch(url, { method: 'GET', signal: controller.signal })
         if (!res.ok) throw new Error(`get-empresas ${res.status}`)
         const data = await res.json().catch(() => [])
@@ -415,7 +416,7 @@ export default function GeradorSitesV3() {
     return () => controller.abort()
   }, [isGenerateOpen])
 
-  const endpoint = 'http://85.31.61.242:5679/webhook/get-bms-faces'
+  const endpoint = n8nUrl('/webhook/get-bms-faces')
 
   const fetchFaces = async (signal) => {
     setIsLoading(true)
@@ -733,7 +734,7 @@ export default function GeradorSitesV3() {
     setSiteLoading(true)
     setSiteError(null)
     try {
-      const url = 'http://85.31.61.242:5679/webhook/get-sites'
+      const url = n8nUrl('/webhook/get-sites')
       const res = await fetch(url, { method: 'GET', signal })
       if (!res.ok) throw new Error(`get-sites ${res.status}`)
       const data = await res.json().catch(() => [])
@@ -1457,7 +1458,7 @@ export default function GeradorSitesV3() {
                             id_bm: toNull(genVincIdBm),
                             observacoes: toNull(genVincNotes),
                           }
-                          const url = 'http://85.31.61.242:5679/webhook/gerador-sitev3'
+                          const url = n8nUrl('/webhook/gerador-sitev3')
                           const res = await fetch(url, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },

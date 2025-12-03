@@ -3,6 +3,7 @@ import { Upload, MessageSquare, FileText, Send, Download, ArrowLeft, Settings, C
 import { Link } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
+import { n8nUrl } from '../services/n8nClient.js'
 
 const DEFAULT_BATCH_SIZE = 100
 
@@ -68,7 +69,7 @@ export default function MultiploDisparos() {
   const fetchChannels = async () => {
     setLoadingChannels(true)
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/canais')
+      const response = await fetch(n8nUrl('/webhook/canais'))
       if (response.ok) {
         const data = await response.json()
         setChannels(data)
@@ -88,7 +89,7 @@ export default function MultiploDisparos() {
     if (!accountId) return []
     
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/templates', {
+      const response = await fetch(n8nUrl('/webhook/templates'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -523,7 +524,7 @@ export default function MultiploDisparos() {
       console.log('   - intervalos:', formData.intervalMin, 'a', formData.intervalMax)
       console.log('   - contactCount:', csvData.length)
       
-      const response = await fetch('http://85.31.61.242:5679/webhook/multi-disparos', {
+      const response = await fetch(n8nUrl('/webhook/multi-disparos'), {
         method: 'POST',
         body: formData_upload
       })

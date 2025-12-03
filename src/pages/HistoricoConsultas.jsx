@@ -5,6 +5,7 @@ import { FiArrowLeft, FiDownload } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles } from '../utils/roles.js'
+import { n8nUrl } from '../services/n8nClient.js'
 import '../styles/historico.css'
 
 function fmtDateTime(iso) {
@@ -62,7 +63,7 @@ export default function HistoricoConsultas() {
           const role = user?.role
           const nivel = role === Roles.Master ? 'master' : role === Roles.Administrador ? 'adm' : role === Roles.Supervisor ? 'super' : 'operador'
           const payload = { id: user.id, equipe_id: equipeId, nivel }
-          const res = await fetch('http://85.31.61.242:5679/webhook/consulta-logs-in100', {
+          const res = await fetch(n8nUrl('/webhook/consulta-logs-in100'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json; charset=UTF-8' },
             body: JSON.stringify(payload),

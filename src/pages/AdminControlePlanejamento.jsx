@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
+import { n8nUrl } from '../services/n8nClient.js'
 
 function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
   return (
@@ -222,7 +223,7 @@ export default function AdminControlePlanejamento() {
     }
     try {
       setInactivatingId(item.id)
-      const res = await fetch('http://85.31.61.242:5679/webhook/api/del-vanguard', {
+      const res = await fetch(n8nUrl('/webhook/api/del-vanguard'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })
@@ -249,7 +250,7 @@ export default function AdminControlePlanejamento() {
     }
     try {
       setRenewingId(item.id)
-      const res = await fetch('http://85.31.61.242:5679/webhook/api/up-vanguard', {
+      const res = await fetch(n8nUrl('/webhook/api/up-vanguard'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })

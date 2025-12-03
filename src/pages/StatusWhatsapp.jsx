@@ -4,8 +4,9 @@ import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
+import { n8nUrl } from '../services/n8nClient.js'
 
-const API_ENDPOINT = 'http://85.31.61.242:5679/webhook/canais'
+const API_ENDPOINT = n8nUrl('/webhook/canais')
 
 const STATUS_META = {
   CONNECTED: { label: 'Connected', variant: 'success', tone: 'green' },

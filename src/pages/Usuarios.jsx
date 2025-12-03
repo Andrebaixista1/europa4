@@ -1,10 +1,11 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
+import { n8nUrl } from '../services/n8nClient.js'
 export default function Usuarios() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -57,7 +58,7 @@ export default function Usuarios() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch('http://85.31.61.242:5679/webhook/user-team', {
+        const res = await fetch(n8nUrl('/webhook/user-team'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: user?.id }),
@@ -76,7 +77,7 @@ export default function Usuarios() {
         const payload = unwrap(data)
         const mapUser = (u) => ({
           id: u?.id ?? u?.user_id ?? null,
-          nome: u?.nome ?? u?.name ?? 'Usuários',
+          nome: u?.nome ?? u?.name ?? 'Usu�rios',
           email: u?.email ?? '',
           role: u?.role ?? u?.papel ?? 'Operador',
           equipe_id: u?.equipe_id ?? u?.team_id ?? null,
@@ -103,7 +104,7 @@ export default function Usuarios() {
             
             setEquipesLista(eq)
           } else {
-            // Fallback: criar equipes baseado nos Usuários
+            // Fallback: criar equipes baseado nos Usu�rios
             const uniq = Array.from(new Set(arr.map(u => u.equipe_id).filter(Boolean)))
             setEquipesLista(uniq.map(id => ({ id, nome: `Equipe ${id}` })))
           }
@@ -116,7 +117,7 @@ export default function Usuarios() {
           }
         }
       } catch (e) {
-        console.error('Falha API Usuários:', e)
+        console.error('Falha API Usu�rios:', e)
         if (!aborted) { setError(e); setUsuarios([]); setSelectedId(null) }
       } finally {
         if (!aborted) setIsLoading(false)
@@ -188,16 +189,16 @@ export default function Usuarios() {
     if (te == null || ue == null) return false
     return Number(te) === Number(ue)
   }
-  // Somente Master pode editar dados do usuário (nome/login/tipo/status via modal)
+  // Somente Master pode editar dados do usu�rio (nome/login/tipo/status via modal)
   const canEditUser = (target) => canManageAll
   const canTransferUser = () => canManageAll
   const canDeleteUser = (target) => canManageAll && (target?.id !== user?.id)
-  // Admin/Supervisor podem alterar status e senha apenas da própria equipe
+  // Admin/Supervisor podem alterar status e senha apenas da pr�pria equipe
   const canToggleUser = (target) => (canManageAll || (isScopedManager && sameTeam(target))) && (target?.id !== user?.id)
   const canChangePasswordFor = (target) => canManageAll || (isScopedManager && sameTeam(target))
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
-    return found ? found.nome : (id != null ? `Equipe ${id}` : '—')
+    return found ? found.nome : (id != null ? `Equipe ${id}` : '�')
   }
   function toLoginFromName(nome) {
     const s = (nome || '')
@@ -212,19 +213,19 @@ export default function Usuarios() {
   const handleNomeChange = (nome) => {
     const upper = (nome || '').toUpperCase()
     setFormNome(upper)
-    // se login estiver vazio ou era derivado do nome anterior, atualiza sugestão em minúsculas
+    // se login estiver vazio ou era derivado do nome anterior, atualiza sugest�o em min�sculas
     if (!formLogin || formLogin === toLoginFromName(formNome)) {
       setFormLogin(toLoginFromName(upper))
     }
   }
-  // Função para abrir modal de adicionar Usuário
+  // Fun��o para abrir modal de adicionar Usu�rio
   const handleOpenAddModal = () => {
     if (!canAdd) return
-    // Limpar formulário
+    // Limpar formul�rio
     setFormNome('')
     setFormLogin('')
     setFormSenha('')
-    // Definir tipo padrão conforme papel de quem está criando
+    // Definir tipo padr�o conforme papel de quem est� criando
     if (isSupervisor) setFormTipo('Operador')
     else if (isAdminRole) setFormTipo('Administrador')
     else setFormTipo('Operador')
@@ -277,7 +278,7 @@ export default function Usuarios() {
         id_usuario: transferUser.id,
         equipe_id: newIdNum,
       }
-      const response = await fetch('http://85.31.61.242:5679/webhook/transfer-team', {
+      const response = await fetch(n8nUrl('/webhook/transfer-team'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -291,7 +292,7 @@ export default function Usuarios() {
       setUsuarios(prev => prev.map(u => (
         u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
       )))
-      notify.success('Usuário transferido de equipe.')
+      notify.success('Usu�rio transferido de equipe.')
       closeTransferModal()
     } catch (err) {
       notify.error(`Erro ao transferir: ${err.message}`)
@@ -324,7 +325,7 @@ export default function Usuarios() {
     const senha = passwordValue.trim()
     const confirmacao = passwordConfirm.trim()
     if (!senhaAtual || !senha || !confirmacao) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigat�rios')
       return
     }
     if (senha.length < 4) {
@@ -332,17 +333,17 @@ export default function Usuarios() {
       return
     }
     if (senha !== confirmacao) {
-      notify.warn('As senhas não coincidem')
+      notify.warn('As senhas n�o coincidem')
       return
     }
     const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
     if (userId == null) {
-      notify.error('Selecione um usuário válido')
+      notify.error('Selecione um usu�rio v�lido')
       return
     }
     setIsChangingPassword(true)
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-pass', {
+      const response = await fetch(n8nUrl('/webhook/alter-pass'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -362,8 +363,8 @@ export default function Usuarios() {
       const trimmedBody = (rawBody || '').trim()
       const normalizedBody = trimmedBody.toLowerCase()
       if (!trimmedBody || trimmedBody === '{}' || trimmedBody === '[]' || normalizedBody === 'null' || normalizedBody === 'undefined') {
-        const message = 'Senha não alterada: usuário não encontrado.'
-        console.warn(`API alter-pass retornou payload vazio para o usuário ${userId}`, trimmedBody)
+        const message = 'Senha n�o alterada: usu�rio n�o encontrado.'
+        console.warn(`API alter-pass retornou payload vazio para o usu�rio ${userId}`, trimmedBody)
         notify.error(message)
         return
       }
@@ -372,8 +373,8 @@ export default function Usuarios() {
         const parsed = JSON.parse(trimmedBody)
         console.log('Senha alterada via API:', parsed)
         if (parsed == null || (Array.isArray(parsed) && parsed.length === 0) || (typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length === 0)) {
-          const message = 'Senha não alterada: usuário não encontrado.'
-          console.warn(`API alter-pass retornou objeto vazio para o usuário ${userId}`, parsed)
+          const message = 'Senha n�o alterada: usu�rio n�o encontrado.'
+          console.warn(`API alter-pass retornou objeto vazio para o usu�rio ${userId}`, parsed)
           notify.error(message)
           return
         }
@@ -441,23 +442,23 @@ export default function Usuarios() {
     setIsSavingEdit(false)
   }
   const handleEditSubmit = async (event) => {
-    if (!canEditUser(editUser)) { notify.warn('Você só pode alterar usuários da sua equipe.'); return }
+    if (!canEditUser(editUser)) { notify.warn('Voc� s� pode alterar usu�rios da sua equipe.'); return }
     event.preventDefault()
     const nome = editNome.trim()
     const login = editLogin.trim()
     const roleOption = optionToRole(editTipo)
     const userId = normalizeId(editUser?.id ?? null) ?? editUser?.id ?? null
     if (!userId) {
-      notify.error('Selecione um usuário válido')
+      notify.error('Selecione um usu�rio v�lido')
       return
     }
     if (!nome || !login) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigat�rios')
       return
     }
     setIsSavingEdit(true)
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-user', {
+      const response = await fetch(n8nUrl('/webhook/alter-user'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -476,15 +477,15 @@ export default function Usuarios() {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-      let successMessage = 'Usuário atualizado com sucesso.'
+      let successMessage = 'Usu�rio atualizado com sucesso.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
-          console.log('Usuário alterado via API:', parsed)
+          console.log('Usu�rio alterado via API:', parsed)
           const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
           if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
         } catch (_) {
-          console.log('Usuário alterado via API (texto):', rawBody)
+          console.log('Usu�rio alterado via API (texto):', rawBody)
           if (rawBody.trim()) successMessage = rawBody.trim()
         }
       }
@@ -495,8 +496,8 @@ export default function Usuarios() {
       notify.success(successMessage)
       closeEditModal()
     } catch (error) {
-      console.error('Erro ao atualizar Usuário:', error)
-      notify.error(`Erro ao atualizar Usuário: ${error.message}`)
+      console.error('Erro ao atualizar Usu�rio:', error)
+      notify.error(`Erro ao atualizar Usu�rio: ${error.message}`)
     } finally {
       setIsSavingEdit(false)
     }
@@ -504,16 +505,16 @@ export default function Usuarios() {
   async function handleAddSubmit(e) {
     if (!canAdd) return
     e.preventDefault()
-    console.log('âœ… Iniciando handleAddSubmit...')
+    console.log('✅ Iniciando handleAddSubmit...')
     
     const nome = formNome.trim()
     const login = formLogin.trim()
     const senha = formSenha.trim()
     
-    console.log('Y Dados do formulário:', { nome, login, senha, formEquipeId, formTipo })
+    console.log('Y Dados do formul�rio:', { nome, login, senha, formEquipeId, formTipo })
     
     if (!nome || !login || !senha) {
-      notify.warn('Preencha todos os campos obrigatórios')
+      notify.warn('Preencha todos os campos obrigat�rios')
       return
     }
     if (senha.length < 4) {
@@ -534,10 +535,10 @@ export default function Usuarios() {
     setIsSaving(true)
     
     try {
-      console.log('Criando usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
+      console.log('Criando usu�rio via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
-      // Chamada para a API de adicionar Usuário
-      const response = await fetch('http://85.31.61.242:5679/webhook/add-user', {
+      // Chamada para a API de adicionar Usu�rio
+      const response = await fetch(n8nUrl('/webhook/add-user'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -557,7 +558,7 @@ export default function Usuarios() {
         throw new Error(`Erro ${response.status}: ${errorText}`)
       }
       const result = await response.json()
-      console.log('Usuário criado via API:', result)
+      console.log('Usu�rio criado via API:', result)
       // Criar objeto local para atualizar a lista
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
       const novo = {
@@ -574,17 +575,17 @@ export default function Usuarios() {
       setSelectedId(nextId)
       setIsAddOpen(false)
       
-      // Limpar formulário
+      // Limpar formul�rio
       setFormNome('')
       setFormLogin('')
       setFormSenha('')
       if (!isSupervisor) setFormTipo('Operador')
       
-      notify.success(`Usuário "${nome}" criado com sucesso!`)
+      notify.success(`Usu�rio "${nome}" criado com sucesso!`)
       
     } catch (error) {
-      console.error('a Erro ao criar Usuário:', error)
-      notify.error(`Erro ao criar Usuário: ${error.message}`)
+      console.error('a Erro ao criar Usu�rio:', error)
+      notify.error(`Erro ao criar Usu�rio: ${error.message}`)
     } finally {
       setIsSaving(false)
     }
@@ -596,7 +597,7 @@ export default function Usuarios() {
     setDeletingId(targetId)
     setPendingDelete(null)
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/delete-user', {
+      const response = await fetch(n8nUrl('/webhook/delete-user'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -610,9 +611,9 @@ export default function Usuarios() {
       }
       if (rawBody) {
         try {
-          console.log('Usuário removido via API:', JSON.parse(rawBody))
+          console.log('Usu�rio removido via API:', JSON.parse(rawBody))
         } catch (_) {
-          console.log('Usuário removido via API (texto):', rawBody)
+          console.log('Usu�rio removido via API (texto):', rawBody)
         }
       }
       const removedUser = usuarios.find(u => u.id === targetId)
@@ -622,13 +623,13 @@ export default function Usuarios() {
         return next
       })
       if (removedUser?.nome) {
-        notify.success(`Usuário "${removedUser.nome}" excluído.`)
+        notify.success(`Usu�rio "${removedUser.nome}" exclu�do.`)
       } else {
-        notify.success('Usuário excluído.')
+        notify.success('Usu�rio exclu�do.')
       }
     } catch (error) {
-      console.error('Erro ao excluir Usuário:', error)
-      notify.error(`Erro ao excluir Usuário: ${error.message}`)
+      console.error('Erro ao excluir Usu�rio:', error)
+      notify.error(`Erro ao excluir Usu�rio: ${error.message}`)
     } finally {
       setDeletingId(null)
     }
@@ -638,17 +639,17 @@ export default function Usuarios() {
     if (!targetUser) return
     const targetId = normalizeId(targetUser.id ?? null) ?? targetUser.id ?? null
     if (targetId == null) {
-      notify.error('Não foi possível identificar o Usuário.')
+      notify.error('N�o foi poss�vel identificar o Usu�rio.')
       return
     }
     if (targetId === user?.id) {
-      notify.warn('Você não pode alterar o seu próprio status.')
+      notify.warn('Voc� n�o pode alterar o seu pr�prio status.')
       return
     }
     const nextActive = !targetUser.ativo
     setTogglingId(targetId)
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-status', {
+      const response = await fetch(n8nUrl('/webhook/alter-status'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -664,7 +665,7 @@ export default function Usuarios() {
         const message = (rawBody || '').trim() || `Erro ${response.status}`
         throw new Error(message)
       }
-      let successMessage = nextActive ? 'usuário ativado.' : 'usuário desativado.'
+      let successMessage = nextActive ? 'usu�rio ativado.' : 'usu�rio desativado.'
       if (rawBody) {
         try {
           const parsed = JSON.parse(rawBody)
@@ -698,7 +699,7 @@ export default function Usuarios() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Usuários</h2>
+              <h2 className="fw-bold mb-1">Usu�rios</h2>
               <div className="opacity-75 small">Gerencie contas, perfis e acessos</div>
             </div>
           </div>
@@ -709,14 +710,14 @@ export default function Usuarios() {
                             <div className="d-flex align-items-center gap-2 mb-3">
                 
                 {canAdd && (
-              <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usuário" aria-label="Adicionar usuário" onClick={handleOpenAddModal} disabled={!canAdd}>
+              <button className="btn btn-primary d-flex align-items-center justify-content-center" title="Adicionar usu�rio" aria-label="Adicionar usu�rio" onClick={handleOpenAddModal} disabled={!canAdd}>
                     <Fi.FiPlus />
                   </button>
                 )}
                 <button type="button" className="btn btn-ghost btn-sm" title="Filtrar" aria-label="Filtrar" onClick={() => setIsFilterOpen(v => !v)}>
                   <Fi.FiFilter />
                 </button>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar Usuário..." />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} className="form-control" placeholder="Buscar Usu�rio..." />
                 <button className="btn btn-ghost btn-sm" onClick={() => setSearch('')} aria-label="Limpar busca" title="Limpar">
                   <Fi.FiX />
                 </button>
@@ -764,7 +765,7 @@ export default function Usuarios() {
               {error && (<div className="alert alert-danger py-2">{String(error)}</div>)}
               {!isLoading && !error && (
                 <ul className="list-group">
-                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum usuário encontrado</li>)}
+                  {filtered.length === 0 && (<li className="list-group-item text-center opacity-75">Nenhum usu�rio encontrado</li>)}
                   {filtered.map((u) => (
                     <li key={u.id} className={`list-group-item d-flex justify-content-between align-items-center ${selectedId === u.id ? 'active' : ''}`} role="button" onClick={() => setSelectedId(u.id)}>
                       <div className="me-3">
@@ -781,7 +782,7 @@ export default function Usuarios() {
           <div className="col-12 col-lg-7">
             <div className="neo-card neo-lg p-4 h-100">
               {!selected ? (
-                <div className="opacity-75">Selecione um usuário para ver os detalhes.</div>
+                <div className="opacity-75">Selecione um usu�rio para ver os detalhes.</div>
               ) : (
                 <>
                   <div className="d-flex align-items-start justify-content-between mb-3">
@@ -818,14 +819,14 @@ export default function Usuarios() {
                     </div>
                     <div className="col-md-6">
                       <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                        <div className="small text-uppercase opacity-75 mb-2">SEGURANÇA</div>
+                        <div className="small text-uppercase opacity-75 mb-2">SEGURAN�A</div>
                         <div className="mb-2"><span className="opacity-75">Status: </span>{selected.ativo ? 'Ativo' : 'Inativo'}</div>
                         <div className="d-flex gap-2">
                           <button className="btn btn-outline-warning btn-sm" title="Alterar senha" aria-label="Alterar senha" disabled={!canChangePasswordFor(selected)}
                             onClick={() => openPasswordModal(selected)}>
                             <Fi.FiKey />
                           </button>
-                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar Usuário' : 'Ativar Usuário'} aria-label={selected.ativo ? 'Desativar Usuário' : 'Ativar Usuário'} disabled={!canToggleUser(selected) || togglingId === selected.id}
+                          <button className="btn btn-outline-secondary btn-sm" title={selected.ativo ? 'Desativar Usu�rio' : 'Ativar Usu�rio'} aria-label={selected.ativo ? 'Desativar Usu�rio' : 'Ativar Usu�rio'} disabled={!canToggleUser(selected) || togglingId === selected.id}
                             onClick={() => handleToggleStatus(selected)}>
                             {togglingId === selected.id ? (
                               <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -839,7 +840,7 @@ export default function Usuarios() {
                   </div>
                 </>
               )}
-              {/* <div className="small mt-3 opacity-75">IntegraAAo com: http://85.31.61.242:5679/webhook/add-user</div> */}
+              {/* <div className="small mt-3 opacity-75">IntegraAAo com: /api/n8n/webhook/add-user</div> */}
             </div>
           </div>
         </div>
@@ -850,13 +851,13 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Transferir Usuário</h5>
+                <h5 className="modal-title">Transferir Usu�rio</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={closeTransferModal}></button>
               </div>
               <form onSubmit={handleConfirmTransfer}>
                 <div className="modal-body">
                   <div className="mb-3">
-                    <div className="small text-uppercase opacity-75 mb-2">Usuário</div>
+                    <div className="small text-uppercase opacity-75 mb-2">Usu�rio</div>
                     <div className="fw-semibold">{transferUser?.nome}</div>
                   </div>
                   <div className="d-flex align-items-center justify-content-between gap-3">
@@ -893,7 +894,7 @@ export default function Usuarios() {
   <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{background:'rgba(0,0,0,0.6)', zIndex:1050}}>
     <div className="neo-card neo-lg p-4" style={{maxWidth:720, width:'95%'}}>
       <div className="d-flex align-items-center justify-content-between mb-2">
-        <h5 className="mb-0">Adicionar Usuário</h5>
+        <h5 className="mb-0">Adicionar Usu�rio</h5>
         <button type="button" className="btn btn-ghost btn-icon" aria-label="Fechar" onClick={() => setIsAddOpen(false)} disabled={isSaving}>
           <Fi.FiX />
         </button>
@@ -907,7 +908,7 @@ export default function Usuarios() {
           <div className="col-12">
             <label className="form-label">Login *</label>
             <input className="form-control" value={formLogin} onChange={(e) => setFormLogin((e.target.value || '').toLowerCase())} disabled={isSaving} placeholder="Ex: joaosilva" required />
-            <div className="form-text text-white">Login será usado para acessar o sistema</div>
+            <div className="form-text text-white">Login ser� usado para acessar o sistema</div>
           </div>
           <div className="col-12">
             <label className="form-label">Tipo</label>
@@ -917,8 +918,8 @@ export default function Usuarios() {
               <option>Supervisor</option>
               <option>Operador</option>
             </select>
-            {isSupervisor && <div className="form-text text-white">Como supervisor(a), você só pode criar operadores</div>}
-            {isAdminRole && <div className="form-text text-white">Como administrador(a), você só pode criar usuários Administradores</div>}
+            {isSupervisor && <div className="form-text text-white">Como supervisor(a), voc� s� pode criar operadores</div>}
+            {isAdminRole && <div className="form-text text-white">Como administrador(a), voc� s� pode criar usu�rios Administradores</div>}
           </div>
           <div className="col-12">
             <label className="form-label">Senha *</label>
@@ -1089,12 +1090,12 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Confirmar exclusão</h5>
+                <h5 className="modal-title">Confirmar exclus�o</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setPendingDelete(null)} disabled={deletingId != null}></button>
               </div>
               <div className="modal-body">
                 <p>Tem certeza que deseja excluir <strong>{pendingDelete.nome}</strong>?</p>
-                <p className="mb-0 small opacity-75">Esta ação não pode ser desfeita.</p>
+                <p className="mb-0 small opacity-75">Esta a��o n�o pode ser desfeita.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deletingId != null}>Cancelar</button>

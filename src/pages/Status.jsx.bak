@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { FiCheckCircle, FiAlertTriangle, FiXCircle, FiRefreshCw } from 'react-icons/fi'
@@ -20,7 +20,7 @@ export default function Status() {
   const TOTAL_SEC = 180
   const [remaining, setRemaining] = useState(TOTAL_SEC)
 
-  // Chama o endpoint do n8n ao abrir a pÃƒÂ¡gina e no botÃƒÂ£o Atualizar
+  // Chama o endpoint do n8n ao abrir a pÃ¡gina e no botÃ£o Atualizar
   const runN8nStatus = async () => {
     if (running) return
     setRunning(true)
@@ -32,7 +32,7 @@ export default function Status() {
     try {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 15000)
-      const res = await fetch('http://85.31.61.242:5679/webhook/status-workflows', { method: 'GET', signal: controller.signal })
+      const res = await fetch('/api/n8n/webhook/status-workflows', { method: 'GET', signal: controller.signal })
       clearTimeout(timeout)
       ok = res.ok
       statusText = String(res.status)
@@ -77,7 +77,7 @@ export default function Status() {
     const id = setInterval(() => {
       setRemaining((prev) => {
         if (prev <= 1) {
-          // dispara atualizaÃƒÂ§ÃƒÂ£o quando zera
+          // dispara atualizaÃ§Ã£o quando zera
           if (!running) runN8nStatus()
           return TOTAL_SEC
         }
@@ -98,7 +98,7 @@ export default function Status() {
         <div className="d-flex align-items-center justify-content-between mb-3">
           <h2 className="fw-bold mb-0 d-flex align-items-center gap-2">Status</h2>
           <div className="d-flex align-items-center gap-3">
-            <div className="small opacity-85">Próxima atualização em {formatMMSS(remaining)}</div>
+            <div className="small opacity-85">Pr�xima atualiza��o em {formatMMSS(remaining)}</div>
             <div className="progress" style={{ width: '160px', height: '6px' }}>
               <div className="progress-bar bg-info" role="progressbar" style={{ width: `${(TOTAL_SEC - remaining) / TOTAL_SEC * 100}%` }} aria-valuemin="0" aria-valuemax="100"></div>
             </div>
@@ -124,10 +124,10 @@ export default function Status() {
             <table className="table table-dark table-striped table-hover mb-0 align-middle">
               <thead>
                 <tr>
-                  <th style={{minWidth: '220px'}}>Serviço</th>
+                  <th style={{minWidth: '220px'}}>Servi�o</th>
                   <th style={{minWidth: '120px'}}>Status</th>
-                  <th style={{minWidth: '120px'}}>Latência</th>
-                  <th style={{minWidth: '220px'}}>Última checagem</th>
+                  <th style={{minWidth: '120px'}}>Lat�ncia</th>
+                  <th style={{minWidth: '220px'}}>�ltima checagem</th>
                   <th>Detalhe</th>
                 </tr>
               </thead>

@@ -4,6 +4,7 @@ import { ArrowLeft, Activity, Calendar, RefreshCw, Clock, CheckCircle2, XCircle,
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { notify } from '../utils/notify.js'
+import { n8nUrl } from '../services/n8nClient.js'
 
 export default function AcompanhamentoDisparos() {
   const [loading, setLoading] = useState(false)
@@ -108,7 +109,7 @@ export default function AcompanhamentoDisparos() {
     setLoading(true)
     setError('')
     try {
-      const resp = await fetch('http://85.31.61.242:5679/webhook/tracking')
+      const resp = await fetch(n8nUrl('/webhook/tracking'))
       if (!resp.ok) {
         const tx = await resp.text()
         throw new Error(`HTTP ${resp.status} - ${tx}`)
@@ -305,7 +306,7 @@ export default function AcompanhamentoDisparos() {
     if (!itemToDelete) return
     
     try {
-      const resp = await fetch('http://85.31.61.242:5679/webhook/tracking-del', {
+      const resp = await fetch(n8nUrl('/webhook/tracking-del'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -359,7 +360,7 @@ export default function AcompanhamentoDisparos() {
     
     try {
       const deletePromises = campanhaToDelete.items.map(item => 
-        fetch('http://85.31.61.242:5679/webhook/tracking-del', {
+        fetch(n8nUrl('/webhook/tracking-del'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

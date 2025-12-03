@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import users from '../data/users.json'
 import { normalizeRole, Roles } from '../utils/roles.js'
+import { n8nUrl } from '../services/n8nClient.js'
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -110,7 +111,7 @@ export function AuthProvider({ children }) {
       const dataHoraLogin = formatDateTime7(new Date(), 'America/Sao_Paulo')
       const ultimoIp = await resolveClientIp()
 
-      const webhookResponse = await fetch('http://85.31.61.242:5679/webhook/login', {
+      const webhookResponse = await fetch(n8nUrl('/webhook/login'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

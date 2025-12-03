@@ -60,7 +60,7 @@ export default function Usu�rios() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch('http://85.31.61.242:5679/webhook/user-team', {
+        const res = await fetch('/api/n8n/webhook/user-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: user?.id }),
@@ -274,7 +274,7 @@ export default function Usu�rios() {
         nova_equipe_id: newIdNum,
         supervisor: ((transferUser.role || '').toLowerCase().includes('supervisor')) ? 1 : undefined,
       }
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-team-name', {
+      const response = await fetch('/api/n8n/webhook/alter-team-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -348,7 +348,7 @@ export default function Usu�rios() {
     setIsChangingPassword(true)
 
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-pass', {
+      const response = await fetch('/api/n8n/webhook/alter-pass', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -463,7 +463,7 @@ export default function Usu�rios() {
     setIsSavingEdit(true)
 
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-user', {
+      const response = await fetch('/api/n8n/webhook/alter-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -549,7 +549,7 @@ export default function Usu�rios() {
       console.log('Y Criando Usu�rio via API...', { nome, login, role: roleOut, equipe_id: equipeId })
       
       // Chamada para a API de adicionar Usu�rio
-      const response = await fetch('http://85.31.61.242:5679/webhook/add-user', {
+      const response = await fetch('/api/n8n/webhook/add-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -613,7 +613,7 @@ export default function Usu�rios() {
     setPendingDelete(null)
 
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/delete-user', {
+      const response = await fetch('/api/n8n/webhook/delete-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -675,7 +675,7 @@ export default function Usu�rios() {
     setTogglingId(targetId)
 
     try {
-      const response = await fetch('http://85.31.61.242:5679/webhook/alter-status', {
+      const response = await fetch('/api/n8n/webhook/alter-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -932,7 +932,7 @@ export default function Usu�rios() {
 
                 </>
               )}
-              {/* <div className="small mt-3 opacity-75">IntegraAAo com: http://85.31.61.242:5679/webhook/add-user</div> */}
+              {/* <div className="small mt-3 opacity-75">IntegraAAo com: /api/n8n/webhook/add-user</div> */}
             </div>
           </div>
         </div>
