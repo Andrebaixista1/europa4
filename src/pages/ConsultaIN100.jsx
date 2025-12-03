@@ -66,16 +66,24 @@ export default function ConsultaIN100() {
     if (!user || !user.id) return
     try {
       const url = n8nUrl('/webhook/get-saldos')
+      const payload = buildSaldoPayload()
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildSaldoPayload()),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) return
       const data = await res.json().catch(() => null)
       if (!data) return
-      const item = Array.isArray(data) ? (data[0] || {}) : data
       const num = (val) => Number(val ?? 0)
+      const asArray = Array.isArray(data) ? data : [data]
+      const targetTeamId = payload?.equipe_id ?? payload?.team_id ?? payload?.id_equipe ?? null
+      const item = (asArray.find((row) => {
+        if (!row) return false
+        if (targetTeamId == null) return false
+        const eqId = Number(row.equipe_id ?? row.team_id ?? row.id_equipe)
+        return Number(targetTeamId) === eqId
+      })) || asArray[0] || {}
       setMetrics({
         totalCarregado: num(item.total_carregado ?? item.total ?? item.carregado),
         disponivel: num(item.limite_disponivel ?? item.disponivel ?? item.limite ?? item.limite_total),
