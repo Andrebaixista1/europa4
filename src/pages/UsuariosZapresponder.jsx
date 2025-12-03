@@ -27,7 +27,11 @@ export default function UsuariosZapresponder() {
   const [error, setError] = useState(null)
   const [modalUser, setModalUser] = useState(null)
   const [search, setSearch] = useState('')
-  const [deptFilter, setDeptFilter] = useState('')
+  const [deptFilter, setDeptFilter] = useState([])
+  const [activeTab, setActiveTab] = useState('usuarios')
+  const [showDeptModal, setShowDeptModal] = useState(false)
+  const [tempDept, setTempDept] = useState([])
+  const [deptUsersModal, setDeptUsersModal] = useState(null)
 
   useEffect(() => {
     const load = async () => {
@@ -89,12 +93,33 @@ export default function UsuariosZapresponder() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const deptSet = new Set(deptFilter.map((d) => String(d || '').toLowerCase()))
     return grouped.filter((user) => {
       const matchesText = !q || `${user.nome} ${user.email}`.toLowerCase().includes(q)
-      const matchesDept = !deptFilter || user.departamentos.some((d) => String(d || '').toLowerCase() === deptFilter.toLowerCase())
+      const matchesDept =
+        deptSet.size === 0 ||
+        user.departamentos.some((d) => deptSet.has(String(d || '').toLowerCase()))
       return matchesText && matchesDept
     })
   }, [grouped, search, deptFilter])
+
+  const deptGroups = useMemo(() => {
+    const map = new Map()
+    filtered.forEach((user) => {
+      user.departamentos.forEach((dep) => {
+        const key = dep || '-'
+        const entry = map.get(key) || { dep: key, users: new Map(), atualizadoEm: null }
+        const name = user.nome || user.email || 'Usuário'
+        const email = user.email || name
+        entry.users.set(email, name)
+        const ts = user.atualizadoEm ? new Date(user.atualizadoEm).getTime() : 0
+        const prev = entry.atualizadoEm ? new Date(entry.atualizadoEm).getTime() : 0
+        if (ts > prev) entry.atualizadoEm = user.atualizadoEm
+        map.set(key, entry)
+      })
+    })
+    return Array.from(map.values()).sort((a, b) => a.dep.localeCompare(b.dep))
+  }, [filtered])
 
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
@@ -164,24 +189,34 @@ export default function UsuariosZapresponder() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div className="col-12 col-md-6 col-lg-4">
-              <label className="form-label small text-secondary mb-1">Departamento</label>
-              <select
-                className="form-select"
-                value={deptFilter}
-                onChange={(e) => setDeptFilter(e.target.value)}
-              >
-                <option value="">Todos</option>
-                {totals.depList.map((dep) => (
-                  <option key={dep} value={dep}>{dep}</option>
-                ))}
-              </select>
+            <div className="col-12 col-md-6 col-lg-4 d-flex flex-column gap-2">
+              <label className="form-label small text-secondary mb-1">Departamentos</label>
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-info btn-sm"
+                  onClick={() => { setTempDept(deptFilter); setShowDeptModal(true) }}
+                >
+                  Selecionar
+                </button>
+                {deptFilter.length > 0 && (
+                  <div className="d-flex flex-wrap gap-1">
+                    {deptFilter.slice(0, 3).map((dep) => (
+                      <span key={dep} className="badge text-bg-dark">{dep}</span>
+                    ))}
+                    {deptFilter.length > 3 && (
+                      <span className="badge text-bg-secondary">+{deptFilter.length - 3}</span>
+                    )}
+                  </div>
+                )}
+                {deptFilter.length === 0 && <span className="small text-secondary">Todos</span>}
+              </div>
             </div>
             <div className="col-12 col-md-12 col-lg-4 d-flex gap-2">
               <button
                 type="button"
                 className="btn btn-outline-light mt-auto"
-                onClick={() => { setSearch(''); setDeptFilter('') }}
+                onClick={() => { setSearch(''); setDeptFilter([]) }}
               >
                 Limpar filtros
               </button>
@@ -189,71 +224,156 @@ export default function UsuariosZapresponder() {
           </div>
         </div>
 
-        <div className="neo-card neo-lg p-4">
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
-            <div>
-              <h5 className="mb-1 d-flex align-items-center gap-2">
-                <Fi.FiUsers />
-                Usuários e departamentos
-              </h5>
-              <div className="small opacity-75">Dados carregados do Zapresponder.</div>
+        <div className="d-flex gap-2 mb-3">
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'usuarios' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => setActiveTab('usuarios')}
+          >
+            Usuários
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${activeTab === 'deptos' ? 'btn-primary' : 'btn-outline-primary'}`}
+            onClick={() => setActiveTab('deptos')}
+          >
+            Departamentos
+          </button>
+        </div>
+
+        <div className="neo-card neo-lg p-4 tab-content">
+          <div className={`tab-pane fade ${activeTab === 'usuarios' ? 'show active' : ''}`}>
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+              <div>
+                <h5 className="mb-1 d-flex align-items-center gap-2">
+                  <Fi.FiUsers />
+                  Usuários e departamentos
+                </h5>
+                <div className="small opacity-75">Dados carregados do Zapresponder.</div>
+              </div>
+              {loading && (
+                <div className="d-flex align-items-center gap-2 text-warning small">
+                  <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                  Carregando...
+                </div>
+              )}
+              {error && (
+                <div className="text-danger small">
+                  Falha ao carregar: {error.message}
+                </div>
+              )}
             </div>
-            {loading && (
-              <div className="d-flex align-items-center gap-2 text-warning small">
-                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                Carregando...
-              </div>
-            )}
-            {error && (
-              <div className="text-danger small">
-                Falha ao carregar: {error.message}
-              </div>
-            )}
+
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>Usuário</th>
+                    <th>Email</th>
+                    <th style={{ minWidth: '220px' }}>Departamentos</th>
+                    <th style={{ width: '180px' }}>Atualizado em</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((user) => (
+                    <tr key={user.email}>
+                      <td className="fw-semibold">{user.nome}</td>
+                      <td>{user.email}</td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-2"
+                            onClick={() => setModalUser(user)}
+                            title="Ver departamentos"
+                            aria-label="Ver departamentos"
+                          >
+                            <Fi.FiList />
+                            <span className="visually-hidden">Ver departamentos</span>
+                            <span className="badge ms-1" style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#e2e8f0' }}>
+                              {user.departamentos.length}
+                            </span>
+                          </button>
+                        </div>
+                      </td>
+                      <td className="text-nowrap">{formatDateTime(user.atualizadoEm)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="table-responsive">
-            <table className="table table-dark table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th>Usuário</th>
-                  <th>Email</th>
-                  <th style={{ minWidth: '220px' }}>Departamentos</th>
+          <div className={`tab-pane fade ${activeTab === 'deptos' ? 'show active' : ''}`}>
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+              <div>
+                <h5 className="mb-1 d-flex align-items-center gap-2">
+                  <Fi.FiGrid />
+                  Departamentos e usuários
+                </h5>
+                <div className="small opacity-75">Agrupamento por departamento considerando os filtros acima.</div>
+              </div>
+            </div>
+
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle mb-0">
+                <thead>
+                  <tr>
+                  <th>Departamento</th>
+                  <th style={{ width: '140px' }}>Usuários</th>
+                  <th>Lista</th>
                   <th style={{ width: '180px' }}>Atualizado em</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((user) => (
-                  <tr key={user.email}>
-                    <td className="fw-semibold">{user.nome}</td>
-                    <td>{user.email}</td>
-                    <td>
-                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                {deptGroups.map((dep) => {
+                    const users = Array.from(dep.users.values())
+                    const preview = users.slice(0, 4).join(', ')
+                    const hasMore = users.length > 4
+                    return (
+                    <tr key={dep.dep}>
+                      <td className="fw-semibold">{dep.dep}</td>
+                      <td>{users.length}</td>
+                      <td>
+                        {preview}
+                        {hasMore && <span className="text-secondary"> +{users.length - 4} mais</span>}
                         <button
                           type="button"
-                          className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-2"
-                          onClick={() => setModalUser(user)}
-                          title="Ver departamentos"
-                          aria-label="Ver departamentos"
+                          className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-1 ms-2"
+                          onClick={() => setDeptUsersModal({ dep: dep.dep, users })}
                         >
-                          <Fi.FiList />
-                          <span className="visually-hidden">Ver departamentos</span>
-                          <span className="badge ms-1" style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#e2e8f0' }}>
-                            {user.departamentos.length}
-                          </span>
+                          <Fi.FiUsers />
+                          <span className="visually-hidden">Ver usuários</span>
                         </button>
-                      </div>
-                    </td>
-                    <td className="text-nowrap">{formatDateTime(user.atualizadoEm)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                      <td className="text-nowrap">{formatDateTime(dep.atualizadoEm)}</td>
+                    </tr>
+                  )
+                })}
+                  {deptGroups.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="text-center text-secondary py-3">Nenhum departamento encontrado.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </main>
       <Footer />
 
       <DepartamentosModal user={modalUser} onClose={() => setModalUser(null)} />
+      <DeptUsersModal data={deptUsersModal} onClose={() => setDeptUsersModal(null)} />
+      <DepartamentoFilterModal
+        open={showDeptModal}
+        options={totals.depList}
+        selected={tempDept}
+        onChange={setTempDept}
+        onApply={() => { setDeptFilter(tempDept); setShowDeptModal(false) }}
+        onClose={() => setShowDeptModal(false)}
+        onClear={() => { setTempDept([]); setDeptFilter([]); setShowDeptModal(false) }}
+      />
     </div>
   )
 }
@@ -288,6 +408,84 @@ export function DepartamentosModal({ user, onClose }) {
                 </span>
               ))}
             </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DepartamentoFilterModal({ open, options, selected, onChange, onApply, onClose, onClear }) {
+  if (!open) return null
+  const toggle = (dep) => {
+    const exists = selected.includes(dep)
+    if (exists) onChange(selected.filter((d) => d !== dep))
+    else onChange([...selected, dep])
+  }
+  return (
+    <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)' }} role="dialog" aria-modal="true">
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content bg-dark text-light border border-secondary">
+          <div className="modal-header">
+            <h5 className="modal-title d-flex align-items-center gap-2">
+              <Fi.FiList /> Selecionar departamentos
+            </h5>
+            <button type="button" className="btn-close btn-close-white" aria-label="Close" onClick={onClose}></button>
+          </div>
+          <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            {options.length === 0 && <div className="text-secondary small">Nenhum departamento disponível.</div>}
+            <div className="d-flex flex-column gap-2">
+              {options.map((dep) => (
+                <label key={dep} className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={selected.includes(dep)}
+                    onChange={() => toggle(dep)}
+                  />
+                  <span>{dep}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-outline-light" onClick={onClear}>Limpar</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
+            <button type="button" className="btn btn-primary" onClick={onApply}>Aplicar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeptUsersModal({ data, onClose }) {
+  if (!data) return null
+  const { dep, users = [] } = data
+  return (
+    <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)' }} role="dialog" aria-modal="true">
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal-content bg-dark text-light border border-secondary">
+          <div className="modal-header">
+            <h5 className="modal-title d-flex align-items-center gap-2">
+              <Fi.FiUsers />
+              Usuários do departamento
+            </h5>
+            <button type="button" className="btn-close btn-close-white" aria-label="Close" onClick={onClose}></button>
+          </div>
+          <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            <div className="mb-3 small text-secondary">{dep}</div>
+            {users.length === 0 && <div className="text-secondary small">Nenhum usuário listado.</div>}
+            <ul className="list-group list-group-flush">
+              {users.map((name, idx) => (
+                <li key={`${dep}-${idx}`} className="list-group-item bg-dark text-light d-flex align-items-center gap-2">
+                  <Fi.FiUser /> <span>{name}</span>
+                </li>
+              ))}
+            </ul>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
