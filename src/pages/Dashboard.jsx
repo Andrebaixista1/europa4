@@ -103,21 +103,21 @@ export default function Dashboard() {
         </div>
 
         {isMaster && (
-          <section className="mb-4">
-            <h5 className="section-title">Master</h5>
-            <div className="row g-3">
-              <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Gestao de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">
-                  Gerencie e acompanhe as recargas da equipe.
-                </Card>
-              </div>
-              <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Usuarios Zapresponder" icon="FiUsers" accent="info" to="/admin/usuarios-zapresponder">
-                  Visualize usuarios e departamentos sincronizados do Zapresponder.
-                </Card>
-              </div>
-            </div>
-          </section>
+      <section className="mb-4">
+        <h5 className="section-title">Master</h5>
+        <div className="row g-3">
+          <div className="col-md-6 col-lg-4 col-xl-3">
+            <Card title="Gestao de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">
+              Gerencie e acompanhe as recargas da equipe.
+            </Card>
+          </div>
+          <div className="col-md-6 col-lg-4 col-xl-3">
+            <Card title="Usuarios Zapresponder" iconUrl="https://raichu-uploads.s3.amazonaws.com/logo_zap-responder_UHg1Sn.png" iconAlt="Zapresponder" accent="info" to="/admin/usuarios-zapresponder">
+              Visualize usuarios e departamentos sincronizados do Zapresponder.
+            </Card>
+          </div>
+        </div>
+      </section>
         )}
 
         <Can permission="view:admin">

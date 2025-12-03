@@ -10,13 +10,24 @@ const formatDateTime = (value) => {
   if (!value) return '-'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)
-  return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  return d.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
 }
 
 export default function UsuariosZapresponder() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [modalUser, setModalUser] = useState(null)
+  const [search, setSearch] = useState('')
+  const [deptFilter, setDeptFilter] = useState('')
 
   useEffect(() => {
     const load = async () => {
@@ -72,8 +83,18 @@ export default function UsuariosZapresponder() {
       usuarios: grouped.length,
       departamentos: depSet.size,
       atualizadoEm: lastUpdated ? new Date(lastUpdated) : null,
+      depList: Array.from(depSet).sort(),
     }
   }, [grouped])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return grouped.filter((user) => {
+      const matchesText = !q || `${user.nome} ${user.email}`.toLowerCase().includes(q)
+      const matchesDept = !deptFilter || user.departamentos.some((d) => String(d || '').toLowerCase() === deptFilter.toLowerCase())
+      return matchesText && matchesDept
+    })
+  }, [grouped, search, deptFilter])
 
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
@@ -131,6 +152,43 @@ export default function UsuariosZapresponder() {
           </div>
         </div>
 
+        <div className="neo-card neo-lg p-3 mb-3">
+          <div className="row g-2 align-items-end">
+            <div className="col-12 col-md-6 col-lg-4">
+              <label className="form-label small text-secondary mb-1">Buscar (usuário ou email)</label>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Digite para filtrar"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="col-12 col-md-6 col-lg-4">
+              <label className="form-label small text-secondary mb-1">Departamento</label>
+              <select
+                className="form-select"
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {totals.depList.map((dep) => (
+                  <option key={dep} value={dep}>{dep}</option>
+                ))}
+              </select>
+            </div>
+            <div className="col-12 col-md-12 col-lg-4 d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-light mt-auto"
+                onClick={() => { setSearch(''); setDeptFilter('') }}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="neo-card neo-lg p-4">
           <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
             <div>
@@ -154,27 +212,35 @@ export default function UsuariosZapresponder() {
           </div>
 
           <div className="table-responsive">
-            <table className="table align-middle mb-0 text-light">
+            <table className="table table-dark table-hover align-middle mb-0">
               <thead>
                 <tr>
                   <th>Usuário</th>
                   <th>Email</th>
-                  <th style={{ minWidth: '260px' }}>Departamentos</th>
+                  <th style={{ minWidth: '220px' }}>Departamentos</th>
                   <th style={{ width: '180px' }}>Atualizado em</th>
                 </tr>
               </thead>
               <tbody>
-                {grouped.map((user) => (
+                {filtered.map((user) => (
                   <tr key={user.email}>
                     <td className="fw-semibold">{user.nome}</td>
                     <td>{user.email}</td>
                     <td>
-                      <div className="d-flex flex-wrap gap-1">
-                        {user.departamentos.map((dep, idx) => (
-                          <span key={`${user.email}-${idx}`} className="badge text-bg-dark">
-                            {dep}
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-2"
+                          onClick={() => setModalUser(user)}
+                          title="Ver departamentos"
+                          aria-label="Ver departamentos"
+                        >
+                          <Fi.FiList />
+                          <span className="visually-hidden">Ver departamentos</span>
+                          <span className="badge ms-1" style={{ background: '#0f172a', border: '1px solid #1e293b', color: '#e2e8f0' }}>
+                            {user.departamentos.length}
                           </span>
-                        ))}
+                        </button>
                       </div>
                     </td>
                     <td className="text-nowrap">{formatDateTime(user.atualizadoEm)}</td>
@@ -186,6 +252,48 @@ export default function UsuariosZapresponder() {
         </div>
       </main>
       <Footer />
+
+      <DepartamentosModal user={modalUser} onClose={() => setModalUser(null)} />
+    </div>
+  )
+}
+
+// Modal para mostrar todos os departamentos de um usuário
+export function DepartamentosModal({ user, onClose }) {
+  if (!user) return null
+  return (
+    <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)' }} role="dialog" aria-modal="true">
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal-content bg-dark text-light border border-secondary">
+          <div className="modal-header">
+            <h5 className="modal-title d-flex align-items-center gap-2">
+              <Fi.FiUsers />
+              Departamentos de {user.nome}
+            </h5>
+            <button type="button" className="btn-close btn-close-white" aria-label="Close" onClick={onClose}></button>
+          </div>
+          <div className="modal-body">
+            <div className="mb-2 small text-secondary">{user.email}</div>
+            <div className="mb-3 small text-secondary">
+              Atualizado em: {formatDateTime(user.atualizadoEm)}
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {user.departamentos.map((dep, idx) => (
+                <span
+                  key={`${user.email}-${idx}`}
+                  className="badge"
+                  style={{ background: '#0b1220', border: '1px solid #1f2a44', color: '#e2e8f0' }}
+                >
+                  {dep}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
