@@ -1,6 +1,7 @@
 {
-  "rewrites": [
-    { "source": "/api/n8n/(.*)", "destination": "/api/n8n/$1" },
-    { "source": "/(.*)", "destination": "/" }
+  "version": 2,
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
