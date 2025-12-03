@@ -394,7 +394,7 @@ export default function ConsultaIN100() {
           if (!resConsulta.ok) throw new Error('Falha na consulta online')
 
           // 2) Buscar resposta final no n8n com os dados completos para o front
-          const urlResposta = 'https://n8n.sistemavieira.com.br/webhook/resposta-api'
+          const urlResposta = 'https://n8n.apivieiracred.store/webhook/resposta-api'
           // Aguarda 5s antes da primeira consulta de resposta
           await new Promise(r => setTimeout(r, 5000))
           const isValidResposta = (d) => {

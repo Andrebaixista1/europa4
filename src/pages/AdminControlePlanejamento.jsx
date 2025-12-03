@@ -107,7 +107,7 @@ export default function AdminControlePlanejamento() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://n8n.sistemavieira.com.br/webhook/api/getall-vanguard')
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/getall-vanguard')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
@@ -195,7 +195,7 @@ export default function AdminControlePlanejamento() {
 
     try {
       setIsSubmittingAdd(true)
-      const res = await fetch('https://n8n.sistemavieira.com.br/webhook/api/add-vanguard', {
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/add-vanguard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
