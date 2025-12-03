@@ -137,6 +137,11 @@ export default function Dashboard() {
                   Status de BMs e linhas com detalhes por telefone.
                 </Card>
               </div>
+              <div className="col-md-6 col-lg-4 col-xl-3">
+                <Card title="Usuários Zapresponder" icon="FiUsers" accent="info" to="/admin/usuarios-zapresponder">
+                  Visualize usuários e departamentos sincronizados do Zapresponder.
+                </Card>
+              </div>
             </div>
           </section>
         </Can>

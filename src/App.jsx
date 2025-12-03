@@ -17,6 +17,7 @@ import Status from './pages/Status.jsx'
 import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
+import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -70,6 +71,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master", "Administrador"]}>
             <GeradorSitesV3 />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/usuarios-zapresponder"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador"]}>
+            <UsuariosZapresponder />
           </ProtectedRoute>
         }
       />
