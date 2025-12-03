@@ -49,8 +49,7 @@ function Card({ title, icon, iconUrl, iconAlt = title, children, accent = 'prima
     return (
       <Link
         to={to}
-        className={
-eo-card neo-lg neo-accent- p-5 h-100 text-reset text-decoration-none d-block }
+        className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 text-reset text-decoration-none d-block ${muted ? 'neo-muted position-relative' : ''}`}
       >
         {body}
       </Link>
@@ -59,8 +58,7 @@ eo-card neo-lg neo-accent- p-5 h-100 text-reset text-decoration-none d-block }
 
   return (
     <div
-      className={
-eo-card neo-lg neo-accent- p-5 h-100 }
+      className={`neo-card neo-lg neo-accent-${accent} p-5 h-100 ${muted ? 'neo-muted position-relative' : ''}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       style={onClick ? { cursor: 'pointer' } : undefined}
@@ -109,13 +107,13 @@ export default function Dashboard() {
             <h5 className="section-title">Master</h5>
             <div className="row g-3">
               <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Gestão de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">
+                <Card title="Gestao de Recargas" icon="FiCreditCard" accent="primary" to="/recargas">
                   Gerencie e acompanhe as recargas da equipe.
                 </Card>
               </div>
               <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Usuários Zapresponder" icon="FiUsers" accent="info" to="/admin/usuarios-zapresponder">
-                  Visualize usuários e departamentos sincronizados do Zapresponder.
+                <Card title="Usuarios Zapresponder" icon="FiUsers" accent="info" to="/admin/usuarios-zapresponder">
+                  Visualize usuarios e departamentos sincronizados do Zapresponder.
                 </Card>
               </div>
             </div>
@@ -128,7 +126,7 @@ export default function Dashboard() {
             <div className="row g-3">
               <div className="col-md-6 col-lg-4 col-xl-3">
                 <Card title="Controle Planejamento" icon="FiClipboard" accent="primary" to="/admin/controle-planejamento">
-                  Vanguard - Sistema de controle de usuários.
+                  Vanguard - Sistema de controle de usuarios.
                 </Card>
               </div>
 
@@ -136,7 +134,7 @@ export default function Dashboard() {
 
               <div className="col-md-6 col-lg-4 col-xl-3">
                 <Card title="Gerador de Sites" icon="FiGlobe" accent="primary" to="/admin/gerador-sites">
-                  Gere sites profissionais de forma automatizada com base em templates predefinidos, apenas fornecendo as informações essenciais.
+                  Gere sites profissionais de forma automatizada com base em templates predefinidos, apenas fornecendo as informacoes essenciais.
                 </Card>
               </div>
               <div className="col-md-6 col-lg-4 col-xl-3">
@@ -150,11 +148,11 @@ export default function Dashboard() {
 
         <Can permission="view:supervision">
           <section className="mb-4">
-            <h5 className="section-title">Supervisão</h5>
+            <h5 className="section-title">Supervisao</h5>
             <div className="row g-3">
               <div className="col-md-6 col-lg-4 col-xl-3">
-                <Card title="Usuários" icon="FiUserCheck" accent="primary" to="/usuarios">
-                  Supervisor vê apenas a própria equipe.
+                <Card title="Usuarios" icon="FiUserCheck" accent="primary" to="/usuarios">
+                  Supervisor ve apenas a propria equipe.
                 </Card>
               </div>
               <div className="col-md-6 col-lg-4 col-xl-3">
@@ -184,7 +182,7 @@ export default function Dashboard() {
                       </div>
                     ) : visibleItems.length === 0 ? (
                       <div className="col-12">
-                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponível para a sua equipe.</div>
+                        <div className="neo-card neo-lg p-4 text-center opacity-75">Nenhum card disponivel para a sua equipe.</div>
                       </div>
                     ) : (
                       visibleItems.map((c) => {
@@ -193,7 +191,7 @@ export default function Dashboard() {
                         const onClick = !isMaster && isDev ? () => notify.info('Em desenvolvimento') : undefined
 
                         return (
-                          <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={${categoria}-}>
+                          <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={`${categoria}-${c.title}`}>
                             <Card
                               title={c.title}
                               icon={c.icon}
@@ -218,5 +216,3 @@ export default function Dashboard() {
     </div>
   )
 }
-
-
