@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
-import ThemeToggle from './ThemeToggle.jsx'
 import NovidadesModal from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
 import { n8nUrl } from '../services/n8nClient.js'
@@ -232,7 +231,6 @@ export default function TopNav() {
               )}
             </ul>
             <div className="d-flex align-items-center gap-2">
-              <ThemeToggle />
               {isAuthenticated ? (
                 <>
                   <span className="text-light small opacity-75">{user?.name}</span>
