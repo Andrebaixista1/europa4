@@ -17,9 +17,10 @@ const integer = (value) => {
 }
 
 const parseRow = (raw) => {
-  const total = Number(raw?.total_carregado) || 0
-  const limite = Number(raw?.limite_disponivel) || 0
-  const consultas = Number(raw?.consultas_realizada) || 0
+  const num = (v) => Number(v) || 0
+  const total = num(raw?.total_carregado ?? raw?.total ?? raw?.carregado)
+  const limite = num(raw?.limite_disponivel ?? raw?.disponivel ?? raw?.limite ?? raw?.limite_total)
+  const consultas = num(raw?.consultas_realizada ?? raw?.consultas_realizadas ?? raw?.realizadas ?? raw?.qtd_consultas)
   const data = raw?.data_saldo_carregado ? new Date(raw.data_saldo_carregado) : null
 
   return {

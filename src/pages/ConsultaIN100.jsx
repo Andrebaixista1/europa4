@@ -75,10 +75,11 @@ export default function ConsultaIN100() {
       const data = await res.json().catch(() => null)
       if (!data) return
       const item = Array.isArray(data) ? (data[0] || {}) : data
+      const num = (val) => Number(val ?? 0)
       setMetrics({
-        totalCarregado: Number(item.total_carregado ?? 0),
-        disponivel: Number(item.limite_disponivel ?? 0),
-        realizadas: Number(item.consultas_realizada ?? 0),
+        totalCarregado: num(item.total_carregado ?? item.total ?? item.carregado),
+        disponivel: num(item.limite_disponivel ?? item.disponivel ?? item.limite ?? item.limite_total),
+        realizadas: num(item.consultas_realizada ?? item.consultas_realizadas ?? item.realizadas ?? item.qtd_consultas),
       })
     } catch (_) {
       // silencia erros para nÃ£o travar a UI
