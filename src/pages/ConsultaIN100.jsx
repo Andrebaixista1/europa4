@@ -208,7 +208,7 @@ export default function ConsultaIN100() {
 
   async function fetchBanco(code) {
     try {
-      const res = await fetch(`'https://brasilapi.com.br/api/banks/v1/${code}`')
+      const res = await fetch(`https://brasilapi.com.br/api/banks/v1/${code}`)
       if (!res.ok) throw new Error('fail')
       const data = await res.json()
       return { code: data.code || code, name: data.name || data.fullName || String(code) }

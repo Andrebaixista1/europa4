@@ -1028,7 +1028,7 @@ export default function GeradorSites() {
                                   setAppTesting(true)
                                   setAppTestOk(null)
                                   setAppTestMsg('')
-                                  const url = `'https://graph.facebook.com/v21.0/${encodeURIComponent(id')}?fields=id,name,verification_status,vertical,owned_ad_accounts,owned_pages,owned_whatsapp_business_accounts`
+                                  const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(id)}?fields=id,name,verification_status,vertical,owned_ad_accounts,owned_pages,owned_whatsapp_business_accounts`
                                   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
                                   if (res.ok) {
                                     setAppTestOk(true)
@@ -1356,7 +1356,7 @@ export default function GeradorSites() {
                                     setGenAppTesting(true)
                                     setGenAppTestOk(null)
                                     setGenAppTestMsg('')
-                                    const url = `'https://graph.facebook.com/v21.0/${encodeURIComponent(id')}?fields=id,name,verification_status,vertical,owned_ad_accounts,owned_pages,owned_whatsapp_business_accounts`
+                                    const url = `https://graph.facebook.com/v21.0/${encodeURIComponent(id)}?fields=id,name,verification_status,vertical,owned_ad_accounts,owned_pages,owned_whatsapp_business_accounts`
                                     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
                                     if (res.ok) {
                                       setGenAppTestOk(true)
