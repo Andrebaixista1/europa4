@@ -36,6 +36,7 @@ const normalizeRows = (raw) => {
       phone: row.phone || '-',
       phone_status: row.phone_status || row.status_phone || '-',
       cartao: row.cartao || '-',
+      id_phone: row.id_phone || row.phone_id || row.id_telefone || row.telefone_id || null,
     }
 
     const portEntry = {
@@ -44,6 +45,7 @@ const normalizeRows = (raw) => {
       limite: row.limite || '-',
       criacao_port: row.criacao_port || null,
       telefones: [telefone],
+      id_portifolio: row.id_portifolio || row.portifolio_id || row.id_port || null,
     }
 
     const bm = byBm.get(bmId) || { id: bmId, nome: bmNome, criacao_bm: criacaoBm, portfolios: new Map() }
@@ -89,6 +91,10 @@ const formatPhoneInput = (value) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
 }
 
+const newTelefone = () => ({ numero: '', status: 'Verificado', cartao: 'OK' })
+const newPortifolio = () => ({ nome: '', limite: '0', status: 'Verificado', criacao_port: null, telefones: [newTelefone()] })
+const normalizeLimiteInput = (value) => (value === '1000000' || value === 1000000 ? 'Ilimitado' : String(value ?? '0'))
+
 export default function UsuariosBmControles() {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
@@ -97,13 +103,53 @@ export default function UsuariosBmControles() {
   const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 10
 
-  const [showAdd, setShowAdd] = useState(false)
-  const [addBmNome, setAddBmNome] = useState('')
-  const [addPortifolios, setAddPortifolios] = useState([
-    { nome: '', limite: '0', status: 'Verificado', telefones: [{ numero: '', status: 'Verificado', cartao: 'OK' }] }
-  ])
-  const [addError, setAddError] = useState('')
-  const [addSaving, setAddSaving] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [formMode, setFormMode] = useState('add')
+  const [formBmNome, setFormBmNome] = useState('')
+  const [formCriacaoBm, setFormCriacaoBm] = useState(null)
+  const [formPortifolios, setFormPortifolios] = useState([newPortifolio()])
+  const [formError, setFormError] = useState('')
+  const [formSaving, setFormSaving] = useState(false)
+  const [editingBmId, setEditingBmId] = useState(null)
+  const isEditMode = formMode === 'edit' || Boolean(editingBmId)
+
+  const buildPortifoliosFromBm = (bm) => {
+    const ports = Array.isArray(bm?.portfolios) ? bm.portfolios : []
+    const mapped = ports.map((port) => ({
+      nome: port.nome || '',
+      limite: normalizeLimiteInput(port.limite),
+      status: port.status_port || 'Verificado',
+      criacao_port: port.criacao_port || null,
+      id_portifolio: port.id_portifolio || null,
+      telefones: (Array.isArray(port.telefones) && port.telefones.length > 0 ? port.telefones : [newTelefone()]).map((tel) => ({
+        numero: formatPhoneInput(tel.phone || ''),
+        status: tel.phone_status || tel.status || 'Verificado',
+        cartao: tel.cartao || 'OK',
+        id_phone: tel.id_phone || null
+      }))
+    }))
+    return mapped.length ? mapped : [newPortifolio()]
+  }
+
+  const openAddModal = () => {
+    setFormMode('add')
+    setEditingBmId(null)
+    setFormBmNome('')
+    setFormCriacaoBm(null)
+    setFormPortifolios([newPortifolio()])
+    setFormError('')
+    setShowForm(true)
+  }
+
+  const openEditModal = (bm) => {
+    setFormMode('edit')
+    setEditingBmId(bm?.id || null)
+    setFormBmNome(bm?.nome || '')
+    setFormCriacaoBm(bm?.criacao_bm || null)
+    setFormPortifolios(buildPortifoliosFromBm(bm))
+    setFormError('')
+    setShowForm(true)
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -124,10 +170,17 @@ export default function UsuariosBmControles() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const grupos = useMemo(
-    () => [...rows].sort((a, b) => (a?.nome || '').localeCompare(b?.nome || '')),
-    [rows]
-  )
+  const grupos = useMemo(() => {
+    const parseId = (v) => {
+      const n = Number(v)
+      return Number.isFinite(n) ? n : 0
+    }
+    return [...rows].sort((a, b) => {
+      const diff = parseId(b?.id) - parseId(a?.id)
+      if (diff !== 0) return diff
+      return (a?.nome || '').localeCompare(b?.nome || '')
+    })
+  }, [rows])
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(grupos.length / PAGE_SIZE)), [grupos.length])
   const safePage = Math.min(Math.max(currentPage, 1), totalPages)
@@ -162,31 +215,37 @@ export default function UsuariosBmControles() {
     list
       .map((t) => {
         const digits = String(t.numero || '').replace(/\D/g, '')
-        return {
+        const base = {
           phone: digits || null,
           status: (t.status || '').toLowerCase(),
           cartao: (t.cartao || '').toLowerCase()
         }
+        if (t.id_phone) base.id_phone = t.id_phone
+        return base
       })
       .filter((t) => t.phone)
 
   const payloadPortifolios = (list, criacaoPort) =>
     list
-      .map((p) => ({
-        nome_portifolio: (p.nome || '').trim(),
-        limite: p.limite === 'Ilimitado' ? '1000000' : String(p.limite || '0'),
-        status_port: p.status || '',
-        criacao_port: criacaoPort,
-        telefones: payloadTelefones(p.telefones || [])
-      }))
+      .map((p) => {
+        const base = {
+          nome_portifolio: (p.nome || '').trim(),
+          limite: p.limite === 'Ilimitado' ? '1000000' : String(p.limite || '0'),
+          status_port: p.status || '',
+          criacao_port: p.criacao_port || criacaoPort,
+          telefones: payloadTelefones(p.telefones || [])
+        }
+        if (p.id_portifolio) base.id_portifolio = p.id_portifolio
+        return base
+      })
       .filter((p) => p.nome_portifolio)
 
-  const handleAddPortifolioChange = (idx, field, value) => {
-    setAddPortifolios((prev) => prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)))
+  const handlePortifolioChange = (idx, field, value) => {
+    setFormPortifolios((prev) => prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)))
   }
 
-  const handleAddTelefoneChange = (pIdx, tIdx, field, value) => {
-    setAddPortifolios((prev) =>
+  const handleTelefoneChange = (pIdx, tIdx, field, value) => {
+    setFormPortifolios((prev) =>
       prev.map((p, i) => {
         if (i !== pIdx) return p
         const telefones = (p.telefones || []).map((t, j) =>
@@ -197,26 +256,31 @@ export default function UsuariosBmControles() {
     )
   }
 
-  const handleSubmitAdd = async (e) => {
+  const handleSubmitForm = async (e) => {
     e?.preventDefault?.()
-    const nomeBm = addBmNome.trim()
+    const nomeBm = formBmNome.trim()
     const nowIso = new Date().toISOString()
-    const ports = payloadPortifolios(addPortifolios, nowIso)
+    const ports = payloadPortifolios(formPortifolios, nowIso)
+    const criacaoBm = isEditMode ? (formCriacaoBm || nowIso) : nowIso
 
-    if (!nomeBm) return setAddError('Informe o nome da BM.')
-    if (ports.length === 0) return setAddError('Adicione pelo menos um portifolio com nome.')
-    if (ports.some((p) => (p.telefones || []).length === 0)) return setAddError('Cada portifolio precisa de pelo menos um telefone.')
+    if (!nomeBm) return setFormError('Informe o nome da BM.')
+    if (ports.length === 0) return setFormError('Adicione pelo menos um portifolio com nome.')
+    if (ports.some((p) => (p.telefones || []).length === 0)) return setFormError('Cada portifolio precisa de pelo menos um telefone.')
 
     const payload = {
       nome_bm: nomeBm,
-      criacao_bm: nowIso,
+      criacao_bm: criacaoBm,
       portfolios: ports
     }
+    if (isEditMode && editingBmId) payload.id_bm = editingBmId
 
     try {
-      setAddSaving(true)
-      setAddError('')
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/adiciona-bm-port', {
+      setFormSaving(true)
+      setFormError('')
+      const urlSalvar = isEditMode
+        ? 'https://n8n.apivieiracred.store/webhook/atualiza-bm-port'
+        : 'https://n8n.apivieiracred.store/webhook/adiciona-bm-port'
+      const res = await fetch(urlSalvar, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -225,17 +289,16 @@ export default function UsuariosBmControles() {
         const text = await res.text()
         throw new Error(text || `HTTP ${res.status}`)
       }
-      setShowAdd(false)
-      setAddBmNome('')
-      setAddPortifolios([
-        { nome: '', limite: '0', status: 'Verificado', telefones: [{ numero: '', status: 'Verificado', cartao: 'OK' }] }
-      ])
+      setShowForm(false)
+      setFormBmNome('')
+      setFormCriacaoBm(null)
+      setFormPortifolios([newPortifolio()])
       await loadData()
     } catch (err) {
-      console.error('Falha ao adicionar BM:', err)
-      setAddError(err.message || 'Erro ao salvar')
+      console.error('Falha ao salvar BM:', err)
+      setFormError(err.message || 'Erro ao salvar')
     } finally {
-      setAddSaving(false)
+      setFormSaving(false)
     }
   }
 
@@ -273,8 +336,7 @@ export default function UsuariosBmControles() {
             }}>
               <div className="d-flex align-items-center justify-content-between mb-3">
                 <div>
-                  <div className="text-uppercase small opacity-75 mb-1">Dados em tempo real</div>
-                  <h5 className="mb-0">Business Managers (BM manual)</h5>
+                  <h5 className="mb-0">Business Managers</h5>
                 </div>
                 <div className="d-flex gap-2 align-items-center flex-wrap">
                   <span className="badge text-bg-secondary">BMs: {resumo.bms}</span>
@@ -282,7 +344,7 @@ export default function UsuariosBmControles() {
                   <span className="badge text-bg-secondary">
                     Ult. criacao BM: {resumo.ultimaCriacaoBm ? resumo.ultimaCriacaoBm.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '-'}
                   </span>
-                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={openAddModal}>
                     + Adicionar BM
                   </button>
                 </div>
@@ -354,19 +416,29 @@ export default function UsuariosBmControles() {
                             overflow: 'hidden'
                           }}
                         >
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             className="w-100 d-flex align-items-center justify-content-between px-3 py-3"
                             onClick={() =>
                               setOpenBms((prev) =>
                                 prev.includes(bm.id) ? prev.filter((id) => id !== bm.id) : [...prev, bm.id]
                               )
                             }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                setOpenBms((prev) =>
+                                  prev.includes(bm.id) ? prev.filter((id) => id !== bm.id) : [...prev, bm.id]
+                                )
+                              }
+                            }}
                             aria-expanded={isOpen}
                             style={{
                               background: 'transparent',
                               border: 'none',
-                              color: 'inherit'
+                              color: 'inherit',
+                              cursor: 'pointer'
                             }}
                           >
                             <div className="d-flex align-items-center gap-3 text-start">
@@ -392,8 +464,21 @@ export default function UsuariosBmControles() {
                                 <div className="small text-secondary">Criacao BM: {formatDateTime(bm.criacao_bm)}</div>
                               </div>
                             </div>
-                            <span className="badge text-bg-info">Portf.: {Array.isArray(portfolios) ? portfolios.length : 0}</span>
-                          </button>
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="badge text-bg-info">Portf.: {Array.isArray(portfolios) ? portfolios.length : 0}</span>
+                              <button
+                                type="button"
+                                className="btn btn-outline-info btn-sm d-inline-flex align-items-center gap-1"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openEditModal(bm)
+                                }}
+                              >
+                                <Fi.FiEdit2 />
+                                <span className="d-none d-md-inline">Editar</span>
+                              </button>
+                            </div>
+                          </div>
 
                           {isOpen && (
                             <div className="p-3 pt-0">
@@ -451,27 +536,38 @@ export default function UsuariosBmControles() {
         </div>
       </main>
 
-      {showAdd && (
+      {showForm && (
         <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 1050 }}>
-          <div className="neo-card neo-lg p-4" style={{ maxWidth: 860, width: '95%' }}>
+          <div
+            className="neo-card neo-lg p-4"
+            style={{
+              maxWidth: 860,
+              width: '95%',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
             <div className="d-flex align-items-center justify-content-between mb-2">
-              <h5 className="mb-0">Adicionar BM manual</h5>
-              <button className="btn btn-ghost btn-icon" onClick={() => setShowAdd(false)} aria-label="Fechar">
+              <div>
+                <h5 className="mb-0">{isEditMode ? 'Editar BM manual' : 'Adicionar BM manual'}</h5>
+                {isEditMode && editingBmId && <div className="small text-secondary mt-1">BM #{editingBmId}</div>}
+              </div>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowForm(false)} aria-label="Fechar">
                 <Fi.FiX />
               </button>
             </div>
 
-            {addError && (
-              <div className="alert alert-danger py-2" role="alert">{addError}</div>
+            {formError && (
+              <div className="alert alert-danger py-2" role="alert">{formError}</div>
             )}
 
-            <form onSubmit={handleSubmitAdd} className="d-flex flex-column gap-3">
+            <form onSubmit={handleSubmitForm} className="d-flex flex-column gap-3">
               <div>
                 <label className="form-label small">Nome da BM *</label>
                 <input
                   className="form-control"
-                  value={addBmNome}
-                  onChange={(e) => setAddBmNome(e.target.value)}
+                  value={formBmNome}
+                  onChange={(e) => setFormBmNome(e.target.value)}
                   placeholder="Ex: Vieira - Leticia - ND, Art, King"
                   required
                 />
@@ -484,9 +580,9 @@ export default function UsuariosBmControles() {
                     type="button"
                     className="btn btn-outline-light btn-sm"
                     onClick={() =>
-                      setAddPortifolios((p) => [
+                      setFormPortifolios((p) => [
                         ...p,
-                        { nome: '', limite: '0', status: 'Verificado', telefones: [{ numero: '', status: 'Verificado', cartao: 'OK' }] }
+                        newPortifolio()
                       ])
                     }
                   >
@@ -494,7 +590,7 @@ export default function UsuariosBmControles() {
                   </button>
                 </div>
                 <div className="d-flex flex-column gap-3">
-                  {addPortifolios.map((p, idx) => (
+                  {formPortifolios.map((p, idx) => (
                     <div key={idx} className="neo-card p-3" style={{ background: 'rgba(10,14,25,0.6)', border: '1px solid rgba(148,163,184,0.2)' }}>
                       <div className="row g-2 align-items-end">
                         <div className="col-12 col-md-4">
@@ -502,7 +598,7 @@ export default function UsuariosBmControles() {
                           <input
                             className="form-control"
                             value={p.nome}
-                            onChange={(e) => handleAddPortifolioChange(idx, 'nome', e.target.value)}
+                            onChange={(e) => handlePortifolioChange(idx, 'nome', e.target.value)}
                             required
                           />
                         </div>
@@ -511,7 +607,7 @@ export default function UsuariosBmControles() {
                           <select
                             className="form-select"
                             value={p.limite}
-                            onChange={(e) => handleAddPortifolioChange(idx, 'limite', e.target.value)}
+                            onChange={(e) => handlePortifolioChange(idx, 'limite', e.target.value)}
                           >
                             <option value="0">0</option>
                             <option value="250">250</option>
@@ -526,7 +622,7 @@ export default function UsuariosBmControles() {
                           <select
                             className="form-select"
                             value={p.status}
-                            onChange={(e) => handleAddPortifolioChange(idx, 'status', e.target.value)}
+                            onChange={(e) => handlePortifolioChange(idx, 'status', e.target.value)}
                           >
                             <option value="Verificado">Verificado</option>
                             <option value="Nao verificado">Nao verificado</option>
@@ -536,11 +632,11 @@ export default function UsuariosBmControles() {
                           </select>
                         </div>
                         <div className="col-12 col-md-2 d-flex justify-content-end">
-                          {addPortifolios.length > 1 && (
+                          {formPortifolios.length > 1 && (
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm text-danger"
-                              onClick={() => setAddPortifolios((prev) => prev.filter((_, i) => i !== idx))}
+                              onClick={() => setFormPortifolios((prev) => prev.filter((_, i) => i !== idx))}
                             >
                               Remover
                             </button>
@@ -555,12 +651,12 @@ export default function UsuariosBmControles() {
                             type="button"
                             className="btn btn-outline-light btn-sm"
                             onClick={() =>
-                              setAddPortifolios((prev) =>
+                              setFormPortifolios((prev) =>
                                 prev.map((port, i) =>
                                   i === idx
                                     ? {
                                         ...port,
-                                        telefones: [...(port.telefones || []), { numero: '', status: 'Verificado', cartao: 'OK' }]
+                                        telefones: [...(port.telefones || []), newTelefone()]
                                       }
                                     : port
                                 )
@@ -578,7 +674,7 @@ export default function UsuariosBmControles() {
                                 <input
                                   className="form-control"
                                   value={t.numero}
-                                  onChange={(e) => handleAddTelefoneChange(idx, tIdx, 'numero', e.target.value)}
+                                  onChange={(e) => handleTelefoneChange(idx, tIdx, 'numero', e.target.value)}
                                   placeholder="(11) 99999-9999"
                                   required
                                 />
@@ -588,7 +684,7 @@ export default function UsuariosBmControles() {
                                 <select
                                   className="form-select"
                                   value={t.status}
-                                  onChange={(e) => handleAddTelefoneChange(idx, tIdx, 'status', e.target.value)}
+                                  onChange={(e) => handleTelefoneChange(idx, tIdx, 'status', e.target.value)}
                                 >
                                   <option value="Verificado">Verificado</option>
                                   <option value="Nao verificado">Nao verificado</option>
@@ -602,7 +698,7 @@ export default function UsuariosBmControles() {
                                 <select
                                   className="form-select"
                                   value={t.cartao}
-                                  onChange={(e) => handleAddTelefoneChange(idx, tIdx, 'cartao', e.target.value)}
+                                  onChange={(e) => handleTelefoneChange(idx, tIdx, 'cartao', e.target.value)}
                                 >
                                   <option value="OK">OK</option>
                                   <option value="Sem Saldo">Sem Saldo</option>
@@ -615,7 +711,7 @@ export default function UsuariosBmControles() {
                                     type="button"
                                     className="btn btn-ghost btn-sm text-danger"
                                     onClick={() =>
-                                      setAddPortifolios((prev) =>
+                                      setFormPortifolios((prev) =>
                                         prev.map((port, i) =>
                                           i === idx
                                             ? { ...port, telefones: port.telefones.filter((_, j) => j !== tIdx) }
@@ -638,9 +734,9 @@ export default function UsuariosBmControles() {
               </div>
 
               <div className="d-flex justify-content-end gap-2">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={addSaving}>
-                  {addSaving ? 'Salvando...' : 'Salvar'}
+                <button type="button" className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" disabled={formSaving}>
+                  {formSaving ? 'Salvando...' : 'Salvar'}
                 </button>
               </div>
             </form>

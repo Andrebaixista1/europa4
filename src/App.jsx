@@ -18,6 +18,7 @@ import MultiploDisparos from './pages/MultiploDisparos.jsx'
 import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
+import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
@@ -79,6 +80,14 @@ function App() {
         element={
           <ProtectedRoute roles={["Master", "Administrador"]}>
             <UsuariosZapresponder />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/bm-controles"
+        element={
+          <ProtectedRoute roles={["Master", "Administrador"]}>
+            <UsuariosBmControles />
           </ProtectedRoute>
         }
       />

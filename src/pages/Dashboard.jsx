@@ -116,6 +116,11 @@ export default function Dashboard() {
               Visualize usuarios e departamentos sincronizados do Zapresponder.
             </Card>
           </div>
+          <div className="col-md-6 col-lg-4 col-xl-3">
+            <Card title="BM Controles" iconUrl="https://cdn-icons-png.flaticon.com/512/6033/6033716.png" iconAlt="BM Controles" accent="info" to="/admin/bm-controles">
+              Visualize usuarios e departamentos sincronizados do BM Controles.
+            </Card>
+          </div>
         </div>
       </section>
         )}
