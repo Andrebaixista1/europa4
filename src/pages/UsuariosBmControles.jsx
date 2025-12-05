@@ -45,7 +45,7 @@ const normalizeRows = (raw) => {
       limite: row.limite || '-',
       criacao_port: row.criacao_port || null,
       telefones: [telefone],
-      id_portifolio: row.id_portifolio || row.portifolio_id || row.id_port || null,
+      id_port: row.id_port || row.id_portifolio || row.portifolio_id || null,
     }
 
     const bm = byBm.get(bmId) || { id: bmId, nome: bmNome, criacao_bm: criacaoBm, portfolios: new Map() }
@@ -91,8 +91,8 @@ const formatPhoneInput = (value) => {
   return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
 }
 
-const newTelefone = () => ({ numero: '', status: 'Verificado', cartao: 'OK' })
-const newPortifolio = () => ({ nome: '', limite: '0', status: 'Verificado', criacao_port: null, telefones: [newTelefone()] })
+const newTelefone = () => ({ numero: '', status: 'Verificado', cartao: 'OK', id_phone: null })
+const newPortifolio = () => ({ nome: '', limite: '0', status: 'Verificado', criacao_port: null, id_port: null, telefones: [newTelefone()] })
 const normalizeLimiteInput = (value) => (value === '1000000' || value === 1000000 ? 'Ilimitado' : String(value ?? '0'))
 
 export default function UsuariosBmControles() {
@@ -120,7 +120,7 @@ export default function UsuariosBmControles() {
       limite: normalizeLimiteInput(port.limite),
       status: port.status_port || 'Verificado',
       criacao_port: port.criacao_port || null,
-      id_portifolio: port.id_portifolio || null,
+      id_port: port.id_port || port.id_portifolio || null,
       telefones: (Array.isArray(port.telefones) && port.telefones.length > 0 ? port.telefones : [newTelefone()]).map((tel) => ({
         numero: formatPhoneInput(tel.phone || ''),
         status: tel.phone_status || tel.status || 'Verificado',
@@ -235,7 +235,7 @@ export default function UsuariosBmControles() {
           criacao_port: p.criacao_port || criacaoPort,
           telefones: payloadTelefones(p.telefones || [])
         }
-        if (p.id_portifolio) base.id_portifolio = p.id_portifolio
+        if (p.id_port) base.id_port = p.id_port
         return base
       })
       .filter((p) => p.nome_portifolio)
@@ -314,7 +314,7 @@ export default function UsuariosBmControles() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <div className="small text-secondary mb-1 text-uppercase">Administracao</div>
+              <div className="small text-secondary mb-1 text-uppercase">Administração</div>
               <h2 className="fw-bold mb-1">BM Controles</h2>
               <div className="opacity-75">Central para visualizar conexoes e responsaveis dos BMs.</div>
             </div>
@@ -509,13 +509,21 @@ export default function UsuariosBmControles() {
                                           </tr>
                                         </thead>
                                         <tbody>
-                                          {(port.telefones && port.telefones.length > 0 ? port.telefones : [{}]).map((tel, tIdx) => (
-                                            <tr key={`${bm.id}-${pIdx}-${tIdx}`}>
-                                              <td>{formatPhoneBR(tel.phone)}</td>
-                                              <td>{tel.cartao || '-'}</td>
-                                              <td><span className={`badge ${badgeClass(tel.phone_status)}`}>{tel.phone_status}</span></td>
-                                            </tr>
-                                          ))}
+                                          {(() => {
+                                            const raw = Array.isArray(port.telefones) ? port.telefones : []
+                                            const valid = raw.filter((t) => {
+                                              const digits = String(t.phone || '').replace(/\D/g, '')
+                                              return digits && digits !== '0'
+                                            })
+                                            const toRender = valid.length ? valid : [{ phone: null, cartao: '-', phone_status: '-' }]
+                                            return toRender.map((tel, tIdx) => (
+                                              <tr key={`${bm.id}-${pIdx}-${tIdx}`}>
+                                                <td>{tel.phone ? formatPhoneBR(tel.phone) : 'Sem telefone cadastrado'}</td>
+                                                <td>{tel.cartao || '-'}</td>
+                                                <td><span className={`badge ${badgeClass(tel.phone_status)}`}>{tel.phone_status || '-'}</span></td>
+                                              </tr>
+                                            ))
+                                          })()}
                                         </tbody>
                                       </table>
                                     </div>
