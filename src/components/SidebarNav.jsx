@@ -15,6 +15,7 @@ export default function SidebarNav() {
   const [collapsed, setCollapsed] = useState(true)
   const [openMenu, setOpenMenu] = useState(null)
   const role = user?.role
+  const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
 
   const menu = useMemo(() => {
     const isMaster = role === Roles.Master
@@ -22,16 +23,25 @@ export default function SidebarNav() {
     const isSupervisor = role === Roles.Supervisor
 
     const items = [
-      { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' },
-      {
-        label: 'Consultas',
-        icon: 'FiSearch',
-        children: [
-          { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
-          { label: 'Histórico de Consultas', to: '/consultas/historico' }
-        ]
-      }
+      { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' }
     ]
+
+    if (isMaster) {
+      items.push({
+        label: 'Disparador',
+        icon: 'FiZap',
+        children: [{ label: 'Configurar BM', to: '/disparador/configurar-bm' }]
+      })
+    }
+
+    items.push({
+      label: 'Consultas',
+      icon: 'FiSearch',
+      children: [
+        { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
+        { label: 'Histórico de Consultas', to: '/consultas/historico' }
+      ]
+    })
 
     if (isMaster) {
       items.push({
@@ -56,7 +66,7 @@ export default function SidebarNav() {
     }
 
     return items
-  }, [role])
+  }, [role, level])
 
   const isActive = (path) => path && location.pathname.startsWith(path)
 
