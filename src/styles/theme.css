@@ -385,6 +385,13 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
   box-shadow: 0 12px 24px rgba(37, 99, 235, 0.35);
 }
 
+.modal-dark .btn-icon {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  box-shadow: none;
+}
+
 /* Lookup modal table readability */
 .modal-dark .table-lookup {
   --bs-table-bg: transparent;
