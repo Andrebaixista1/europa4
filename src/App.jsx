@@ -19,6 +19,7 @@ import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
+import DisparadorConfigBM from './pages/DisparadorConfigBM.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 
@@ -151,6 +152,14 @@ function App() {
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
               <HistoricoConsultas />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/disparador/configurar-bm"
+          element={
+            <ProtectedRoute roles={['Master']}>
+              <DisparadorConfigBM />
             </ProtectedRoute>
           }
         />
