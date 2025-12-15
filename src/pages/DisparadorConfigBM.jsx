@@ -376,6 +376,73 @@ export default function DisparadorConfigBM() {
           </p>
         </div>
 
+        <div className="neo-card neo-lg p-4 mt-4">
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <h5 className="mb-1">BMs salvas</h5>
+              <div className="small opacity-75">Dados retornados do webhook.</div>
+            </div>
+            {bmRowsError && <div className="text-danger small">{bmRowsError}</div>}
+          </div>
+          <div className="table-responsive">
+            <table className="table table-dark table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style={{ width: '25%' }}>Data/Hora</th>
+                  <th style={{ width: '20%' }}>ID</th>
+                  <th style={{ width: '30%' }}>Nome BM</th>
+                  <th style={{ width: '15%' }}>Status</th>
+                  <th style={{ width: '10%' }} aria-label="Ações">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bmRowsLoading ? (
+                  Array.from({ length: 3 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td><span className="placeholder col-8" /></td>
+                      <td><span className="placeholder col-6" /></td>
+                      <td><span className="placeholder col-9" /></td>
+                      <td><span className="placeholder col-5" /></td>
+                      <td><span className="placeholder col-6" /></td>
+                    </tr>
+                  ))
+                ) : bmRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="small">Nenhuma BM salva.</td>
+                  </tr>
+                ) : (
+                  bmRows.map((row) => {
+                    const statusInfo = mapStatus(row?.bm_statusPortifolio)
+                    return (
+                      <tr key={row.bm_id}>
+                        <td className="small text-nowrap">{formatIsoToBR(row.canal_data)}</td>
+                        <td className="small text-nowrap">{row.bm_id || '-'}</td>
+                        <td className="small">{row.bm_nome || '-'}</td>
+                        <td className="small">
+                          <span className="d-inline-flex align-items-center gap-2">
+                            <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: statusInfo.color }} aria-hidden />
+                            <span>{statusInfo.label}</span>
+                          </span>
+                        </td>
+                        <td className="small">
+                          <div className="d-flex gap-2">
+                            <button type="button" className="btn btn-icon btn-outline-light" title="Editar" onClick={() => handleEditRow(row)}>
+                              <FiEdit3 />
+                            </button>
+                            <button type="button" className="btn btn-icon btn-outline-danger" title="Excluir">
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         {modalOpen && (
           <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1050 }} aria-modal="true" role="dialog">
             <div
