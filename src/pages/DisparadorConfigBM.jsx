@@ -161,6 +161,7 @@ export default function DisparadorConfigBM() {
   const mapTemplateCategory = (value) => {
     const v = String(value || '').toUpperCase()
     if (v === 'UTILITY') return 'Utilidade'
+    if (v === 'MARKETING') return 'Marketing'
     return value || '-'
   }
 
