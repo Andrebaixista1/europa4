@@ -5,7 +5,7 @@ import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Roles } from '../utils/roles.js'
-import { FiCheckCircle, FiClock, FiXCircle, FiChevronsRight, FiChevronsLeft, FiEdit3, FiTrash2 } from 'react-icons/fi'
+import { FiCheckCircle, FiClock, FiXCircle, FiChevronsRight, FiChevronsLeft, FiRefreshCw, FiTrash2 } from 'react-icons/fi'
 
 export default function DisparadorConfigBM() {
   const { user } = useAuth()
@@ -460,11 +460,11 @@ export default function DisparadorConfigBM() {
                             <button
                               type="button"
                               className="btn btn-icon btn-outline-light"
-                              title={row?.bm_token ? 'Editar' : 'Sem token para editar'}
+                              title={row?.bm_token ? 'Atualizar' : 'Sem token para atualizar'}
                               onClick={() => handleEditRow(row)}
                               disabled={!row?.bm_token}
                             >
-                              <FiEdit3 />
+                              <FiRefreshCw />
                             </button>
                             <button type="button" className="btn btn-icon btn-outline-danger" title="Excluir">
                               <FiTrash2 />
