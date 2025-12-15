@@ -406,6 +406,7 @@ export default function DisparadorConfigBM() {
           </p>
         </div>
 
+        {!modalOpen && (
         <div className="neo-card neo-lg p-4 mt-4">
           <div className="d-flex align-items-center justify-content-between mb-3">
             <div>
@@ -456,7 +457,13 @@ export default function DisparadorConfigBM() {
                         </td>
                         <td className="small">
                           <div className="d-flex gap-2">
-                            <button type="button" className="btn btn-icon btn-outline-light" title="Editar" onClick={() => handleEditRow(row)}>
+                            <button
+                              type="button"
+                              className="btn btn-icon btn-outline-light"
+                              title={row?.bm_token ? 'Editar' : 'Sem token para editar'}
+                              onClick={() => handleEditRow(row)}
+                              disabled={!row?.bm_token}
+                            >
                               <FiEdit3 />
                             </button>
                             <button type="button" className="btn btn-icon btn-outline-danger" title="Excluir">
@@ -472,6 +479,7 @@ export default function DisparadorConfigBM() {
             </table>
           </div>
         </div>
+        )}
 
         {modalOpen && (
           <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1050 }} aria-modal="true" role="dialog">
