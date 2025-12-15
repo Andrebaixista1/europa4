@@ -481,7 +481,7 @@ export default function DisparadorConfigBM() {
                         placeholder="Digite o ID da BM"
                       />
                     </div>
-                    <div className="col-12 col-md-6">
+                    <div className="col-12 col-md-8">
                       <label className="form-label">Token</label>
                       <input
                         type="text"
@@ -491,21 +491,7 @@ export default function DisparadorConfigBM() {
                         placeholder="Cole o token"
                       />
                     </div>
-                    <div className="col-12 col-md-2">
-                      <label className="form-label d-block">Validar</label>
-                      <button
-                        type="button"
-                        className={`btn w-100 ${validationStatus === 'success' ? 'btn-success' : validationStatus === 'error' ? 'btn-danger' : 'btn-secondary'}`}
-                        onClick={handleValidate}
-                        disabled={validating}
-                        title="Validar BM"
-                      >
-                        {validationStatus === 'success' && <FiCheckCircle />}
-                        {validationStatus === 'error' && <FiXCircle />}
-                        {validationStatus === 'idle' && <FiClock />}
-                      </button>
-          </div>
-        </div>
+                  </div>
 
         <div className="neo-card neo-lg p-4 mb-4">
           <div className="d-flex align-items-center justify-content-between mb-3">
@@ -737,10 +723,6 @@ export default function DisparadorConfigBM() {
                   </div>
                 </div>
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-primary" onClick={handleSave} disabled={saving || validating || accountsLoading}>
-                    {saving ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> : null}
-                    Salvar
-                  </button>
                   <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)} disabled={validating}>
                     Fechar
                   </button>
