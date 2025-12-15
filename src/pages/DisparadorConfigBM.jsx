@@ -31,6 +31,8 @@ export default function DisparadorConfigBM() {
   const [selectedPhone, setSelectedPhone] = useState(null)
   const [saving, setSaving] = useState(false)
   const [deletingBmId, setDeletingBmId] = useState(null)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteRow, setDeleteRow] = useState(null)
   const [bmRows, setBmRows] = useState([])
   const [bmRowsLoading, setBmRowsLoading] = useState(false)
   const [bmRowsError, setBmRowsError] = useState('')
@@ -383,9 +385,8 @@ export default function DisparadorConfigBM() {
     const tokenClean = String(row?.bm_token || row?.token || '').trim()
     if (!idClean) {
       notify.warn('ID da BM inv\u00e1lido.')
-      return
+      return false
     }
-    if (!window.confirm(`Excluir a BM ${idClean}?`)) return
 
     setDeletingBmId(idClean)
     try {
@@ -420,11 +421,35 @@ export default function DisparadorConfigBM() {
       if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
       notify.success('Exclus\u00e3o enviada com sucesso.')
       await loadSavedBMs()
+      return true
     } catch (e) {
       notify.error(e?.message || 'Falha ao excluir.')
+      return false
     } finally {
       setDeletingBmId(null)
     }
+  }
+
+  const openDeleteModal = (row) => {
+    const idClean = String(row?.bm_id || row?.bmId || '').trim()
+    if (!idClean) {
+      notify.warn('ID da BM inv\u00e1lido.')
+      return
+    }
+    setDeleteRow(row)
+    setDeleteModalOpen(true)
+  }
+
+  const closeDeleteModal = () => {
+    if (deletingBmId) return
+    setDeleteModalOpen(false)
+    setDeleteRow(null)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteRow) return
+    const ok = await handleDeleteRow(deleteRow)
+    if (ok) closeDeleteModal()
   }
 
   if (!isMasterLevel1) return <Navigate to="/dashboard" replace />
@@ -543,9 +568,9 @@ export default function DisparadorConfigBM() {
                             <button
                               type="button"
                               className="btn btn-icon btn-outline-danger"
-                              title={deletingBmId === row.bm_id ? 'Excluindo...' : 'Excluir'}
-                              onClick={() => handleDeleteRow(row)}
-                              disabled={deletingBmId === row.bm_id}
+                              title={deletingBmId ? 'Aguarde...' : 'Excluir'}
+                              onClick={() => openDeleteModal(row)}
+                              disabled={Boolean(deletingBmId)}
                             >
                               <FiTrash2 />
                             </button>
@@ -860,6 +885,49 @@ export default function DisparadorConfigBM() {
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setTemplatesModalOpen(false)} disabled={templatesLoading}>
                   Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteModalOpen && (
+        <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.65)', position: 'fixed', inset: 0, zIndex: 1800 }} aria-modal="true" role="dialog">
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '640px', width: 'min(96vw, 640px)' }}>
+            <div className="modal-content modal-dark">
+              <div className="modal-header">
+                <h5 className="modal-title">Confirmar exclus\u00e3o</h5>
+                <button type="button" className="btn-close" aria-label="Close" onClick={closeDeleteModal} disabled={Boolean(deletingBmId)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="small opacity-75 mb-3">
+                  Voc\u00ea tem certeza que deseja excluir esta BM? Esta a\u00e7\u00e3o enviar\u00e1 os dados para o webhook.
+                </div>
+                <div className="neo-card p-3">
+                  <div className="row g-3">
+                    <div className="col-12 col-md-6">
+                      <div className="small opacity-75">ID</div>
+                      <div className="fw-semibold text-break">{deleteRow?.bm_id || '-'}</div>
+                    </div>
+                    <div className="col-12 col-md-6">
+                      <div className="small opacity-75">Status</div>
+                      <div className="fw-semibold text-break">{deleteRow?.bm_statusPortifolio || '-'}</div>
+                    </div>
+                    <div className="col-12">
+                      <div className="small opacity-75">Nome BM</div>
+                      <div className="fw-semibold text-break">{deleteRow?.bm_nome || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={closeDeleteModal} disabled={Boolean(deletingBmId)}>
+                  Cancelar
+                </button>
+                <button type="button" className="btn btn-danger" onClick={handleDeleteConfirm} disabled={Boolean(deletingBmId)}>
+                  {deletingBmId ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> : null}
+                  Excluir
                 </button>
               </div>
             </div>
