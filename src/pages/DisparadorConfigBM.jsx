@@ -48,11 +48,11 @@ export default function DisparadorConfigBM() {
     loadSavedBMs()
   }, [])
 
-  const handleValidate = async () => {
-    const idClean = String(bmId || '').trim()
-    const tokenClean = String(token || '').trim()
+  const handleValidate = async (idArg, tokenArg, { silent = false } = {}) => {
+    const idClean = String(idArg ?? bmId ?? '').trim()
+    const tokenClean = String(tokenArg ?? token ?? '').trim()
     if (!idClean || !tokenClean) {
-      notify.warn('Informe ID BM e Token.')
+      if (!silent) notify.warn('Informe ID BM e Token.')
       return false
     }
     setValidating(true)
@@ -77,12 +77,12 @@ export default function DisparadorConfigBM() {
       setBmNome(data?.name || '')
       setBmStatus(data?.verification_status || '')
       setValidationStatus('success')
-      notify.success('BM validado.')
+      if (!silent) notify.success('BM validado.')
       await fetchWhatsappAccounts(idClean, tokenClean)
       return true
     } catch (e) {
       setValidationStatus('error')
-      notify.error(e?.message || 'Falha ao validar BM.')
+      if (!silent) notify.error(e?.message || 'Falha ao validar BM.')
       return false
     } finally {
       setValidating(false)
@@ -104,10 +104,12 @@ export default function DisparadorConfigBM() {
       const data = JSON.parse(raw)
       const arr = Array.isArray(data?.data) ? data.data : []
       setAccounts(arr)
+      return arr
     } catch (e) {
       setAccounts([])
       setAccountsError(e?.message || 'Falha ao buscar canais WhatsApp.')
       notify.error(e?.message || 'Falha ao buscar canais WhatsApp.')
+      return []
     } finally {
       setAccountsLoading(false)
     }
@@ -287,9 +289,9 @@ export default function DisparadorConfigBM() {
     setPhonesError('')
     setModalOpen(true)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    const validated = await handleValidate()
+    const validated = await handleValidate(nextId, nextToken, { silent: true })
     if (validated) {
-      await handleSave()
+      await handleSave(nextId, nextToken, { silent: true })
     }
   }
 
@@ -298,15 +300,15 @@ export default function DisparadorConfigBM() {
   const templates = templatesKey ? templatesByPhone[templatesKey] || [] : []
   const tokenColClass = isEditing ? 'col-12 col-md-8' : 'col-12 col-md-6'
 
-  const handleSave = async () => {
-    const idClean = String(bmId || '').trim()
-    const tokenClean = String(token || '').trim()
+  const handleSave = async (idArg, tokenArg, { silent = false } = {}) => {
+    const idClean = String(idArg ?? bmId ?? '').trim()
+    const tokenClean = String(tokenArg ?? token ?? '').trim()
     if (!idClean || !tokenClean) {
-      notify.warn('Informe ID BM e Token antes de salvar.')
+      if (!silent) notify.warn('Informe ID BM e Token antes de salvar.')
       return false
     }
     if (!accounts || accounts.length === 0) {
-      notify.warn('Valide a BM para carregar os canais antes de salvar.')
+      if (!silent) notify.warn('Valide a BM para carregar os canais antes de salvar.')
       return false
     }
     setSaving(true)
