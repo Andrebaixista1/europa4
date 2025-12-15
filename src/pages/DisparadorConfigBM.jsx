@@ -52,7 +52,7 @@ export default function DisparadorConfigBM() {
     const tokenClean = String(token || '').trim()
     if (!idClean || !tokenClean) {
       notify.warn('Informe ID BM e Token.')
-      return
+      return false
     }
     setValidating(true)
     setBmNome('')
@@ -78,9 +78,11 @@ export default function DisparadorConfigBM() {
       setValidationStatus('success')
       notify.success('BM validado.')
       await fetchWhatsappAccounts(idClean, tokenClean)
+      return true
     } catch (e) {
       setValidationStatus('error')
       notify.error(e?.message || 'Falha ao validar BM.')
+      return false
     } finally {
       setValidating(false)
     }
@@ -264,9 +266,15 @@ export default function DisparadorConfigBM() {
     return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
   }
 
-  const handleEditRow = (row) => {
-    setBmId(row?.bm_id || '')
-    setToken(row?.bm_token || '')
+  const handleEditRow = async (row) => {
+    const nextId = row?.bm_id || ''
+    const nextToken = row?.bm_token || ''
+    if (!nextId || !nextToken) {
+      notify.warn('Registro não possui token para validar.')
+      return
+    }
+    setBmId(nextId)
+    setToken(nextToken)
     setBmNome(row?.bm_nome || '')
     setBmStatus(row?.bm_statusPortifolio || '')
     setValidationStatus('idle')
@@ -276,6 +284,11 @@ export default function DisparadorConfigBM() {
     setSelectedAccountId(null)
     setPhonesError('')
     setModalOpen(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const validated = await handleValidate()
+    if (validated) {
+      await handleSave()
+    }
   }
 
   const selectedPhones = selectedAccountId ? phonesByAccount[selectedAccountId] || [] : []
@@ -287,11 +300,11 @@ export default function DisparadorConfigBM() {
     const tokenClean = String(token || '').trim()
     if (!idClean || !tokenClean) {
       notify.warn('Informe ID BM e Token antes de salvar.')
-      return
+      return false
     }
     if (!accounts || accounts.length === 0) {
       notify.warn('Valide a BM para carregar os canais antes de salvar.')
-      return
+      return false
     }
     setSaving(true)
     try {
@@ -336,8 +349,10 @@ export default function DisparadorConfigBM() {
       const raw = await res.text().catch(() => '')
       if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
       notify.success('Dados enviados com sucesso.')
+      return true
     } catch (e) {
       notify.error(e?.message || 'Falha ao salvar dados.')
+      return false
     } finally {
       setSaving(false)
     }
