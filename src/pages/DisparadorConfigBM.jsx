@@ -389,28 +389,27 @@ export default function DisparadorConfigBM() {
 
     setDeletingBmId(idClean)
     try {
-      let accountsList = []
-      if (tokenClean) {
-        accountsList = await requestWhatsappAccounts(idClean, tokenClean)
-      } else {
-        notify.warn('Registro sem token. Enviando exclus\u00e3o sem canais/telefones.')
+      let body
+      try {
+        if (!tokenClean) throw new Error('Registro sem token.')
+        const accountsList = await requestWhatsappAccounts(idClean, tokenClean)
+        body = await buildBmBody({
+          idClean,
+          tokenClean,
+          nomeBmValue: row?.bm_nome || '-',
+          statusPortfolioValue: row?.bm_statusPortifolio || '-',
+          accountsList
+        })
+      } catch (payloadErr) {
+        notify.warn('N\u00e3o foi poss\u00edvel montar payload completo. Enviando exclus\u00e3o b\u00e1sica.')
+        body = {
+          bmId: idClean,
+          token: tokenClean,
+          nomeBm: row?.bm_nome || '-',
+          statusPortfolio: row?.bm_statusPortifolio || '-',
+          canais: []
+        }
       }
-
-      const body = tokenClean
-        ? await buildBmBody({
-            idClean,
-            tokenClean,
-            nomeBmValue: row?.bm_nome || '-',
-            statusPortfolioValue: row?.bm_statusPortifolio || '-',
-            accountsList
-          })
-        : {
-            bmId: idClean,
-            token: tokenClean,
-            nomeBm: row?.bm_nome || '-',
-            statusPortfolio: row?.bm_statusPortifolio || '-',
-            canais: []
-          }
 
       const res = await fetch('https://n8n.apivieiracred.store/webhook/bm-delete-port', {
         method: 'POST',
