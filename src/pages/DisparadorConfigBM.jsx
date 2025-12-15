@@ -33,6 +33,7 @@ export default function DisparadorConfigBM() {
   const [bmRows, setBmRows] = useState([])
   const [bmRowsLoading, setBmRowsLoading] = useState(false)
   const [bmRowsError, setBmRowsError] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
 
   const isMasterLevel1 = user?.role === Roles.Master && Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? 0) === 1
 
@@ -273,6 +274,7 @@ export default function DisparadorConfigBM() {
       notify.warn('Registro não possui token para validar.')
       return
     }
+    setIsEditing(true)
     setBmId(nextId)
     setToken(nextToken)
     setBmNome(row?.bm_nome || '')
@@ -294,6 +296,7 @@ export default function DisparadorConfigBM() {
   const selectedPhones = selectedAccountId ? phonesByAccount[selectedAccountId] || [] : []
   const templatesKey = selectedAccountId || selectedPhone?.id
   const templates = templatesKey ? templatesByPhone[templatesKey] || [] : []
+  const tokenColClass = isEditing ? 'col-12 col-md-8' : 'col-12 col-md-6'
 
   const handleSave = async () => {
     const idClean = String(bmId || '').trim()
@@ -360,6 +363,16 @@ export default function DisparadorConfigBM() {
 
   if (!isMasterLevel1) return <Navigate to="/dashboard" replace />
 
+  const handleOpenNew = () => {
+    setIsEditing(false)
+    setModalOpen(true)
+  }
+
+  const handleCloseModal = () => {
+    setModalOpen(false)
+    setIsEditing(false)
+  }
+
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
@@ -382,7 +395,7 @@ export default function DisparadorConfigBM() {
               <h5 className="mb-1">Configuração BM</h5>
               <div className="small opacity-75">Gerencie credenciais e status das APIs do BM usadas nos disparos.</div>
             </div>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setModalOpen(true)}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleOpenNew}>
               Adicionar
             </button>
           </div>
@@ -481,7 +494,7 @@ export default function DisparadorConfigBM() {
                         placeholder="Digite o ID da BM"
                       />
                     </div>
-                    <div className="col-12 col-md-8">
+                    <div className={tokenColClass}>
                       <label className="form-label">Token</label>
                       <input
                         type="text"
@@ -491,6 +504,22 @@ export default function DisparadorConfigBM() {
                         placeholder="Cole o token"
                       />
                     </div>
+                    {!isEditing && (
+                      <div className="col-12 col-md-2">
+                        <label className="form-label d-block">Validar</label>
+                        <button
+                          type="button"
+                          className={`btn w-100 ${validationStatus === 'success' ? 'btn-success' : validationStatus === 'error' ? 'btn-danger' : 'btn-secondary'}`}
+                          onClick={handleValidate}
+                          disabled={validating}
+                          title="Validar BM"
+                        >
+                          {validationStatus === 'success' && <FiCheckCircle />}
+                          {validationStatus === 'error' && <FiXCircle />}
+                          {validationStatus === 'idle' && <FiClock />}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
         <div className="neo-card neo-lg p-4 mb-4">
@@ -721,12 +750,18 @@ export default function DisparadorConfigBM() {
                       )}
                     </div>
                   </div>
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(false)} disabled={validating}>
-                    Fechar
+              </div>
+              <div className="modal-footer">
+                {!isEditing && (
+                  <button type="button" className="btn btn-primary me-2" onClick={handleSave} disabled={saving || validating || accountsLoading}>
+                    {saving ? <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> : null}
+                    Salvar
                   </button>
-                </div>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal} disabled={validating}>
+                  Fechar
+                </button>
+              </div>
               </div>
             </div>
           </div>
