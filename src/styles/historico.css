@@ -13,7 +13,7 @@
 .hc-page .btn-outline-light { border-color: rgba(255,255,255,0.22); }
 
 /* Garante que o dropdown apareça sobre o card */
-.hc-page .dropdown-menu { z-index: 2000; background: rgba(16, 23, 42, 0.96); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(8px) saturate(120%); }
+.hc-page .dropdown-menu { z-index: 2000; background: rgba(23, 23, 23, 0.96); color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(8px) saturate(120%); }
 .hc-page .dropdown-item { color: #e5e7eb; }
 .hc-page .dropdown-item:hover, .hc-page .dropdown-item.active { background: rgba(59,130,246,0.28); color: #fff; }
 

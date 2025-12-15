@@ -26,9 +26,9 @@ export function normalizeRole(role, level) {
 
   const numericLevel = Number.parseInt(level, 10)
   if (!Number.isNaN(numericLevel)) {
-    if (numericLevel <= 1) return Roles.Master
-    if (numericLevel === 2) return Roles.Administrador
-    if (numericLevel === 3) return Roles.Supervisor
+    if (numericLevel <= 0) return Roles.Master
+    if (numericLevel === 1) return Roles.Administrador
+    if (numericLevel === 2) return Roles.Supervisor
     return Roles.Operador
   }
 

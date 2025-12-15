@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import NovidadesModal from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
-import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiBarChart2, FiActivity } from 'react-icons/fi'
+import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiActivity } from 'react-icons/fi'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -218,16 +218,7 @@ export default function TopNav() {
           </button>
           <div className="collapse navbar-collapse" id="navbarsExample">
             <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-              {isAuthenticated && (
-                <>
-                  <li className="nav-item">
-                    <Link to="/dashboard" className="nav-link d-inline-flex align-items-center gap-2">
-                      <FiBarChart2 />
-                      <span>Dashboard</span>
-                    </Link>
-                  </li>
-                </>
-              )}
+              {/* ícones extras removidos */}
             </ul>
             <div className="d-flex align-items-center gap-2">
               {isAuthenticated ? (

@@ -8,7 +8,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'dark')
     const meta = document.querySelector('meta[name="theme-color"]')
-    if (meta) meta.setAttribute('content', '#0a0f1e')
+    if (meta) meta.setAttribute('content', '#171717')
   }, [])
 
   const toggleTheme = () => {
