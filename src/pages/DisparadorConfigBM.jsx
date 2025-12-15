@@ -30,6 +30,7 @@ export default function DisparadorConfigBM() {
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false)
   const [selectedPhone, setSelectedPhone] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [deletingBmId, setDeletingBmId] = useState(null)
   const [bmRows, setBmRows] = useState([])
   const [bmRowsLoading, setBmRowsLoading] = useState(false)
   const [bmRowsError, setBmRowsError] = useState('')
@@ -91,20 +92,24 @@ export default function DisparadorConfigBM() {
     }
   }
 
+  const requestWhatsappAccounts = async (idClean, tokenClean) => {
+    const params = new URLSearchParams({
+      fields: 'id,name,creation_time',
+      access_token: tokenClean
+    })
+    const url = `https://graph.facebook.com/v24.0/${encodeURIComponent(idClean)}/owned_whatsapp_business_accounts?${params.toString()}`
+    const res = await fetch(url, { method: 'GET' })
+    const raw = await res.text().catch(() => '')
+    if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
+    const data = JSON.parse(raw)
+    return Array.isArray(data?.data) ? data.data : []
+  }
+
   const fetchWhatsappAccounts = async (idClean, tokenClean) => {
     setAccountsLoading(true)
     setAccountsError('')
     try {
-      const params = new URLSearchParams({
-        fields: 'id,name,creation_time',
-        access_token: tokenClean
-      })
-      const url = `https://graph.facebook.com/v24.0/${encodeURIComponent(idClean)}/owned_whatsapp_business_accounts?${params.toString()}`
-      const res = await fetch(url, { method: 'GET' })
-      const raw = await res.text().catch(() => '')
-      if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
-      const data = JSON.parse(raw)
-      const arr = Array.isArray(data?.data) ? data.data : []
+      const arr = await requestWhatsappAccounts(idClean, tokenClean)
       setAccounts(arr)
       return arr
     } catch (e) {
@@ -312,38 +317,13 @@ export default function DisparadorConfigBM() {
     }
     setSaving(true)
     try {
-      const payloadAccounts = []
-      for (const acc of accounts) {
-        const phones = await requestPhones(acc.id, tokenClean)
-        const templatesForAccount = await requestTemplates(acc.id, tokenClean)
-        const phonesPayload = phones.map((ph) => ({
-          telefone: ph.display_phone_number || '-',
-          telefoneId: ph.id || '-',
-          qualidade: ph.quality_rating || '-',
-          limite: formatLimit(ph.messaging_limit_tier),
-          modelos: templatesForAccount.map((tpl) => ({
-            nomeModelo: tpl.name || '-',
-            linguagem: tpl.language || '-',
-            status: tpl.status || '-',
-            categoria: tpl.category || '-',
-            mensagem: getTemplateBodyText(tpl)
-          }))
-        }))
-        payloadAccounts.push({
-          data: formatUnixToBR(acc.creation_time),
-          nome: acc.name || '-',
-          canalId: acc.id || '-',
-          telefones: phonesPayload
-        })
-      }
-
-      const body = {
-        bmId: idClean,
-        token: tokenClean,
-        nomeBm: bmNome || '-',
-        statusPortfolio: bmStatus || '-',
-        canais: payloadAccounts
-      }
+      const body = await buildBmBody({
+        idClean,
+        tokenClean,
+        nomeBmValue: bmNome,
+        statusPortfolioValue: bmStatus,
+        accountsList: accounts
+      })
 
       const res = await fetch('https://n8n.apivieiracred.store/webhook/bm-cadastro', {
         method: 'POST',
@@ -360,6 +340,91 @@ export default function DisparadorConfigBM() {
       return false
     } finally {
       setSaving(false)
+    }
+  }
+
+  const buildBmBody = async ({ idClean, tokenClean, nomeBmValue, statusPortfolioValue, accountsList }) => {
+    const payloadAccounts = []
+    for (const acc of accountsList || []) {
+      const phones = await requestPhones(acc.id, tokenClean)
+      const templatesForAccount = await requestTemplates(acc.id, tokenClean)
+      const phonesPayload = phones.map((ph) => ({
+        telefone: ph.display_phone_number || '-',
+        telefoneId: ph.id || '-',
+        qualidade: ph.quality_rating || '-',
+        limite: formatLimit(ph.messaging_limit_tier),
+        modelos: templatesForAccount.map((tpl) => ({
+          nomeModelo: tpl.name || '-',
+          linguagem: tpl.language || '-',
+          status: tpl.status || '-',
+          categoria: tpl.category || '-',
+          mensagem: getTemplateBodyText(tpl)
+        }))
+      }))
+      payloadAccounts.push({
+        data: formatUnixToBR(acc.creation_time),
+        nome: acc.name || '-',
+        canalId: acc.id || '-',
+        telefones: phonesPayload
+      })
+    }
+
+    return {
+      bmId: idClean,
+      token: tokenClean,
+      nomeBm: nomeBmValue || '-',
+      statusPortfolio: statusPortfolioValue || '-',
+      canais: payloadAccounts
+    }
+  }
+
+  const handleDeleteRow = async (row) => {
+    const idClean = String(row?.bm_id || row?.bmId || '').trim()
+    const tokenClean = String(row?.bm_token || row?.token || '').trim()
+    if (!idClean) {
+      notify.warn('ID da BM inv\u00e1lido.')
+      return
+    }
+    if (!window.confirm(`Excluir a BM ${idClean}?`)) return
+
+    setDeletingBmId(idClean)
+    try {
+      let accountsList = []
+      if (tokenClean) {
+        accountsList = await requestWhatsappAccounts(idClean, tokenClean)
+      } else {
+        notify.warn('Registro sem token. Enviando exclus\u00e3o sem canais/telefones.')
+      }
+
+      const body = tokenClean
+        ? await buildBmBody({
+            idClean,
+            tokenClean,
+            nomeBmValue: row?.bm_nome || '-',
+            statusPortfolioValue: row?.bm_statusPortifolio || '-',
+            accountsList
+          })
+        : {
+            bmId: idClean,
+            token: tokenClean,
+            nomeBm: row?.bm_nome || '-',
+            statusPortfolio: row?.bm_statusPortifolio || '-',
+            canais: []
+          }
+
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/bm-delete-port', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const raw = await res.text().catch(() => '')
+      if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
+      notify.success('Exclus\u00e3o enviada com sucesso.')
+      await loadSavedBMs()
+    } catch (e) {
+      notify.error(e?.message || 'Falha ao excluir.')
+    } finally {
+      setDeletingBmId(null)
     }
   }
 
@@ -476,7 +541,13 @@ export default function DisparadorConfigBM() {
                             >
                               <FiRefreshCw />
                             </button>
-                            <button type="button" className="btn btn-icon btn-outline-danger" title="Excluir">
+                            <button
+                              type="button"
+                              className="btn btn-icon btn-outline-danger"
+                              title={deletingBmId === row.bm_id ? 'Excluindo...' : 'Excluir'}
+                              onClick={() => handleDeleteRow(row)}
+                              disabled={deletingBmId === row.bm_id}
+                            >
                               <FiTrash2 />
                             </button>
                           </div>
