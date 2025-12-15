@@ -5,7 +5,7 @@ import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Roles } from '../utils/roles.js'
-import { FiCheckCircle, FiClock, FiXCircle, FiChevronsRight, FiChevronsLeft } from 'react-icons/fi'
+import { FiCheckCircle, FiClock, FiXCircle, FiChevronsRight, FiChevronsLeft, FiEdit3, FiTrash2 } from 'react-icons/fi'
 
 export default function DisparadorConfigBM() {
   const { user } = useAuth()
@@ -30,6 +30,9 @@ export default function DisparadorConfigBM() {
   const [templatesModalOpen, setTemplatesModalOpen] = useState(false)
   const [selectedPhone, setSelectedPhone] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [bmRows, setBmRows] = useState([])
+  const [bmRowsLoading, setBmRowsLoading] = useState(false)
+  const [bmRowsError, setBmRowsError] = useState('')
 
   const isMasterLevel1 = user?.role === Roles.Master && Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? 0) === 1
 
@@ -39,6 +42,10 @@ export default function DisparadorConfigBM() {
       notify.warn('Acesso permitido apenas para Master nível 1.')
     }
   }, [isMasterLevel1])
+
+  useEffect(() => {
+    loadSavedBMs()
+  }, [])
 
   const handleValidate = async () => {
     const idClean = String(bmId || '').trim()
@@ -100,6 +107,42 @@ export default function DisparadorConfigBM() {
       notify.error(e?.message || 'Falha ao buscar canais WhatsApp.')
     } finally {
       setAccountsLoading(false)
+    }
+  }
+
+  const loadSavedBMs = async () => {
+    setBmRowsLoading(true)
+    setBmRowsError('')
+    try {
+      const res = await fetch('https://n8n.apivieiracred.store/webhook/bm-get', { method: 'GET' })
+      const raw = await res.text().catch(() => '')
+      if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
+      const data = JSON.parse(raw)
+      const arr = Array.isArray(data) ? data : []
+      const map = new Map()
+      arr.forEach((item) => {
+        const key = item?.bm_id || item?.bmId
+        if (!key) return
+        const current = map.get(key)
+        const currentDate = current?.canal_data ? Date.parse(current.canal_data) : -Infinity
+        const incomingDate = item?.canal_data ? Date.parse(item.canal_data) : -Infinity
+        if (!current || incomingDate > currentDate) {
+          map.set(key, {
+            bm_id: key,
+            bm_nome: item?.bm_nome || '-',
+            bm_statusPortifolio: item?.bm_statusPortifolio || '-',
+            canal_data: item?.canal_data || null,
+            bm_token: item?.bm_token || item?.token || ''
+          })
+        }
+      })
+      const rows = Array.from(map.values()).sort((a, b) => (Date.parse(b.canal_data || 0) || 0) - (Date.parse(a.canal_data || 0) || 0))
+      setBmRows(rows)
+    } catch (e) {
+      setBmRows([])
+      setBmRowsError(e?.message || 'Falha ao buscar BMs salvas.')
+    } finally {
+      setBmRowsLoading(false)
     }
   }
 
@@ -212,6 +255,27 @@ export default function DisparadorConfigBM() {
     const d = new Date(num * 1000)
     if (Number.isNaN(d)) return '-'
     return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  }
+
+  const formatIsoToBR = (value) => {
+    if (!value) return '-'
+    const d = new Date(value)
+    if (Number.isNaN(d)) return '-'
+    return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  }
+
+  const handleEditRow = (row) => {
+    setBmId(row?.bm_id || '')
+    setToken(row?.bm_token || '')
+    setBmNome(row?.bm_nome || '')
+    setBmStatus(row?.bm_statusPortifolio || '')
+    setValidationStatus('idle')
+    setAccounts([])
+    setAccountsError('')
+    setPhonesByAccount({})
+    setSelectedAccountId(null)
+    setPhonesError('')
+    setModalOpen(true)
   }
 
   const selectedPhones = selectedAccountId ? phonesByAccount[selectedAccountId] || [] : []
@@ -358,8 +422,75 @@ export default function DisparadorConfigBM() {
                         {validationStatus === 'error' && <FiXCircle />}
                         {validationStatus === 'idle' && <FiClock />}
                       </button>
-                    </div>
-                  </div>
+          </div>
+        </div>
+
+        <div className="neo-card neo-lg p-4 mb-4">
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <h5 className="mb-1">BMs salvas</h5>
+              <div className="small opacity-75">Dados retornados do webhook.</div>
+            </div>
+            {bmRowsError && <div className="text-danger small">{bmRowsError}</div>}
+          </div>
+          <div className="table-responsive">
+            <table className="table table-dark table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style={{ width: '25%' }}>Data/Hora</th>
+                  <th style={{ width: '20%' }}>ID</th>
+                  <th style={{ width: '30%' }}>Nome BM</th>
+                  <th style={{ width: '15%' }}>Status</th>
+                  <th style={{ width: '10%' }} aria-label="Ações">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bmRowsLoading ? (
+                  Array.from({ length: 3 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td><span className="placeholder col-8" /></td>
+                      <td><span className="placeholder col-6" /></td>
+                      <td><span className="placeholder col-9" /></td>
+                      <td><span className="placeholder col-5" /></td>
+                      <td><span className="placeholder col-6" /></td>
+                    </tr>
+                  ))
+                ) : bmRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="small">Nenhuma BM salva.</td>
+                  </tr>
+                ) : (
+                  bmRows.map((row) => {
+                    const statusInfo = mapStatus(row?.bm_statusPortifolio)
+                    return (
+                      <tr key={row.bm_id}>
+                        <td className="small text-nowrap">{formatIsoToBR(row.canal_data)}</td>
+                        <td className="small text-nowrap">{row.bm_id || '-'}</td>
+                        <td className="small">{row.bm_nome || '-'}</td>
+                        <td className="small">
+                          <span className="d-inline-flex align-items-center gap-2">
+                            <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: statusInfo.color }} aria-hidden />
+                            <span>{statusInfo.label}</span>
+                          </span>
+                        </td>
+                        <td className="small">
+                          <div className="d-flex gap-2">
+                            <button type="button" className="btn btn-icon btn-outline-light" title="Editar" onClick={() => handleEditRow(row)}>
+                              <FiEdit3 />
+                            </button>
+                            <button type="button" className="btn btn-icon btn-outline-danger" title="Excluir">
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
                   <div className="row g-3 mb-4">
                     <div className="col-12 col-md-6">
