@@ -532,8 +532,8 @@ export default function DisparadorConfigBM() {
             <table className="table table-dark table-sm align-middle mb-0">
               <thead>
                 <tr>
-                  <th style={{ width: '25%' }}>Data/Hora</th>
-                  <th style={{ width: '20%' }}>ID</th>
+                  <th className="d-none d-lg-table-cell" style={{ width: '25%' }}>Data/Hora</th>
+                  <th className="d-none d-lg-table-cell" style={{ width: '20%' }}>ID</th>
                   <th style={{ width: '30%' }}>Nome BM</th>
                   <th style={{ width: '15%' }}>Status</th>
                   <th style={{ width: '10%' }} aria-label="Ações">Ações</th>
@@ -559,9 +559,13 @@ export default function DisparadorConfigBM() {
                     const statusInfo = mapStatus(row?.bm_statusPortifolio)
                     return (
                       <tr key={row.bm_id}>
-                        <td className="small text-nowrap">{formatIsoToBR(row.canal_data)}</td>
-                        <td className="small text-nowrap">{row.bm_id || '-'}</td>
-                        <td className="small">{row.bm_nome || '-'}</td>
+                        <td className="small text-nowrap d-none d-lg-table-cell">{formatIsoToBR(row.canal_data)}</td>
+                        <td className="small text-nowrap d-none d-lg-table-cell">{row.bm_id || '-'}</td>
+                        <td className="small">
+                          <div className="text-break">{row.bm_nome || '-'}</div>
+                          <div className="d-lg-none small opacity-75 text-break">ID: {row.bm_id || '-'}</div>
+                          <div className="d-lg-none small opacity-75 text-break">Data: {formatIsoToBR(row.canal_data)}</div>
+                        </td>
                         <td className="small">
                           <span className="d-inline-flex align-items-center gap-2">
                             <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: statusInfo.color }} aria-hidden />
@@ -601,10 +605,10 @@ export default function DisparadorConfigBM() {
         )}
 
         {modalOpen && (
-          <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1050 }} aria-modal="true" role="dialog">
+          <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1800 }} aria-modal="true" role="dialog">
             <div
-              className="modal-dialog modal-dialog-centered"
-              style={{ maxWidth: '1500px', width: 'min(98vw, 1500px)' }}
+              className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down"
+              style={{ '--bs-modal-width': 'min(96vw, 860px)' }}
             >
               <div className="modal-content modal-dark">
                 <div className="modal-header">
@@ -688,9 +692,9 @@ export default function DisparadorConfigBM() {
                           <table className="table table-dark table-sm align-middle mb-0" style={{ tableLayout: 'auto', minWidth: '100%' }}>
                             <thead>
                               <tr>
-                                <th style={{ width: '28%' }}>Data</th>
+                                <th className="d-none d-lg-table-cell" style={{ width: '28%' }}>Data</th>
                                 <th style={{ width: '42%' }}>Canais</th>
-                                <th style={{ width: '20%' }}>Canal ID</th>
+                                <th className="d-none d-lg-table-cell" style={{ width: '20%' }}>Canal ID</th>
                                 <th style={{ width: '10%' }} aria-label="Ações" />
                               </tr>
                             </thead>
@@ -707,9 +711,13 @@ export default function DisparadorConfigBM() {
                               ) : accounts.length > 0 ? (
                                 accounts.map((acc) => (
                                   <tr key={acc.id}>
-                                    <td className="small text-nowrap">{formatUnixToBR(acc.creation_time)}</td>
-                                    <td className="small">{acc.name || '-'}</td>
-                                    <td className="small">{acc.id || '-'}</td>
+                                    <td className="small text-nowrap d-none d-lg-table-cell">{formatUnixToBR(acc.creation_time)}</td>
+                                    <td className="small">
+                                      <div className="text-break">{acc.name || '-'}</div>
+                                      <div className="d-lg-none small opacity-75 text-break">ID: {acc.id || '-'}</div>
+                                      <div className="d-lg-none small opacity-75 text-break">Data: {formatUnixToBR(acc.creation_time)}</div>
+                                    </td>
+                                    <td className="small d-none d-lg-table-cell">{acc.id || '-'}</td>
                                     <td className="small text-center">
                                       <button
                                         type="button"
@@ -759,7 +767,7 @@ export default function DisparadorConfigBM() {
                               <thead>
                                 <tr>
                                   <th style={{ width: '30%' }}>Telefone</th>
-                                  <th style={{ width: '30%' }}>Telefone ID</th>
+                                  <th className="d-none d-lg-table-cell" style={{ width: '30%' }}>Telefone ID</th>
                                   <th style={{ width: '20%' }}>Qualidade</th>
                                   <th style={{ width: '20%' }}>Limite</th>
                                 </tr>
@@ -774,7 +782,7 @@ export default function DisparadorConfigBM() {
                                   )}
                                   {!phonesLoading && selectedPhones.length > 0 && selectedPhones.map((ph) => (
                                     <tr key={ph.id}>
-                                      <td className="small text-nowrap">
+                                      <td className="small">
                                         <button
                                           type="button"
                                           className="btn btn-link text-decoration-none p-0 text-light"
@@ -783,8 +791,9 @@ export default function DisparadorConfigBM() {
                                         >
                                           {ph.display_phone_number || '-'}
                                         </button>
+                                        <div className="d-lg-none small opacity-75 text-break">ID: {ph.id || '-'}</div>
                                       </td>
-                                      <td className="small text-nowrap">{ph.id || '-'}</td>
+                                      <td className="small text-nowrap d-none d-lg-table-cell">{ph.id || '-'}</td>
                                       <td className="small text-nowrap">
                                         {(() => {
                                           const { label, color } = mapQuality(ph.quality_rating)
@@ -832,7 +841,7 @@ export default function DisparadorConfigBM() {
 
       {templatesModalOpen && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.65)', position: 'fixed', inset: 0, zIndex: 2000 }} aria-modal="true" role="dialog">
-          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '900px', width: 'min(96vw, 900px)' }}>
+          <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down" style={{ '--bs-modal-width': 'min(96vw, 820px)' }}>
             <div className="modal-content modal-dark">
               <div className="modal-header">
                 <h5 className="modal-title">Modelos de mensagem</h5>
@@ -908,7 +917,7 @@ export default function DisparadorConfigBM() {
 
       {deleteModalOpen && (
         <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.65)', position: 'fixed', inset: 0, zIndex: 1800 }} aria-modal="true" role="dialog">
-          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '640px', width: 'min(96vw, 640px)' }}>
+          <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down" style={{ '--bs-modal-width': 'min(96vw, 560px)' }}>
             <div className="modal-content modal-dark">
               <div className="modal-header">
                 <h5 className="modal-title">Confirmar exclus\u00e3o</h5>
