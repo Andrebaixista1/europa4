@@ -24,8 +24,8 @@ const QUALITY_META = {
   ORANGE: { label: 'Medium', color: '#f97316', tone: 'yellow' },
   RED: { label: 'Low', color: '#ef4444', tone: 'red' },
   LOW: { label: 'Low', color: '#ef4444', tone: 'red' },
-  GRAY: { label: 'Unknown', color: '#9ca3af', tone: 'gray' },
-  UNKNOWN: { label: 'Unknown', color: '#9ca3af', tone: 'gray' },
+  GRAY: { label: 'Sem status', color: '#9ca3af', tone: 'gray' },
+  UNKNOWN: { label: 'Sem status', color: '#9ca3af', tone: 'gray' },
 }
 
 const COLOR_PALETTE = {

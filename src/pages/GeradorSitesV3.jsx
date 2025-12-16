@@ -126,16 +126,9 @@ function mapWhatsappLimit(value) {
 function renderStatusBM(value) {
   const v = (value ?? '').toString()
   const s = v.trim().toLowerCase()
-  if (s === 'pending_need_more_info') {
+  if (s === 'pending_need_more_info' || s === 'pending_submission') {
     return (
-      <span className="badge" style={{ backgroundColor: '#ffedd5', color: '#9a3412', border: '1px solid #fdba74', fontWeight: 600 }}>Não Verificado</span>
-    )
-  }
-  if (s === 'pending_submission') {
-    return (
-      <span className="badge" style={{ backgroundColor: '#fef9c3', color: '#854d0e', border: '1px solid #fde047', fontWeight: 600 }}>
-        Em andamento
-      </span>
+      <span className="badge" style={{ backgroundColor: '#ffedd5', color: '#9a3412', border: '1px solid #fdba74', fontWeight: 600 }}>Não verificado</span>
     )
   }
   if (s === 'verified') {
@@ -240,7 +233,8 @@ function valueForKey(key, value) {
   }
   if (key === 'quality_rating') {
     const s = (v ?? '').toString().trim().toUpperCase()
-    if (!s || s === 'UNKNOWN') return '-'
+    if (!s) return '-'
+    if (s === 'UNKNOWN') return 'Sem status'
     if (s === 'GREEN') {
       return (
         <span className="d-inline-flex align-items-center gap-2">
@@ -617,11 +611,10 @@ export default function GeradorSitesV3() {
 
   // Resumos: contagem de status e total de conexões
   const statusCounts = useMemo(() => {
-    const out = { naoVerificado: 0, emAndamento: 0, verificado: 0 }
+    const out = { naoVerificado: 0, verificado: 0 }
     for (const r of records) {
       const s = (r?.verification_status ?? '').toString().trim().toLowerCase()
-      if (s === 'pending_need_more_info') out.naoVerificado++
-      else if (s === 'pending_submission') out.emAndamento++
+      if (s === 'pending_need_more_info' || s === 'pending_submission') out.naoVerificado++
       else if (s === 'verified') out.verificado++
     }
     return out
@@ -677,8 +670,7 @@ export default function GeradorSitesV3() {
 
   const statusOptions = useMemo(() => {
     const arr = []
-    if (statusCounts.naoVerificado > 0) arr.push({ value: 'pending_need_more_info', label: 'Não Verificado' })
-    if (statusCounts.emAndamento > 0) arr.push({ value: 'pending_submission', label: 'Em andamento' })
+    if (statusCounts.naoVerificado > 0) arr.push({ value: 'nao_verificado', label: 'Não verificado' })
     if (statusCounts.verificado > 0) arr.push({ value: 'verified', label: 'Verificado' })
     return arr
   }, [statusCounts])
@@ -696,7 +688,16 @@ export default function GeradorSitesV3() {
   const filteredRecords = useMemo(() => {
     let arr = records
     if (filterEmpresa) arr = arr.filter(r => (empresaByBmId[r.id] || '') === filterEmpresa)
-    if (filterStatus) arr = arr.filter(r => ((r?.verification_status ?? '').toString().trim().toLowerCase()) === filterStatus)
+    if (filterStatus) {
+      if (filterStatus === 'nao_verificado') {
+        arr = arr.filter((r) => {
+          const s = ((r?.verification_status ?? '').toString().trim().toLowerCase())
+          return s === 'pending_need_more_info' || s === 'pending_submission'
+        })
+      } else {
+        arr = arr.filter((r) => ((r?.verification_status ?? '').toString().trim().toLowerCase()) === filterStatus)
+      }
+    }
     if (filterLimit) arr = arr.filter(r => ((r?.whatsapp_limit ?? '').toString().trim().toUpperCase()) === filterLimit)
     return arr
   }, [records, filterEmpresa, filterStatus, filterLimit, empresaByBmId])
@@ -803,12 +804,8 @@ export default function GeradorSitesV3() {
               </div>
               <div className="d-flex flex-column gap-2">
                 <div className="d-flex align-items-center justify-content-between">
-                  <span className="fs-5">Não Verificado</span>
+                  <span className="fs-5">Não verificado</span>
                   <span className="fw-bold fs-5">{statusCounts.naoVerificado}</span>
-                </div>
-                <div className="d-flex align-items-center justify-content-between">
-                  <span className="fs-5">Em andamento</span>
-                  <span className="fw-bold fs-5">{statusCounts.emAndamento}</span>
                 </div>
                 <div className="d-flex align-items-center justify-content-between">
                   <span className="fs-5">Verificado</span>

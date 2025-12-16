@@ -10,6 +10,7 @@ import { FiCheckCircle, FiClock, FiXCircle, FiChevronsRight, FiChevronsLeft, FiR
 export default function DisparadorConfigBM() {
   const { user } = useAuth()
   const warned = useRef(false)
+  const countersRunId = useRef(0)
   const [modalOpen, setModalOpen] = useState(false)
   const [bmId, setBmId] = useState('')
   const [token, setToken] = useState('')
@@ -37,6 +38,13 @@ export default function DisparadorConfigBM() {
   const [bmRowsLoading, setBmRowsLoading] = useState(false)
   const [bmRowsError, setBmRowsError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [countersLoading, setCountersLoading] = useState(false)
+  const [countersError, setCountersError] = useState('')
+  const [countersUpdatedAt, setCountersUpdatedAt] = useState(null)
+  const [counters, setCounters] = useState({
+    bm: { verified: 0, naoVerificado: 0, total: 0 },
+    phones: { connected: 0, banned: 0 }
+  })
 
   const isMasterLevel1 = user?.role === Roles.Master && Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? 0) === 1
 
@@ -168,6 +176,7 @@ export default function DisparadorConfigBM() {
       })
       const rows = Array.from(map.values()).sort((a, b) => (Date.parse(b.canal_data || 0) || 0) - (Date.parse(a.canal_data || 0) || 0))
       setBmRows(rows)
+      refreshCounters(rows)
     } catch (e) {
       setBmRows([])
       setBmRowsError(e?.message || 'Falha ao buscar BMs salvas.')
@@ -193,6 +202,7 @@ export default function DisparadorConfigBM() {
   const mapStatus = (value) => {
     const v = String(value || '').toLowerCase()
     if (v === 'verified') return { label: 'Verificado', color: '#22c55e' }
+    if (v === 'pending_submission' || v === 'pending_need_more_info') return { label: 'N\u00e3o verificado', color: '#D47B04' }
     return { label: value || '-', color: '#6c757d' }
   }
 
@@ -200,19 +210,31 @@ export default function DisparadorConfigBM() {
     const v = String(value || '').toLowerCase()
     if (v === 'red') return { label: 'Ruim', color: '#ef4444' }
     if (v === 'green') return { label: 'Boa', color: '#22c55e' }
+    if (v === 'unknown') return { label: 'Sem status', color: '#6c757d' }
     return { label: value || '-', color: '#6c757d' }
+  }
+
+  const mapPhoneStatus = (value) => {
+    const v = String(value || '').trim().toUpperCase()
+    if (v === 'CONNECTED') return { label: 'Conectado', color: '#22c55e' }
+    if (v === 'BANNED') return { label: 'Banido', color: '#ef4444' }
+    if (v === 'DISCONNECTED') return { label: 'Desconectado', color: '#ef4444' }
+    if (v === 'CONNECTING') return { label: 'Conectando', color: '#f59e0b' }
+    if (!v) return { label: '-', color: '#6c757d' }
+    return { label: v, color: '#6c757d' }
   }
 
   const formatLimit = (value) => {
     const v = String(value || '').toUpperCase()
     if (v === 'TIER_1K') return '1.000'
+    if (v === 'TIER_250') return '250'
     return value || '-'
   }
 
-  const requestPhones = async (accountId, tokenClean, { force = false } = {}) => {
-    if (!force && phonesByAccount[accountId]) return phonesByAccount[accountId]
+  const fetchPhonesFromGraph = async (accountId, tokenClean) => {
     const params = new URLSearchParams({
-      fields: 'id,verified_name,display_phone_number,quality_rating,code_verification_status,is_official_business_account,name_status,new_name_status,platform_type,throughput,account_mode,certificate,messaging_limit_tier',
+      fields:
+        'id,verified_name,display_phone_number,status,quality_rating,code_verification_status,account_mode,messaging_limit_tier',
       access_token: tokenClean
     })
     const url = `https://graph.facebook.com/v24.0/${encodeURIComponent(accountId)}/phone_numbers?${params.toString()}`
@@ -220,9 +242,131 @@ export default function DisparadorConfigBM() {
     const raw = await res.text().catch(() => '')
     if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
     const data = JSON.parse(raw)
-    const arr = Array.isArray(data?.data) ? data.data : []
+    return Array.isArray(data?.data) ? data.data : []
+  }
+
+  const requestPhones = async (accountId, tokenClean, { force = false } = {}) => {
+    if (!force && phonesByAccount[accountId]) return phonesByAccount[accountId]
+    const arr = await fetchPhonesFromGraph(accountId, tokenClean)
     setPhonesByAccount((prev) => ({ ...prev, [accountId]: arr }))
     return arr
+  }
+
+  async function pMapLimit(items, limit, mapper) {
+    const arr = Array.isArray(items) ? items : []
+    const pool = Math.max(1, Number(limit) || 1)
+    const results = []
+    const executing = new Set()
+
+    for (const item of arr) {
+      const p = Promise.resolve().then(() => mapper(item))
+      results.push(p)
+      executing.add(p)
+      const cleanup = () => executing.delete(p)
+      p.then(cleanup).catch(cleanup)
+      if (executing.size >= pool) await Promise.race(executing)
+    }
+
+    return Promise.allSettled(results)
+  }
+
+  async function refreshCounters(rowsArg = bmRows) {
+    const rows = Array.isArray(rowsArg) ? rowsArg : []
+    const runId = ++countersRunId.current
+    setCountersLoading(true)
+    setCountersError('')
+    setCountersUpdatedAt(null)
+
+    const statusByBm = new Map()
+    rows.forEach((row) => {
+      const id = String(row?.bm_id || row?.bmId || '').trim()
+      if (!id) return
+      statusByBm.set(id, row?.bm_statusPortifolio || '')
+    })
+
+    let bmVerified = 0
+    let bmNaoVerificado = 0
+    for (const value of statusByBm.values()) {
+      const v = String(value || '').toLowerCase()
+      if (v === 'verified') bmVerified++
+      else if (v === 'pending_submission' || v === 'pending_need_more_info') bmNaoVerificado++
+    }
+
+    setCounters((prev) => ({
+      ...prev,
+      bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
+      phones: { connected: 0, banned: 0 }
+    }))
+
+    let connected = 0
+    let banned = 0
+    let hasAnyError = false
+
+    try {
+      const rowsWithToken = rows.filter((row) => {
+        const id = String(row?.bm_id || row?.bmId || '').trim()
+        const tokenClean = String(row?.bm_token || row?.token || '').trim()
+        return Boolean(id && tokenClean)
+      })
+
+      await pMapLimit(rowsWithToken, 3, async (row) => {
+        const idClean = String(row?.bm_id || row?.bmId || '').trim()
+        const tokenClean = String(row?.bm_token || row?.token || '').trim()
+        if (!idClean || !tokenClean) return
+
+        try {
+          const info = await requestBmInfo(idClean, tokenClean)
+          if (info?.verification_status) statusByBm.set(idClean, info.verification_status)
+        } catch {
+          hasAnyError = true
+        }
+
+        let accountsList = []
+        try {
+          accountsList = await requestWhatsappAccounts(idClean, tokenClean)
+        } catch {
+          hasAnyError = true
+          return
+        }
+
+        await pMapLimit(accountsList, 4, async (acc) => {
+          const accountId = String(acc?.id || '').trim()
+          if (!accountId) return
+          try {
+            const phones = await fetchPhonesFromGraph(accountId, tokenClean)
+            phones.forEach((ph) => {
+              const st = String(ph?.status || '').trim().toUpperCase()
+              if (st === 'CONNECTED') connected++
+              else if (st === 'BANNED') banned++
+            })
+          } catch {
+            hasAnyError = true
+          }
+        })
+      })
+
+      if (runId !== countersRunId.current) return
+
+      bmVerified = 0
+      bmNaoVerificado = 0
+      for (const value of statusByBm.values()) {
+        const v = String(value || '').toLowerCase()
+        if (v === 'verified') bmVerified++
+        else if (v === 'pending_submission' || v === 'pending_need_more_info') bmNaoVerificado++
+      }
+
+      setCounters({
+        bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
+        phones: { connected, banned }
+      })
+      setCountersUpdatedAt(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }))
+      if (hasAnyError) setCountersError('Algumas BMs/canais não puderam ser atualizados (token/permissões).')
+    } catch (e) {
+      if (runId !== countersRunId.current) return
+      setCountersError(e?.message || 'Falha ao atualizar contadores.')
+    } finally {
+      if (runId === countersRunId.current) setCountersLoading(false)
+    }
   }
 
   const mapTemplateStatus = (value) => {
@@ -504,6 +648,71 @@ export default function DisparadorConfigBM() {
           </div>
         </div>
 
+        <div className="row g-3 mb-4 align-items-stretch">
+          <div className="col-12 col-lg-6">
+            <div className="neo-card neo-lg p-3 h-100">
+              <div className="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-2">
+                <div>
+                  <div className="fw-semibold">Status BM</div>
+                  {countersUpdatedAt && <div className="small opacity-75">Atualizado: {countersUpdatedAt}</div>}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
+                  onClick={() => refreshCounters()}
+                  disabled={bmRowsLoading || countersLoading}
+                >
+                  {countersLoading ? <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> : <FiRefreshCw />}
+                  Atualizar
+                </button>
+              </div>
+              <div className="d-flex flex-column gap-2">
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="d-inline-flex align-items-center gap-2">
+                    <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#22c55e' }} aria-hidden />
+                    <span>Verificado</span>
+                  </span>
+                  <span className="fw-bold fs-5">{counters.bm.verified}</span>
+                </div>
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="d-inline-flex align-items-center gap-2">
+                    <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#D47B04' }} aria-hidden />
+                    <span>Não verificado</span>
+                  </span>
+                  <span className="fw-bold fs-5">{counters.bm.naoVerificado}</span>
+                </div>
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="opacity-75">Total</span>
+                  <span className="fw-bold fs-5">{counters.bm.total}</span>
+                </div>
+              </div>
+              {countersError && <div className="text-danger small mt-2">{countersError}</div>}
+            </div>
+          </div>
+          <div className="col-12 col-lg-6">
+            <div className="neo-card neo-lg p-3 h-100">
+              <div className="fw-semibold mb-2">Status dos telefones</div>
+              <div className="d-flex flex-column gap-2">
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="d-inline-flex align-items-center gap-2">
+                    <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#22c55e' }} aria-hidden />
+                    <span>Conectados</span>
+                  </span>
+                  <span className="fw-bold fs-5">{counters.phones.connected}</span>
+                </div>
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="d-inline-flex align-items-center gap-2">
+                    <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#ef4444' }} aria-hidden />
+                    <span>Banidos</span>
+                  </span>
+                  <span className="fw-bold fs-5">{counters.phones.banned}</span>
+                </div>
+              </div>
+              <div className="small opacity-75 mt-2">Usa o Graph API e considera todos os canais salvos.</div>
+            </div>
+          </div>
+        </div>
+
         <div className="neo-card neo-lg p-4">
           <div className="d-flex align-items-center justify-content-between mb-3">
             <div>
@@ -608,7 +817,7 @@ export default function DisparadorConfigBM() {
           <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1800 }} aria-modal="true" role="dialog">
             <div
               className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down"
-              style={{ '--bs-modal-width': 'min(96vw, 860px)' }}
+              style={{ '--bs-modal-width': 'min(98vw, 2200px)' }}
             >
               <div className="modal-content modal-dark">
                 <div className="modal-header">
@@ -766,16 +975,17 @@ export default function DisparadorConfigBM() {
                             <table className="table table-dark table-sm align-middle mb-0" style={{ tableLayout: 'auto', minWidth: '100%' }}>
                               <thead>
                                 <tr>
-                                  <th style={{ width: '30%' }}>Telefone</th>
+                                  <th style={{ width: '40%' }}>Telefone</th>
+                                  <th style={{ width: '15%' }}>Status</th>
                                   <th className="d-none d-lg-table-cell" style={{ width: '30%' }}>Telefone ID</th>
-                                  <th style={{ width: '20%' }}>Qualidade</th>
-                                  <th style={{ width: '20%' }}>Limite</th>
+                                  <th style={{ width: '15%' }}>Qualidade</th>
+                                  <th style={{ width: '15%' }}>Limite</th>
                                 </tr>
                               </thead>
                                 <tbody>
                                   {phonesLoading && (
                                     <tr>
-                                      <td colSpan={4} className="text-center">
+                                      <td colSpan={5} className="text-center">
                                         <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                                       </td>
                                     </tr>
@@ -785,13 +995,24 @@ export default function DisparadorConfigBM() {
                                       <td className="small">
                                         <button
                                           type="button"
-                                          className="btn btn-link text-decoration-none p-0 text-light"
+                                          className="btn btn-link text-decoration-none p-0 text-light text-nowrap"
                                           onClick={() => fetchTemplatesForPhone(ph, selectedAccountId)}
                                           title="Ver modelos de mensagem deste telefone"
                                         >
                                           {ph.display_phone_number || '-'}
                                         </button>
                                         <div className="d-lg-none small opacity-75 text-break">ID: {ph.id || '-'}</div>
+                                      </td>
+                                      <td className="small text-nowrap">
+                                        {(() => {
+                                          const { label, color } = mapPhoneStatus(ph.status)
+                                          return (
+                                            <span className="d-inline-flex align-items-center gap-2">
+                                              <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: color }} aria-hidden />
+                                              <span>{label}</span>
+                                            </span>
+                                          )
+                                        })()}
                                       </td>
                                       <td className="small text-nowrap d-none d-lg-table-cell">{ph.id || '-'}</td>
                                       <td className="small text-nowrap">
@@ -810,7 +1031,7 @@ export default function DisparadorConfigBM() {
                                   ))}
                                   {!phonesLoading && selectedPhones.length === 0 && (
                                     <tr>
-                                      <td colSpan={4} className="small">Nenhum telefone carregado.</td>
+                                      <td colSpan={5} className="small">Nenhum telefone carregado.</td>
                                     </tr>
                                   )}
                                 </tbody>
