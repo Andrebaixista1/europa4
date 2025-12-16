@@ -376,6 +376,7 @@ export default function DisparadorConfigBM() {
   const mapTemplateStatus = (value) => {
     const v = String(value || '').toUpperCase()
     if (v === 'APPROVED') return { label: 'Aprovado', color: '#22c55e' }
+    if (v === 'PENDING') return { label: 'Pendente', color: '#d47b04' }
     return { label: value || '-', color: '#6c757d' }
   }
 
