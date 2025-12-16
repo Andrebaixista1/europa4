@@ -38,12 +38,14 @@ export default function DisparadorConfigBM() {
   const [bmRowsLoading, setBmRowsLoading] = useState(false)
   const [bmRowsError, setBmRowsError] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [bmSearch, setBmSearch] = useState('')
+  const [bmStatusFilter, setBmStatusFilter] = useState('')
   const [countersLoading, setCountersLoading] = useState(false)
   const [countersError, setCountersError] = useState('')
   const [countersUpdatedAt, setCountersUpdatedAt] = useState(null)
   const [counters, setCounters] = useState({
     bm: { verified: 0, naoVerificado: 0, total: 0 },
-    phones: { connected: 0, banned: 0 }
+    phones: { connected: 0, banned: 0, total: 0 }
   })
 
   const isMasterLevel1 = user?.role === Roles.Master && Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? 0) === 1
@@ -295,11 +297,12 @@ export default function DisparadorConfigBM() {
     setCounters((prev) => ({
       ...prev,
       bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
-      phones: { connected: 0, banned: 0 }
+      phones: { connected: 0, banned: 0, total: 0 }
     }))
 
     let connected = 0
     let banned = 0
+    let totalPhones = 0
     let hasAnyError = false
 
     try {
@@ -334,6 +337,7 @@ export default function DisparadorConfigBM() {
           if (!accountId) return
           try {
             const phones = await fetchPhonesFromGraph(accountId, tokenClean)
+            totalPhones += phones.length
             phones.forEach((ph) => {
               const st = String(ph?.status || '').trim().toUpperCase()
               if (st === 'CONNECTED') connected++
@@ -357,7 +361,7 @@ export default function DisparadorConfigBM() {
 
       setCounters({
         bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
-        phones: { connected, banned }
+        phones: { connected, banned, total: totalPhones }
       })
       setCountersUpdatedAt(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }))
       if (hasAnyError) setCountersError('Algumas BMs/canais não puderam ser atualizados (token/permissões).')
@@ -465,6 +469,15 @@ export default function DisparadorConfigBM() {
   const templates = templatesKey ? templatesByPhone[templatesKey] || [] : []
   const tokenColClass = isEditing ? 'col-12 col-md-8' : 'col-12 col-md-6'
   const showSavedBms = !modalOpen && !templatesModalOpen
+  const bmSearchClean = String(bmSearch || '').trim().toLowerCase()
+  const filteredBmRows = bmRows.filter((row) => {
+    if (bmSearchClean && !String(row?.bm_nome || '').toLowerCase().includes(bmSearchClean)) return false
+    if (!bmStatusFilter) return true
+    const statusValue = String(row?.bm_statusPortifolio || '').toLowerCase()
+    if (bmStatusFilter === 'verified') return statusValue === 'verified'
+    if (bmStatusFilter === 'nao_verificado') return statusValue === 'pending_submission' || statusValue === 'pending_need_more_info'
+    return true
+  })
 
   const handleSave = async (idArg, tokenArg, { silent = false } = {}) => {
     const idClean = String(idArg ?? bmId ?? '').trim()
@@ -707,6 +720,10 @@ export default function DisparadorConfigBM() {
                   </span>
                   <span className="fw-bold fs-5">{counters.phones.banned}</span>
                 </div>
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="opacity-75">Total</span>
+                  <span className="fw-bold fs-5">{counters.phones.total}</span>
+                </div>
               </div>
               <div className="small opacity-75 mt-2">Usa o Graph API e considera todos os canais salvos.</div>
             </div>
@@ -723,6 +740,34 @@ export default function DisparadorConfigBM() {
               Adicionar
             </button>
           </div>
+          {showSavedBms && (
+            <div className="d-flex flex-column flex-md-row gap-2 align-items-stretch align-items-md-center mb-3">
+              <div className="input-group input-group-sm" style={{ maxWidth: 520 }}>
+                <span className="input-group-text">Pesquisar</span>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Filtrar por Nome BM..."
+                  value={bmSearch}
+                  onChange={(e) => setBmSearch(e.target.value)}
+                  aria-label="Filtrar por Nome BM"
+                />
+                {bmSearchClean && (
+                  <button type="button" className="btn btn-outline-light" onClick={() => setBmSearch('')}>
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <div className="input-group input-group-sm" style={{ maxWidth: 300 }}>
+                <span className="input-group-text">Status</span>
+                <select className="form-select" value={bmStatusFilter} onChange={(e) => setBmStatusFilter(e.target.value)} aria-label="Filtrar por status">
+                  <option value="">Todos</option>
+                  <option value="verified">Verificado</option>
+                  <option value="nao_verificado">Não verificado</option>
+                </select>
+              </div>
+            </div>
+          )}
           <p className="mb-0 opacity-75">
             Cadastre uma BM para validar tokens, acompanhar status de verificação e habilitar os fluxos de disparo.
           </p>
@@ -735,7 +780,7 @@ export default function DisparadorConfigBM() {
               <h5 className="mb-1">BMs salvas</h5>
               <div className="small opacity-75">Dados retornados do webhook.</div>
             </div>
-            {bmRowsError && <div className="text-danger small">{bmRowsError}</div>}
+            {bmRowsError && <div className="text-danger small text-end">{bmRowsError}</div>}
           </div>
           <div className="table-responsive">
             <table className="table table-dark table-sm align-middle mb-0">
@@ -759,12 +804,12 @@ export default function DisparadorConfigBM() {
                       <td><span className="placeholder col-6" /></td>
                     </tr>
                   ))
-                ) : bmRows.length === 0 ? (
+                ) : filteredBmRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="small">Nenhuma BM salva.</td>
+                    <td colSpan={5} className="small">{bmRows.length === 0 ? 'Nenhuma BM salva.' : 'Nenhuma BM encontrada para a pesquisa.'}</td>
                   </tr>
                 ) : (
-                  bmRows.map((row) => {
+                  filteredBmRows.map((row) => {
                     const statusInfo = mapStatus(row?.bm_statusPortifolio)
                     return (
                       <tr key={row.bm_id}>
