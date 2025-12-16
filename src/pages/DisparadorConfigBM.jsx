@@ -107,6 +107,22 @@ export default function DisparadorConfigBM() {
     return Array.isArray(data?.data) ? data.data : []
   }
 
+  const requestBmInfo = async (idClean, tokenClean) => {
+    const params = new URLSearchParams({
+      fields: 'id,name,primary_page,timezone_id,verification_status,owned_pages{id,name},owned_ad_accounts{id,account_id,name,account_status}',
+      access_token: tokenClean
+    })
+    const url = `https://graph.facebook.com/v24.0/${encodeURIComponent(idClean)}?${params.toString()}`
+    const res = await fetch(url, { method: 'GET' })
+    const raw = await res.text().catch(() => '')
+    if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
+    const data = JSON.parse(raw)
+    return {
+      name: data?.name || '',
+      verification_status: data?.verification_status || ''
+    }
+  }
+
   const fetchWhatsappAccounts = async (idClean, tokenClean) => {
     setAccountsLoading(true)
     setAccountsError('')
@@ -193,8 +209,8 @@ export default function DisparadorConfigBM() {
     return value || '-'
   }
 
-  const requestPhones = async (accountId, tokenClean) => {
-    if (phonesByAccount[accountId]) return phonesByAccount[accountId]
+  const requestPhones = async (accountId, tokenClean, { force = false } = {}) => {
+    if (!force && phonesByAccount[accountId]) return phonesByAccount[accountId]
     const params = new URLSearchParams({
       fields: 'id,verified_name,display_phone_number,quality_rating,code_verification_status,is_official_business_account,name_status,new_name_status,platform_type,throughput,account_mode,certificate,messaging_limit_tier',
       access_token: tokenClean
@@ -227,8 +243,8 @@ export default function DisparadorConfigBM() {
     return body?.text || '-'
   }
 
-  const requestTemplates = async (accountId, tokenClean) => {
-    if (templatesByPhone[accountId]) return templatesByPhone[accountId]
+  const requestTemplates = async (accountId, tokenClean, { force = false } = {}) => {
+    if (!force && templatesByPhone[accountId]) return templatesByPhone[accountId]
     const url = `https://graph.facebook.com/v24.0/${encodeURIComponent(accountId)}/message_templates?access_token=${encodeURIComponent(tokenClean)}`
     const res = await fetch(url, { method: 'GET' })
     const raw = await res.text().catch(() => '')
@@ -345,11 +361,11 @@ export default function DisparadorConfigBM() {
     }
   }
 
-  const buildBmBody = async ({ idClean, tokenClean, nomeBmValue, statusPortfolioValue, accountsList }) => {
+  const buildBmBody = async ({ idClean, tokenClean, nomeBmValue, statusPortfolioValue, accountsList, forceFetch = false }) => {
     const payloadAccounts = []
     for (const acc of accountsList || []) {
-      const phones = await requestPhones(acc.id, tokenClean)
-      const templatesForAccount = await requestTemplates(acc.id, tokenClean)
+      const phones = await requestPhones(acc.id, tokenClean, { force: forceFetch })
+      const templatesForAccount = await requestTemplates(acc.id, tokenClean, { force: forceFetch })
       const phonesPayload = phones.map((ph) => ({
         telefone: ph.display_phone_number || '-',
         telefoneId: ph.id || '-',
@@ -387,30 +403,23 @@ export default function DisparadorConfigBM() {
       notify.warn('ID da BM inv\u00e1lido.')
       return false
     }
+    if (!tokenClean) {
+      notify.warn('Este registro est\u00e1 sem token. N\u00e3o \u00e9 poss\u00edvel excluir sem chamar as APIs.')
+      return false
+    }
 
     setDeletingBmId(idClean)
     try {
-      let body
-      try {
-        if (!tokenClean) throw new Error('Registro sem token.')
-        const accountsList = await requestWhatsappAccounts(idClean, tokenClean)
-        body = await buildBmBody({
-          idClean,
-          tokenClean,
-          nomeBmValue: row?.bm_nome || '-',
-          statusPortfolioValue: row?.bm_statusPortifolio || '-',
-          accountsList
-        })
-      } catch (payloadErr) {
-        notify.warn('N\u00e3o foi poss\u00edvel montar payload completo. Enviando exclus\u00e3o b\u00e1sica.')
-        body = {
-          bmId: idClean,
-          token: tokenClean,
-          nomeBm: row?.bm_nome || '-',
-          statusPortfolio: row?.bm_statusPortifolio || '-',
-          canais: []
-        }
-      }
+      const bmInfo = await requestBmInfo(idClean, tokenClean)
+      const accountsList = await requestWhatsappAccounts(idClean, tokenClean)
+      const body = await buildBmBody({
+        idClean,
+        tokenClean,
+        nomeBmValue: bmInfo?.name || row?.bm_nome || '-',
+        statusPortfolioValue: bmInfo?.verification_status || row?.bm_statusPortifolio || '-',
+        accountsList,
+        forceFetch: true
+      })
 
       const res = await fetch('https://n8n.apivieiracred.store/webhook/bm-delete-port', {
         method: 'POST',
@@ -432,8 +441,13 @@ export default function DisparadorConfigBM() {
 
   const openDeleteModal = (row) => {
     const idClean = String(row?.bm_id || row?.bmId || '').trim()
+    const tokenClean = String(row?.bm_token || row?.token || '').trim()
     if (!idClean) {
       notify.warn('ID da BM inv\u00e1lido.')
+      return
+    }
+    if (!tokenClean) {
+      notify.warn('Este registro est\u00e1 sem token. N\u00e3o \u00e9 poss\u00edvel excluir sem chamar as APIs.')
       return
     }
     setDeleteRow(row)
@@ -568,9 +582,9 @@ export default function DisparadorConfigBM() {
                             <button
                               type="button"
                               className="btn btn-icon btn-outline-danger"
-                              title={deletingBmId ? 'Aguarde...' : 'Excluir'}
+                              title={deletingBmId ? 'Aguarde...' : row?.bm_token ? 'Excluir' : 'Sem token para excluir'}
                               onClick={() => openDeleteModal(row)}
-                              disabled={Boolean(deletingBmId)}
+                              disabled={Boolean(deletingBmId) || !row?.bm_token}
                             >
                               <FiTrash2 />
                             </button>
