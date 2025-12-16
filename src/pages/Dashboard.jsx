@@ -112,6 +112,28 @@ export default function Dashboard() {
     }
   }
 
+  const dedupeLogs = (list) => {
+    const arr = Array.isArray(list) ? list : []
+    const seen = new Set()
+    const out = []
+    for (const item of arr) {
+      if (!item) continue
+      const cpf = String(item?.numero_documento ?? '').replace(/\D/g, '')
+      const nb = String(item?.numero_beneficio ?? '').replace(/\D/g, '')
+      const key = [
+        String(item?.data_hora_registro ?? ''),
+        String(item?.status_api ?? '').trim(),
+        String(item?.resposta_api ?? '').trim(),
+        cpf,
+        nb
+      ].join('|')
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(item)
+    }
+    return out
+  }
+
   const fetchLogs = async () => {
     if (!user?.id) return
     setLoadingLogs(true)
@@ -127,7 +149,7 @@ export default function Dashboard() {
       const raw = await res.text().catch(() => '')
       if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
       const arr = parseLogs(raw)
-      setLogs(arr.slice(0, 10))
+      setLogs(dedupeLogs(arr).slice(0, 10))
     } catch (e) {
       setLogs([])
       setLogsError(e?.message || 'Erro ao carregar')

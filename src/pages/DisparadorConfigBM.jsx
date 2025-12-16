@@ -25,6 +25,7 @@ export default function DisparadorConfigBM() {
   const [phonesLoading, setPhonesLoading] = useState(null)
   const [phonesError, setPhonesError] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState(null)
+  const [phoneStatusFilter, setPhoneStatusFilter] = useState('')
   const [templatesByPhone, setTemplatesByPhone] = useState({})
   const [templatesLoading, setTemplatesLoading] = useState(false)
   const [templatesError, setTemplatesError] = useState('')
@@ -40,6 +41,8 @@ export default function DisparadorConfigBM() {
   const [isEditing, setIsEditing] = useState(false)
   const [bmSearch, setBmSearch] = useState('')
   const [bmStatusFilter, setBmStatusFilter] = useState('')
+  const [bmPhoneStatusFilter, setBmPhoneStatusFilter] = useState('')
+  const [phoneStatusByBm, setPhoneStatusByBm] = useState({})
   const [countersLoading, setCountersLoading] = useState(false)
   const [countersError, setCountersError] = useState('')
   const [countersUpdatedAt, setCountersUpdatedAt] = useState(null)
@@ -279,6 +282,7 @@ export default function DisparadorConfigBM() {
     setCountersLoading(true)
     setCountersError('')
     setCountersUpdatedAt(null)
+    setPhoneStatusByBm({})
 
     const statusByBm = new Map()
     rows.forEach((row) => {
@@ -305,6 +309,7 @@ export default function DisparadorConfigBM() {
     let banned = 0
     let totalPhones = 0
     let hasAnyError = false
+    const nextPhoneStatusByBm = {}
 
     try {
       const rowsWithToken = rows.filter((row) => {
@@ -341,6 +346,10 @@ export default function DisparadorConfigBM() {
             totalPhones += phones.length
             phones.forEach((ph) => {
               const st = String(ph?.status || '').trim().toUpperCase()
+              if (st) {
+                nextPhoneStatusByBm[idClean] ||= {}
+                nextPhoneStatusByBm[idClean][st] = (nextPhoneStatusByBm[idClean][st] || 0) + 1
+              }
               if (st === 'CONNECTED') connected++
               else if (st === 'BANNED') banned++
             })
@@ -364,6 +373,7 @@ export default function DisparadorConfigBM() {
         bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
         phones: { connected, banned, total: totalPhones }
       })
+      setPhoneStatusByBm(nextPhoneStatusByBm)
       setCountersUpdatedAt(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }))
       if (hasAnyError) setCountersError('Algumas BMs/canais não puderam ser atualizados (token/permissões).')
     } catch (e) {
@@ -472,6 +482,31 @@ export default function DisparadorConfigBM() {
   const tokenColClass = isEditing ? 'col-12 col-md-8' : 'col-12 col-md-6'
   const showSavedBms = !modalOpen && !templatesModalOpen
   const bmSearchClean = String(bmSearch || '').trim().toLowerCase()
+  const bmPhoneStatusFilterClean = String(bmPhoneStatusFilter || '').trim().toUpperCase()
+  const bmPhoneStatusBaseOptions = ['CONNECTED', 'PENDING', 'BANNED', 'DISCONNECTED', 'CONNECTING']
+  const bmPhoneStatusDynamicOptions = Array.from(
+    new Set(
+      Object.values(phoneStatusByBm || {}).flatMap((obj) => Object.keys(obj || {}))
+    )
+  )
+    .map((st) => String(st || '').trim().toUpperCase())
+    .filter(Boolean)
+    .filter((st) => !bmPhoneStatusBaseOptions.includes(st))
+  const bmPhoneStatusOptions = Array.from(
+    new Set([...bmPhoneStatusBaseOptions, ...bmPhoneStatusDynamicOptions, ...(bmPhoneStatusFilterClean ? [bmPhoneStatusFilterClean] : [])])
+  )
+  const phoneStatusFilterClean = String(phoneStatusFilter || '').trim().toUpperCase()
+  const phoneStatusBaseOptions = ['CONNECTED', 'PENDING', 'BANNED', 'DISCONNECTED', 'CONNECTING']
+  const phoneStatusDynamicOptions = Array.from(
+    new Set((selectedPhones || []).map((ph) => String(ph?.status || '').trim().toUpperCase()).filter(Boolean))
+  ).filter((st) => !phoneStatusBaseOptions.includes(st))
+  const phoneStatusOptions = Array.from(
+    new Set([...phoneStatusBaseOptions, ...phoneStatusDynamicOptions, ...(phoneStatusFilterClean ? [phoneStatusFilterClean] : [])])
+  )
+  const filteredPhones = selectedPhones.filter((ph) => {
+    if (!phoneStatusFilterClean) return true
+    return String(ph?.status || '').trim().toUpperCase() === phoneStatusFilterClean
+  })
   const filteredBmRows = bmRows.filter((row) => {
     if (bmSearchClean && !String(row?.bm_nome || '').toLowerCase().includes(bmSearchClean)) return false
     if (!bmStatusFilter) return true
@@ -479,6 +514,12 @@ export default function DisparadorConfigBM() {
     if (bmStatusFilter === 'verified') return statusValue === 'verified'
     if (bmStatusFilter === 'nao_verificado') return statusValue === 'pending_submission' || statusValue === 'pending_need_more_info'
     return true
+  }).filter((row) => {
+    if (!bmPhoneStatusFilterClean) return true
+    const id = String(row?.bm_id || row?.bmId || '').trim()
+    if (!id) return false
+    const counts = phoneStatusByBm?.[id]
+    return Boolean(counts && counts[bmPhoneStatusFilterClean] > 0)
   })
 
   const handleSave = async (idArg, tokenArg, { silent = false } = {}) => {
@@ -768,6 +809,23 @@ export default function DisparadorConfigBM() {
                   <option value="nao_verificado">Não verificado</option>
                 </select>
               </div>
+              <div className="input-group input-group-sm" style={{ maxWidth: 320 }}>
+                <span className="input-group-text">Telefones</span>
+                <select
+                  className="form-select"
+                  value={bmPhoneStatusFilter}
+                  onChange={(e) => setBmPhoneStatusFilter(e.target.value)}
+                  aria-label="Filtrar por status dos telefones"
+                  disabled={countersLoading}
+                >
+                  <option value="">Todos</option>
+                  {bmPhoneStatusOptions.map((st) => (
+                    <option key={st} value={st}>
+                      {mapPhoneStatus(st).label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
           <p className="mb-0 opacity-75">
@@ -808,7 +866,7 @@ export default function DisparadorConfigBM() {
                   ))
                 ) : filteredBmRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="small">{bmRows.length === 0 ? 'Nenhuma BM salva.' : 'Nenhuma BM encontrada para a pesquisa.'}</td>
+                    <td colSpan={5} className="small">{bmRows.length === 0 ? 'Nenhuma BM salva.' : 'Nenhuma BM encontrada para os filtros.'}</td>
                   </tr>
                 ) : (
                   filteredBmRows.map((row) => {
@@ -1015,7 +1073,26 @@ export default function DisparadorConfigBM() {
                                 <div className="fw-semibold">Telefones do canal</div>
                                 <div className="small opacity-75">{'Clique em "<" para fechar.'}</div>
                               </div>
-                              {phonesError && <div className="text-danger small text-end">{phonesError}</div>}
+                              <div className="d-flex flex-column align-items-end gap-2">
+                                <div className="input-group input-group-sm" style={{ maxWidth: 240 }}>
+                                  <span className="input-group-text">Status</span>
+                                  <select
+                                    className="form-select"
+                                    value={phoneStatusFilter}
+                                    onChange={(e) => setPhoneStatusFilter(e.target.value)}
+                                    disabled={Boolean(phonesLoading) || selectedPhones.length === 0}
+                                    aria-label="Filtrar por status do telefone"
+                                  >
+                                    <option value="">Todos</option>
+                                    {phoneStatusOptions.map((st) => (
+                                      <option key={st} value={st}>
+                                        {mapPhoneStatus(st).label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                {phonesError && <div className="text-danger small text-end">{phonesError}</div>}
+                              </div>
                             </div>
 
                           <div className="table-responsive">
@@ -1037,7 +1114,7 @@ export default function DisparadorConfigBM() {
                                       </td>
                                     </tr>
                                   )}
-                                  {!phonesLoading && selectedPhones.length > 0 && selectedPhones.map((ph) => (
+                                  {!phonesLoading && filteredPhones.length > 0 && filteredPhones.map((ph) => (
                                     <tr key={ph.id}>
                                       <td className="small">
                                         <button
@@ -1079,6 +1156,11 @@ export default function DisparadorConfigBM() {
                                   {!phonesLoading && selectedPhones.length === 0 && (
                                     <tr>
                                       <td colSpan={5} className="small">Nenhum telefone carregado.</td>
+                                    </tr>
+                                  )}
+                                  {!phonesLoading && selectedPhones.length > 0 && filteredPhones.length === 0 && (
+                                    <tr>
+                                      <td colSpan={5} className="small">Nenhum telefone encontrado para o filtro.</td>
                                     </tr>
                                   )}
                                 </tbody>
