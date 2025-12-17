@@ -229,7 +229,7 @@ export default function DisparadorConfigBM() {
     const v = String(value || '').trim().toUpperCase()
     if (v === 'CONNECTED') return { label: 'Conectado', color: '#22c55e' }
     if (v === 'BANNED') return { label: 'Banido', color: '#ef4444' }
-    if (v === 'PENDING') return { label: 'Pendente', color: '#ffc107' }
+    if (v === 'PENDING') return { label: 'Não verificado', color: '#ffc107' }
     if (v === 'DISCONNECTED') return { label: 'Desconectado', color: '#ef4444' }
     if (v === 'CONNECTING') return { label: 'Conectando', color: '#f59e0b' }
     if (!v) return { label: '-', color: '#6c757d' }
