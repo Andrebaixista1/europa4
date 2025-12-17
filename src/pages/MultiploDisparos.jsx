@@ -38,6 +38,9 @@ export default function MultiploDisparos() {
   })
   const [toast, setToast] = useState({ show: false, message: '', bg: 'success' })
   const [channelBatchSizes, setChannelBatchSizes] = useState({})
+  const [filterBmNome, setFilterBmNome] = useState('')
+  const [filterStatusApi, setFilterStatusApi] = useState('')
+  const [filterQualidadeApi, setFilterQualidadeApi] = useState('')
 
   const notify = (message, type = 'success') => {
     const bg = type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'danger'
@@ -141,6 +144,18 @@ export default function MultiploDisparos() {
     if (v === 'UNKNOWN') return { label: 'Sem status', color: '#6c757d' }
     if (!v) return { label: '-', color: '#6c757d' }
     return { label: v, color: '#6c757d' }
+  }
+
+  const normalizeApiCode = (value) => String(value || '').trim().toUpperCase()
+
+  const channelMatchesFilters = (channel) => {
+    const bmNome = String(channel?.graph_verified_name || '').trim()
+    const status = normalizeApiCode(channel?.graph_status || channel?.status)
+    const quality = normalizeApiCode(channel?.graph_quality_rating || channel?.quality_rating)
+    if (filterBmNome && bmNome !== filterBmNome) return false
+    if (filterStatusApi && status !== filterStatusApi) return false
+    if (filterQualidadeApi && quality !== filterQualidadeApi) return false
+    return true
   }
 
   const fetchGraphPhoneInfoByToken = async (phoneIdsByToken) => {
@@ -310,10 +325,15 @@ export default function MultiploDisparos() {
 
   const toggleSelectAllChannels = (checked) => {
     if (checked) {
-      setSelectedChannels([...channels])
+      const channelsToSelect = channels.filter(channelMatchesFilters)
+      if (channelsToSelect.length === 0) return
+
+      const selectedMap = new Map(selectedChannels.map((c) => [String(c?.record_id), c]))
+      channelsToSelect.forEach((channel) => selectedMap.set(String(channel.record_id), channel))
+      setSelectedChannels(Array.from(selectedMap.values()))
       setChannelBatchSizes(prev => {
         const updated = { ...prev }
-        channels.forEach(channel => {
+        channelsToSelect.forEach(channel => {
           if (updated[channel.record_id] === undefined) {
             updated[channel.record_id] = String(DEFAULT_BATCH_SIZE)
           }
@@ -321,10 +341,39 @@ export default function MultiploDisparos() {
         return updated
       })
     } else {
-      setSelectedChannels([])
-      setSelectedTemplates({})
-      setExpandedChannels(new Set())
-      setChannelBatchSizes({})
+      const hasFilters = Boolean(filterBmNome || filterStatusApi || filterQualidadeApi)
+      if (!hasFilters) {
+        setSelectedChannels([])
+        setSelectedTemplates({})
+        setExpandedChannels(new Set())
+        setChannelBatchSizes({})
+        return
+      }
+
+      const channelsToClear = channels.filter(channelMatchesFilters)
+      if (channelsToClear.length === 0) return
+      const idsToClear = new Set(channelsToClear.map((channel) => String(channel.record_id)))
+
+      setSelectedChannels((prev) => prev.filter((channel) => !idsToClear.has(String(channel.record_id))))
+      setSelectedTemplates((prev) => {
+        const next = { ...prev }
+        idsToClear.forEach((id) => {
+          delete next[id]
+        })
+        return next
+      })
+      setExpandedChannels((prev) => {
+        const next = new Set(prev)
+        idsToClear.forEach((id) => next.delete(id))
+        return next
+      })
+      setChannelBatchSizes((prev) => {
+        const next = { ...prev }
+        idsToClear.forEach((id) => {
+          delete next[id]
+        })
+        return next
+      })
     }
   }
 
@@ -821,6 +870,34 @@ export default function MultiploDisparos() {
     return baseValid && hasAllTemplates
   }
 
+  const filteredChannels = channels.filter(channelMatchesFilters)
+  const selectedChannelIds = new Set(selectedChannels.map((c) => String(c?.record_id)))
+  const selectedVisibleCount = filteredChannels.reduce(
+    (acc, channel) => acc + (selectedChannelIds.has(String(channel.record_id)) ? 1 : 0),
+    0
+  )
+  const allVisibleSelected = filteredChannels.length > 0 && selectedVisibleCount === filteredChannels.length
+
+  const bmNomeOptions = Array.from(
+    new Set(channels.map((c) => String(c?.graph_verified_name || '').trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b))
+
+  const statusApiOrder = ['CONNECTED', 'PENDING', 'BANNED', 'DISCONNECTED', 'CONNECTING']
+  const statusApiOptions = Array.from(
+    new Set(channels.map((c) => normalizeApiCode(c?.graph_status || c?.status)).filter(Boolean))
+  ).sort((a, b) => {
+    const ia = statusApiOrder.indexOf(a)
+    const ib = statusApiOrder.indexOf(b)
+    if (ia === -1 && ib === -1) return a.localeCompare(b)
+    if (ia === -1) return 1
+    if (ib === -1) return -1
+    return ia - ib
+  })
+
+  const qualidadeApiOptions = Array.from(
+    new Set(channels.map((c) => normalizeApiCode(c?.graph_quality_rating || c?.quality_rating)).filter(Boolean))
+  ).sort((a, b) => getQualityRank(a) - getQualityRank(b))
+
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
@@ -1206,7 +1283,61 @@ export default function MultiploDisparos() {
                         <p className="mt-3 text-muted">Carregando canais da API...</p>
                       </div>
                     ) : (
-                      <div className="table-responsive">
+                      <>
+                        <div className="row g-2 mb-3">
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small text-muted mb-1">BM Nome</label>
+                            <select
+                              className="form-select form-select-sm"
+                              value={filterBmNome}
+                              onChange={(e) => setFilterBmNome(e.target.value)}
+                              disabled={channels.length === 0}
+                              aria-label="Filtrar por BM Nome"
+                            >
+                              <option value="">Todos</option>
+                              {bmNomeOptions.map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small text-muted mb-1">Status (API)</label>
+                            <select
+                              className="form-select form-select-sm"
+                              value={filterStatusApi}
+                              onChange={(e) => setFilterStatusApi(e.target.value)}
+                              disabled={channels.length === 0}
+                              aria-label="Filtrar por Status (API)"
+                            >
+                              <option value="">Todos</option>
+                              {statusApiOptions.map((code) => (
+                                <option key={code} value={code}>
+                                  {mapPhoneStatusApi(code).label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="col-12 col-md-4">
+                            <label className="form-label small text-muted mb-1">Qualidade (API)</label>
+                            <select
+                              className="form-select form-select-sm"
+                              value={filterQualidadeApi}
+                              onChange={(e) => setFilterQualidadeApi(e.target.value)}
+                              disabled={channels.length === 0}
+                              aria-label="Filtrar por Qualidade (API)"
+                            >
+                              <option value="">Todos</option>
+                              {qualidadeApiOptions.map((code) => (
+                                <option key={code} value={code}>
+                                  {mapQualityApi(code).label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="table-responsive">
                         <table className="table table-hover mb-0">
                           <thead className="table-light">
                             <tr>
@@ -1216,17 +1347,20 @@ export default function MultiploDisparos() {
                                     className="form-check-input" 
                                     type="checkbox" 
                                     onChange={(e) => toggleSelectAllChannels(e.target.checked)}
-                                    checked={selectedChannels.length === channels.length && channels.length > 0}
+                                    checked={allVisibleSelected}
                                     style={{ cursor: 'pointer' }}
                                     title={
-                                      selectedChannels.length === 0 ? "Selecionar todos" :
-                                      selectedChannels.length === channels.length ? "Deselecionar todos" :
+                                      selectedVisibleCount === 0 ? "Selecionar todos" :
+                                      allVisibleSelected ? "Deselecionar todos" :
                                       "Alguns selecionados - clique para selecionar todos"
                                     }
                                   />
                                   {selectedChannels.length > 0 && (
                                     <small className="text-muted mt-1">
-                                      {selectedChannels.length}/{channels.length}
+                                      {selectedVisibleCount}/{filteredChannels.length}
+                                      {filteredChannels.length !== channels.length && (
+                                        <span className="ms-1 opacity-75">({selectedChannels.length}/{channels.length})</span>
+                                      )}
                                     </small>
                                   )}
                                 </div>
@@ -1240,7 +1374,7 @@ export default function MultiploDisparos() {
                             </tr>
                           </thead>
                           <tbody>
-                            {channels.map((channel) => {
+                            {filteredChannels.map((channel) => {
                               const isSelected = selectedChannels.find(c => c.record_id === channel.record_id)
                               const isExpanded = expandedChannels.has(channel.record_id)
                               const templates = channelTemplates[channel.record_id] || []
@@ -1402,12 +1536,15 @@ export default function MultiploDisparos() {
                           </tbody>
                         </table>
                         
-                        {channels.length === 0 && (
+                        {filteredChannels.length === 0 && (
                           <div className="text-center py-4">
-                            <p className="text-muted">Nenhum canal encontrado na API.</p>
+                            <p className="text-muted">
+                              {channels.length === 0 ? 'Nenhum canal encontrado na API.' : 'Nenhum canal encontrado para os filtros.'}
+                            </p>
                           </div>
                         )}
                       </div>
+                      </>
                     )}
                   </div>
                 </div>
