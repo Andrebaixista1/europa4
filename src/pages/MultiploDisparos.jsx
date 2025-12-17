@@ -228,8 +228,9 @@ export default function MultiploDisparos() {
       rows.forEach((item) => {
         const phoneId = item?.telefone_id
         if (!phoneId) return
-        const token = String(item?.bm_token || item?.token || '').trim()
-        if (token && token !== '-') {
+        const tokenRaw = String(item?.bm_token || item?.token || '').trim()
+        const token = tokenRaw && tokenRaw !== '-' ? tokenRaw : ''
+        if (token) {
           const currentSet = phoneIdsByToken.get(token) || new Set()
           currentSet.add(String(phoneId))
           phoneIdsByToken.set(token, currentSet)
@@ -247,16 +248,24 @@ export default function MultiploDisparos() {
             record_id: String(phoneId),
             phone_id: String(phoneId),
             bm_nome: bmNome,
+            bm_token: token,
             label,
             display_phone_number: displayPhone || (phoneDigits ? `+${phoneDigits}` : ''),
             phone_number_raw: phoneDigits,
             status: String(status || ''),
             quality_rating: String(quality || 'UNKNOWN'),
           })
-        } else if (bmNome) {
+        } else if (bmNome || token) {
           const existing = phoneMap.get(String(phoneId))
-          if (existing && !String(existing?.bm_nome || '').trim()) {
-            phoneMap.set(String(phoneId), { ...existing, bm_nome: bmNome })
+          if (!existing) return
+          const needsBmNome = bmNome && !String(existing?.bm_nome || '').trim()
+          const needsToken = token && !String(existing?.bm_token || '').trim()
+          if (needsBmNome || needsToken) {
+            phoneMap.set(String(phoneId), {
+              ...existing,
+              ...(needsBmNome ? { bm_nome: bmNome } : {}),
+              ...(needsToken ? { bm_token: token } : {})
+            })
           }
         }
 
@@ -748,12 +757,14 @@ export default function MultiploDisparos() {
           channel: `${channel.label || channel.account_name || 'Final Fone'} - ${channel.display_phone_number || ''}`.trim(),
           phone_id: channel.phone_id || channel.record_id,
           display_phone_number: channel.display_phone_number,
+          bm_token: channel.bm_token || '',
           template: template.name,
           batchSize
         }
       })
       
-      console.log('4. Array de canais preparado:', channels)
+      const channelsForLog = channels.map(({ bm_token, ...rest }) => ({ ...rest, bm_token_present: Boolean(bm_token) }))
+      console.log('4. Array de canais preparado:', channelsForLog)
       
       const formData_upload = new FormData()
       formData_upload.append('name', formData.name)
@@ -767,7 +778,7 @@ export default function MultiploDisparos() {
       
       console.log('5. FormData sendo enviado:')
       console.log('   - name:', formData.name)
-      console.log('   - channels:', JSON.stringify(channels, null, 2))
+      console.log('   - channels:', JSON.stringify(channelsForLog, null, 2))
       console.log('   - scheduledDateTime:', formatDateTimeForSaoPaulo(formData.scheduledDateTime))
       console.log('   - intervalos:', formData.intervalMin, 'a', formData.intervalMax)
       console.log('   - contactCount:', csvData.length)
