@@ -1167,10 +1167,6 @@ export default function MultiploDisparos() {
                           const channelId = channel.record_id
                           const template = selectedTemplates[channelId]
                           const currentValue = channelBatchSizes[channelId]
-                          const configuredQuantity = getChannelBatchSize(channelId)
-                          const availableContacts = csvData.length
-                          const clampedQuantity = availableContacts > 0 ? Math.min(configuredQuantity, availableContacts) : configuredQuantity
-                          const clampNote = availableContacts > 0 && configuredQuantity > availableContacts ? ' (limitado ao arquivo)' : ''
 
                             return (
                               <div key={channelId} className="p-2 border rounded small" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
@@ -1194,9 +1190,6 @@ export default function MultiploDisparos() {
                                   onBlur={() => handleChannelBatchSizeBlur(channelId)}
                                 />
                               </div>
-                              <small className="text-muted d-block mt-1">
-                                Previsto disparar até {clampedQuantity} contato(s){clampNote}
-                              </small>
                             </div>
                           )
                         })}
