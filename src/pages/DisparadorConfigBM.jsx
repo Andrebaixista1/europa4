@@ -41,8 +41,8 @@ export default function DisparadorConfigBM() {
   const [isEditing, setIsEditing] = useState(false)
   const [bmSearch, setBmSearch] = useState('')
   const [bmStatusFilter, setBmStatusFilter] = useState('')
-  const [bmPhoneStatusFilter, setBmPhoneStatusFilter] = useState('')
-  const [phoneStatusByBm, setPhoneStatusByBm] = useState({})
+  const [bmPhoneSearch, setBmPhoneSearch] = useState('')
+  const [bmPhoneNumbersByBm, setBmPhoneNumbersByBm] = useState({})
   const [bmStatusByBm, setBmStatusByBm] = useState({})
   const [countersLoading, setCountersLoading] = useState(false)
   const [countersError, setCountersError] = useState('')
@@ -288,8 +288,8 @@ export default function DisparadorConfigBM() {
     setCountersLoading(true)
     setCountersError('')
     setCountersUpdatedAt(null)
-    setPhoneStatusByBm({})
     setBmStatusByBm({})
+    setBmPhoneNumbersByBm({})
 
     const statusByBm = new Map()
     rows.forEach((row) => {
@@ -318,7 +318,7 @@ export default function DisparadorConfigBM() {
     let banned = 0
     let totalPhones = 0
     let hasAnyError = false
-    const nextPhoneStatusByBm = {}
+    const nextPhoneNumbersByBm = {}
 
     try {
       const rowsWithToken = rows.filter((row) => {
@@ -360,9 +360,10 @@ export default function DisparadorConfigBM() {
             totalPhones += phones.length
             phones.forEach((ph) => {
               const st = String(ph?.status || '').trim().toUpperCase()
-              if (st) {
-                nextPhoneStatusByBm[idClean] ||= {}
-                nextPhoneStatusByBm[idClean][st] = (nextPhoneStatusByBm[idClean][st] || 0) + 1
+              const digits = String(ph?.display_phone_number || '').replace(/\D/g, '')
+              if (digits) {
+                nextPhoneNumbersByBm[idClean] ||= new Set()
+                nextPhoneNumbersByBm[idClean].add(digits)
               }
               if (st === 'CONNECTED') connected++
               else if (st === 'BANNED') banned++
@@ -390,7 +391,11 @@ export default function DisparadorConfigBM() {
         bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, emAnalise: bmEmAnalise, total: rows.length },
         phones: { connected, banned, total: totalPhones }
       })
-      setPhoneStatusByBm(nextPhoneStatusByBm)
+      const phoneNumbersOut = {}
+      Object.entries(nextPhoneNumbersByBm).forEach(([id, set]) => {
+        phoneNumbersOut[id] = Array.from(set || [])
+      })
+      setBmPhoneNumbersByBm(phoneNumbersOut)
       setCountersUpdatedAt(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }))
       if (hasAnyError) setCountersError('Algumas BMs/canais não puderam ser atualizados (token/permissões).')
     } catch (e) {
@@ -499,19 +504,8 @@ export default function DisparadorConfigBM() {
   const tokenColClass = isEditing ? 'col-12 col-md-8' : 'col-12 col-md-6'
   const showSavedBms = !modalOpen && !templatesModalOpen
   const bmSearchClean = String(bmSearch || '').trim().toLowerCase()
-  const bmPhoneStatusFilterClean = String(bmPhoneStatusFilter || '').trim().toUpperCase()
-  const bmPhoneStatusBaseOptions = ['CONNECTED', 'PENDING', 'BANNED', 'DISCONNECTED', 'CONNECTING']
-  const bmPhoneStatusDynamicOptions = Array.from(
-    new Set(
-      Object.values(phoneStatusByBm || {}).flatMap((obj) => Object.keys(obj || {}))
-    )
-  )
-    .map((st) => String(st || '').trim().toUpperCase())
-    .filter(Boolean)
-    .filter((st) => !bmPhoneStatusBaseOptions.includes(st))
-  const bmPhoneStatusOptions = Array.from(
-    new Set([...bmPhoneStatusBaseOptions, ...bmPhoneStatusDynamicOptions, ...(bmPhoneStatusFilterClean ? [bmPhoneStatusFilterClean] : [])])
-  )
+  const bmPhoneSearchClean = String(bmPhoneSearch || '').trim()
+  const bmPhoneSearchDigits = bmPhoneSearchClean.replace(/\D/g, '')
   const phoneStatusFilterClean = String(phoneStatusFilter || '').trim().toUpperCase()
   const phoneStatusBaseOptions = ['CONNECTED', 'PENDING', 'BANNED', 'DISCONNECTED', 'CONNECTING']
   const phoneStatusDynamicOptions = Array.from(
@@ -540,11 +534,11 @@ export default function DisparadorConfigBM() {
     if (bmStatusFilter === 'em_analise') return statusValue === 'pending'
     return true
   }).filter((row) => {
-    if (!bmPhoneStatusFilterClean) return true
+    if (!bmPhoneSearchDigits) return true
     const id = String(row?.bm_id || row?.bmId || '').trim()
     if (!id) return false
-    const counts = phoneStatusByBm?.[id]
-    return Boolean(counts && counts[bmPhoneStatusFilterClean] > 0)
+    const phones = bmPhoneNumbersByBm?.[id] || []
+    return phones.some((digits) => String(digits || '').includes(bmPhoneSearchDigits))
   })
 
   const handleSave = async (idArg, tokenArg, { silent = false } = {}) => {
@@ -843,21 +837,20 @@ export default function DisparadorConfigBM() {
                 </select>
               </div>
               <div className="input-group input-group-sm" style={{ maxWidth: 320 }}>
-                <span className="input-group-text">Telefones</span>
-                <select
-                  className="form-select"
-                  value={bmPhoneStatusFilter}
-                  onChange={(e) => setBmPhoneStatusFilter(e.target.value)}
-                  aria-label="Filtrar por status dos telefones"
-                  disabled={countersLoading}
-                >
-                  <option value="">Todos</option>
-                  {bmPhoneStatusOptions.map((st) => (
-                    <option key={st} value={st}>
-                      {mapPhoneStatus(st).label}
-                    </option>
-                  ))}
-                </select>
+                <span className="input-group-text">Telefone</span>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Filtrar por número (contém)..."
+                  value={bmPhoneSearch}
+                  onChange={(e) => setBmPhoneSearch(e.target.value)}
+                  aria-label="Filtrar por número de telefone"
+                />
+                {bmPhoneSearchClean && (
+                  <button type="button" className="btn btn-outline-light" onClick={() => setBmPhoneSearch('')}>
+                    Limpar
+                  </button>
+                )}
               </div>
             </div>
           )}
