@@ -149,7 +149,7 @@ export default function MultiploDisparos() {
   const normalizeApiCode = (value) => String(value || '').trim().toUpperCase()
 
   const channelMatchesFilters = (channel) => {
-    const bmNome = String(channel?.graph_verified_name || '').trim()
+    const bmNome = String(channel?.bm_nome || channel?.bmNome || '').trim()
     const status = normalizeApiCode(channel?.graph_status || channel?.status)
     const quality = normalizeApiCode(channel?.graph_quality_rating || channel?.quality_rating)
     if (filterBmNome && bmNome !== filterBmNome) return false
@@ -240,17 +240,24 @@ export default function MultiploDisparos() {
         const label = computePhoneLabel(phoneDigits, phoneId)
         const status = derivePhoneStatus(item)
         const quality = item?.telefone_qualidade || item?.quality_rating || 'UNKNOWN'
+        const bmNome = String(item?.bm_nome || item?.bmNome || '').trim()
 
         if (!phoneMap.has(String(phoneId))) {
           phoneMap.set(String(phoneId), {
             record_id: String(phoneId),
             phone_id: String(phoneId),
+            bm_nome: bmNome,
             label,
             display_phone_number: displayPhone || (phoneDigits ? `+${phoneDigits}` : ''),
             phone_number_raw: phoneDigits,
             status: String(status || ''),
             quality_rating: String(quality || 'UNKNOWN'),
           })
+        } else if (bmNome) {
+          const existing = phoneMap.get(String(phoneId))
+          if (existing && !String(existing?.bm_nome || '').trim()) {
+            phoneMap.set(String(phoneId), { ...existing, bm_nome: bmNome })
+          }
         }
 
         const templateName = item?.modelo_nome
@@ -879,7 +886,7 @@ export default function MultiploDisparos() {
   const allVisibleSelected = filteredChannels.length > 0 && selectedVisibleCount === filteredChannels.length
 
   const bmNomeOptions = Array.from(
-    new Set(channels.map((c) => String(c?.graph_verified_name || '').trim()).filter(Boolean))
+    new Set(channels.map((c) => String(c?.bm_nome || c?.bmNome || '').trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b))
 
   const statusApiOrder = ['CONNECTED', 'PENDING', 'BANNED', 'DISCONNECTED', 'CONNECTING']
@@ -1379,7 +1386,7 @@ export default function MultiploDisparos() {
                               const isExpanded = expandedChannels.has(channel.record_id)
                               const templates = channelTemplates[channel.record_id] || []
                               const channelLast4 = getLast4Digits(channel.phone_number_raw || channel.display_phone_number || channel.phone)
-                              const bmNomeRaw = String(channel.graph_verified_name || '').trim()
+                              const bmNomeRaw = String(channel.bm_nome || channel.bmNome || '').trim()
                               const statusRaw = String(channel.graph_status || channel.status || '').trim()
                               const qualityRaw = String(channel.graph_quality_rating || channel.quality_rating || '').trim()
                               
