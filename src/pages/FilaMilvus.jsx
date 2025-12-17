@@ -88,13 +88,13 @@ const adaptTickets = (items = []) =>
     .map((item) => {
       const desk = item?.mesa_trabalho ?? item?.mesaTrabalho ?? ''
       return {
-        codigo: item?.codigo ?? item?.id ?? 'Sem codigo',
-        cliente: item?.setor ?? item?.cliente ?? 'Nao informado',
+        codigo: item?.codigo ?? item?.id ?? 'Sem código',
+        cliente: item?.setor ?? item?.cliente ?? 'Não informado',
         descricao: item?.titulo ?? item?.assunto ?? item?.descricao ?? '',
         status: item?.status ?? 'Sem status',
         prioridade: item?.prioridade ?? 'Sem prioridade',
         ultimaAtualizacao: item?.data_modificacao ?? item?.data ?? '',
-        tecnico: item?.tecnico ?? item?.responsavel ?? 'Agurdando técnico',
+        tecnico: item?.tecnico ?? item?.responsavel ?? 'Aguardando técnico',
         mesaTrabalho: desk,
       }
     })
@@ -139,7 +139,7 @@ export default function FilaMilvus() {
       setLastSync(new Date())
     } catch (err) {
       console.error('Erro ao buscar fila Milvus', err)
-      setError('Nao foi possivel carregar a fila agora. Tente novamente em instantes.')
+      setError('Não foi possível carregar a fila agora. Tente novamente em instantes.')
     } finally {
       silent ? setRefreshing(false) : setLoading(false)
     }

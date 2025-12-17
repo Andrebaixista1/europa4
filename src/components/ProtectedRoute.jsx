@@ -22,7 +22,7 @@ export default function ProtectedRoute({ children, roles, teamIds, allowMaster =
   if (Array.isArray(roles) && roles.length > 0) {
     const allowedRoles = roles.map((role) => normalizeRole(role))
     if (!allowedRoles.includes(normalizedUserRole)) {
-      notify.warn('Acesso nao permitido para seu perfil')
+      notify.warn('Acesso não permitido para seu perfil')
       return <Navigate to="/" replace />
     }
   }
@@ -39,7 +39,7 @@ export default function ProtectedRoute({ children, roles, teamIds, allowMaster =
       const hasTeamAccess = userTeamId !== null && normalizedTeamIds.includes(userTeamId)
 
       if (!masterBypass && !hasTeamAccess) {
-        notify.warn('Acesso nao permitido para sua equipe')
+        notify.warn('Acesso não permitido para sua equipe')
         return <Navigate to="/" replace />
       }
     }

@@ -8,22 +8,22 @@ import { notify } from '../utils/notify.js'
 const API_ENDPOINT = 'https://n8n.apivieiracred.store/webhook/canais'
 
 const STATUS_META = {
-  CONNECTED: { label: 'Connected', variant: 'success', tone: 'green' },
-  DISCONNECTED: { label: 'Disconnected', variant: 'danger', tone: 'red' },
-  CONNECTING: { label: 'Connecting', variant: 'warning', tone: 'yellow' },
-  FAILED: { label: 'Failed', variant: 'danger', tone: 'red' },
-  FLAGGED: { label: 'Flagged', variant: 'warning', tone: 'yellow' },
-  UNKNOWN: { label: 'Unknown', variant: 'secondary', tone: 'gray' },
+  CONNECTED: { label: 'Conectado', variant: 'success', tone: 'green' },
+  DISCONNECTED: { label: 'Desconectado', variant: 'danger', tone: 'red' },
+  CONNECTING: { label: 'Conectando', variant: 'warning', tone: 'yellow' },
+  FAILED: { label: 'Falha', variant: 'danger', tone: 'red' },
+  FLAGGED: { label: 'Sinalizado', variant: 'warning', tone: 'yellow' },
+  UNKNOWN: { label: 'Indefinido', variant: 'secondary', tone: 'gray' },
 }
 
 const QUALITY_META = {
-  GREEN: { label: 'High', color: '#22c55e', tone: 'green' },
-  HIGH: { label: 'High', color: '#22c55e', tone: 'green' },
-  YELLOW: { label: 'Medium', color: '#fbbf24', tone: 'yellow' },
-  MEDIUM: { label: 'Medium', color: '#fbbf24', tone: 'yellow' },
-  ORANGE: { label: 'Medium', color: '#f97316', tone: 'yellow' },
-  RED: { label: 'Low', color: '#ef4444', tone: 'red' },
-  LOW: { label: 'Low', color: '#ef4444', tone: 'red' },
+  GREEN: { label: 'Alta', color: '#22c55e', tone: 'green' },
+  HIGH: { label: 'Alta', color: '#22c55e', tone: 'green' },
+  YELLOW: { label: 'Média', color: '#fbbf24', tone: 'yellow' },
+  MEDIUM: { label: 'Média', color: '#fbbf24', tone: 'yellow' },
+  ORANGE: { label: 'Média', color: '#f97316', tone: 'yellow' },
+  RED: { label: 'Baixa', color: '#ef4444', tone: 'red' },
+  LOW: { label: 'Baixa', color: '#ef4444', tone: 'red' },
   GRAY: { label: 'Sem status', color: '#9ca3af', tone: 'gray' },
   UNKNOWN: { label: 'Sem status', color: '#9ca3af', tone: 'gray' },
 }
@@ -39,7 +39,7 @@ const columns = [
   { key: 'name', label: 'Canal' },
   { key: 'count', label: 'Telefones' },
   { key: 'status', label: 'Status' },
-  { key: 'quality', label: 'Quality rating' },
+  { key: 'quality', label: 'Qualidade' },
 ]
 
 const STATUS_PRIORITY = ['FAILED', 'DISCONNECTED', 'FLAGGED', 'CONNECTING', 'CONNECTED', 'UNKNOWN']
@@ -49,6 +49,23 @@ const TONES = ['green', 'yellow', 'red', 'gray']
 const normalizeString = (value) => {
   if (value === null || value === undefined) return ''
   return String(value).trim()
+}
+
+const qualitySortRank = (code) => {
+  switch (normalizeString(code).toUpperCase()) {
+    case 'GREEN':
+    case 'HIGH':
+      return 0
+    case 'YELLOW':
+    case 'MEDIUM':
+    case 'ORANGE':
+      return 1
+    case 'RED':
+    case 'LOW':
+      return 2
+    default:
+      return 3
+  }
 }
 
 const toStatusCode = (status) => {
@@ -195,9 +212,7 @@ export default function StatusWhatsapp() {
           return (aIndex - bIndex) * dir
         }
         case 'quality': {
-          const aIndex = QUALITY_PRIORITY.indexOf(a.qualityCode)
-          const bIndex = QUALITY_PRIORITY.indexOf(b.qualityCode)
-          return (aIndex - bIndex) * dir
+          return (qualitySortRank(a.qualityCode) - qualitySortRank(b.qualityCode)) * dir
         }
         case 'name':
         default:
@@ -360,7 +375,7 @@ export default function StatusWhatsapp() {
           </div>
           <div className="col-12 col-md-6 col-xl-3">
             <div className="neo-card neo-lg p-4 h-100">
-              <div className="small text-uppercase opacity-65 mb-3">Quality rating</div>
+              <div className="small text-uppercase opacity-65 mb-3">Qualidade</div>
               {renderSummaryCounters(summary.quality)}
             </div>
           </div>

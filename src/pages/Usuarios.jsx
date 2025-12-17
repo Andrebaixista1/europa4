@@ -504,7 +504,7 @@ export default function Usuarios() {
   async function handleAddSubmit(e) {
     if (!canAdd) return
     e.preventDefault()
-    console.log('âœ… Iniciando handleAddSubmit...')
+    console.log('✅ Iniciando handleAddSubmit...')
     
     const nome = formNome.trim()
     const login = formLogin.trim()

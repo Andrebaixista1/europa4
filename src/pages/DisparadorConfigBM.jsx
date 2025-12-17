@@ -43,11 +43,12 @@ export default function DisparadorConfigBM() {
   const [bmStatusFilter, setBmStatusFilter] = useState('')
   const [bmPhoneStatusFilter, setBmPhoneStatusFilter] = useState('')
   const [phoneStatusByBm, setPhoneStatusByBm] = useState({})
+  const [bmStatusByBm, setBmStatusByBm] = useState({})
   const [countersLoading, setCountersLoading] = useState(false)
   const [countersError, setCountersError] = useState('')
   const [countersUpdatedAt, setCountersUpdatedAt] = useState(null)
   const [counters, setCounters] = useState({
-    bm: { verified: 0, naoVerificado: 0, total: 0 },
+    bm: { verified: 0, naoVerificado: 0, emAnalise: 0, total: 0 },
     phones: { connected: 0, banned: 0, total: 0 }
   })
 
@@ -205,16 +206,21 @@ export default function DisparadorConfigBM() {
   }
 
   const mapStatus = (value) => {
-    const v = String(value || '').toLowerCase()
+    const v = String(value || '').trim().toLowerCase()
     if (v === 'verified') return { label: 'Verificado', color: '#22c55e' }
-    if (v === 'pending_submission' || v === 'pending_need_more_info') return { label: 'N\u00e3o verificado', color: '#D47B04' }
+    if (v === 'pending') return { label: 'Em análise', color: '#CBD2D9' }
+    if (v === 'pending_submission' || v === 'pending_need_more_info' || v === 'not_verified' || v === 'unverified')
+      return { label: 'N\u00e3o verificado', color: '#D47B04' }
     return { label: value || '-', color: '#6c757d' }
   }
 
   const mapQuality = (value) => {
     const v = String(value || '').toLowerCase()
     if (v === 'red') return { label: 'Ruim', color: '#ef4444' }
+    if (v === 'low') return { label: 'Ruim', color: '#ef4444' }
     if (v === 'green') return { label: 'Boa', color: '#22c55e' }
+    if (v === 'high') return { label: 'Boa', color: '#22c55e' }
+    if (v === 'yellow' || v === 'orange' || v === 'medium') return { label: 'Média', color: '#ffc107' }
     if (v === 'unknown') return { label: 'Sem status', color: '#6c757d' }
     return { label: value || '-', color: '#6c757d' }
   }
@@ -223,7 +229,7 @@ export default function DisparadorConfigBM() {
     const v = String(value || '').trim().toUpperCase()
     if (v === 'CONNECTED') return { label: 'Conectado', color: '#22c55e' }
     if (v === 'BANNED') return { label: 'Banido', color: '#ef4444' }
-    if (v === 'PENDING') return { label: 'Pendente', color: '#d47b04' }
+    if (v === 'PENDING') return { label: 'Pendente', color: '#ffc107' }
     if (v === 'DISCONNECTED') return { label: 'Desconectado', color: '#ef4444' }
     if (v === 'CONNECTING') return { label: 'Conectando', color: '#f59e0b' }
     if (!v) return { label: '-', color: '#6c757d' }
@@ -283,6 +289,7 @@ export default function DisparadorConfigBM() {
     setCountersError('')
     setCountersUpdatedAt(null)
     setPhoneStatusByBm({})
+    setBmStatusByBm({})
 
     const statusByBm = new Map()
     rows.forEach((row) => {
@@ -293,15 +300,17 @@ export default function DisparadorConfigBM() {
 
     let bmVerified = 0
     let bmNaoVerificado = 0
+    let bmEmAnalise = 0
     for (const value of statusByBm.values()) {
-      const v = String(value || '').toLowerCase()
+      const v = String(value || '').trim().toLowerCase()
       if (v === 'verified') bmVerified++
-      else if (v === 'pending_submission' || v === 'pending_need_more_info') bmNaoVerificado++
+      else if (v === 'pending_submission' || v === 'pending_need_more_info' || v === 'not_verified' || v === 'unverified') bmNaoVerificado++
+      else if (v === 'pending') bmEmAnalise++
     }
 
     setCounters((prev) => ({
       ...prev,
-      bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
+      bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, emAnalise: bmEmAnalise, total: rows.length },
       phones: { connected: 0, banned: 0, total: 0 }
     }))
 
@@ -325,7 +334,12 @@ export default function DisparadorConfigBM() {
 
         try {
           const info = await requestBmInfo(idClean, tokenClean)
-          if (info?.verification_status) statusByBm.set(idClean, info.verification_status)
+          if (info?.verification_status) {
+            statusByBm.set(idClean, info.verification_status)
+            if (runId === countersRunId.current) {
+              setBmStatusByBm((prev) => ({ ...prev, [idClean]: info.verification_status }))
+            }
+          }
         } catch {
           hasAnyError = true
         }
@@ -363,14 +377,17 @@ export default function DisparadorConfigBM() {
 
       bmVerified = 0
       bmNaoVerificado = 0
+      bmEmAnalise = 0
       for (const value of statusByBm.values()) {
-        const v = String(value || '').toLowerCase()
+        const v = String(value || '').trim().toLowerCase()
         if (v === 'verified') bmVerified++
-        else if (v === 'pending_submission' || v === 'pending_need_more_info') bmNaoVerificado++
+        else if (v === 'pending_submission' || v === 'pending_need_more_info' || v === 'not_verified' || v === 'unverified') bmNaoVerificado++
+        else if (v === 'pending') bmEmAnalise++
       }
 
+      setBmStatusByBm(Object.fromEntries(statusByBm))
       setCounters({
-        bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, total: rows.length },
+        bm: { verified: bmVerified, naoVerificado: bmNaoVerificado, emAnalise: bmEmAnalise, total: rows.length },
         phones: { connected, banned, total: totalPhones }
       })
       setPhoneStatusByBm(nextPhoneStatusByBm)
@@ -510,9 +527,17 @@ export default function DisparadorConfigBM() {
   const filteredBmRows = bmRows.filter((row) => {
     if (bmSearchClean && !String(row?.bm_nome || '').toLowerCase().includes(bmSearchClean)) return false
     if (!bmStatusFilter) return true
-    const statusValue = String(row?.bm_statusPortifolio || '').toLowerCase()
+    const id = String(row?.bm_id || row?.bmId || '').trim()
+    const statusValue = String(bmStatusByBm?.[id] ?? row?.bm_statusPortifolio ?? '').trim().toLowerCase()
     if (bmStatusFilter === 'verified') return statusValue === 'verified'
-    if (bmStatusFilter === 'nao_verificado') return statusValue === 'pending_submission' || statusValue === 'pending_need_more_info'
+    if (bmStatusFilter === 'nao_verificado')
+      return (
+        statusValue === 'pending_submission' ||
+        statusValue === 'pending_need_more_info' ||
+        statusValue === 'unverified' ||
+        statusValue === 'not_verified'
+      )
+    if (bmStatusFilter === 'em_analise') return statusValue === 'pending'
     return true
   }).filter((row) => {
     if (!bmPhoneStatusFilterClean) return true
@@ -722,10 +747,10 @@ export default function DisparadorConfigBM() {
                   Atualizar
                 </button>
               </div>
-              <div className="d-flex flex-column gap-2">
-                <div className="d-flex align-items-center justify-content-between">
-                  <span className="d-inline-flex align-items-center gap-2">
-                    <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#22c55e' }} aria-hidden />
+                <div className="d-flex flex-column gap-2">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <span className="d-inline-flex align-items-center gap-2">
+                      <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#22c55e' }} aria-hidden />
                     <span>Verificado</span>
                   </span>
                   <span className="fw-bold fs-5">{counters.bm.verified}</span>
@@ -736,6 +761,13 @@ export default function DisparadorConfigBM() {
                     <span>Não verificado</span>
                   </span>
                   <span className="fw-bold fs-5">{counters.bm.naoVerificado}</span>
+                </div>
+                <div className="d-flex align-items-center justify-content-between">
+                  <span className="d-inline-flex align-items-center gap-2">
+                    <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: '#CBD2D9' }} aria-hidden />
+                    <span>Em análise</span>
+                  </span>
+                  <span className="fw-bold fs-5">{counters.bm.emAnalise}</span>
                 </div>
                 <div className="d-flex align-items-center justify-content-between">
                   <span className="opacity-75">Total</span>
@@ -807,6 +839,7 @@ export default function DisparadorConfigBM() {
                   <option value="">Todos</option>
                   <option value="verified">Verificado</option>
                   <option value="nao_verificado">Não verificado</option>
+                  <option value="em_analise">Em análise</option>
                 </select>
               </div>
               <div className="input-group input-group-sm" style={{ maxWidth: 320 }}>
@@ -870,7 +903,8 @@ export default function DisparadorConfigBM() {
                   </tr>
                 ) : (
                   filteredBmRows.map((row) => {
-                    const statusInfo = mapStatus(row?.bm_statusPortifolio)
+                    const id = String(row?.bm_id || row?.bmId || '').trim()
+                    const statusInfo = mapStatus(bmStatusByBm?.[id] ?? row?.bm_statusPortifolio)
                     return (
                       <tr key={row.bm_id}>
                         <td className="small text-nowrap d-none d-lg-table-cell">{formatIsoToBR(row.canal_data)}</td>
@@ -1100,9 +1134,9 @@ export default function DisparadorConfigBM() {
                               <thead>
                                 <tr>
                                   <th style={{ width: '40%' }}>Telefone</th>
-                                  <th style={{ width: '15%' }}>Status</th>
+                                  <th style={{ width: '15%' }}>Status (API)</th>
                                   <th className="d-none d-lg-table-cell" style={{ width: '30%' }}>Telefone ID</th>
-                                  <th style={{ width: '15%' }}>Qualidade</th>
+                                  <th style={{ width: '15%' }}>Qualidade (API)</th>
                                   <th style={{ width: '15%' }}>Limite</th>
                                 </tr>
                               </thead>

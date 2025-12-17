@@ -65,54 +65,245 @@ export default function MultiploDisparos() {
     return `${y}-${m}-${day} ${hh}:${mm}`
   }
 
-  const fetchChannels = async () => {
-    setLoadingChannels(true)
-    try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/canais')
-      if (response.ok) {
-        const data = await response.json()
-        setChannels(data)
-      } else {
-        console.error('Erro ao buscar canais:', response.statusText)
-        setChannels(mockChannels)
-      }
-    } catch (error) {
-      console.error('Erro ao conectar com a API:', error)
-      setChannels(mockChannels)
-    } finally {
-      setLoadingChannels(false)
+  const formatPhoneNumberBR = (value) => {
+    const digits = String(value || '').replace(/\D/g, '')
+    if (!digits) return ''
+
+    if (digits.startsWith('55') && digits.length >= 12) {
+      const rest = digits.slice(2)
+      const ddd = rest.slice(0, 2)
+      const number = rest.slice(2)
+      if (number.length === 9) return `+55 ${ddd} ${number.slice(0, 5)}-${number.slice(5)}`
+      if (number.length === 8) return `+55 ${ddd} ${number.slice(0, 4)}-${number.slice(4)}`
+      return `+55 ${ddd} ${number}`.trim()
+    }
+
+    if (digits.length === 11) return `+55 ${digits.slice(0, 2)} ${digits.slice(2, 7)}-${digits.slice(7)}`
+    if (digits.length === 10) return `+55 ${digits.slice(0, 2)} ${digits.slice(2, 6)}-${digits.slice(6)}`
+
+    return digits.startsWith('+') ? digits : `+${digits}`
+  }
+
+  const getLast4Digits = (value) => {
+    const digits = String(value || '').replace(/\D/g, '')
+    return digits.length >= 4 ? digits.slice(-4) : ''
+  }
+
+  const derivePhoneStatus = (row) => {
+    const explicit = row?.telefone_status || row?.telefoneStatus || row?.status || ''
+    if (explicit) return String(explicit)
+
+    const limitRaw = row?.telefone_limite
+    const limit = Number.parseInt(String(limitRaw ?? ''), 10)
+    if (Number.isFinite(limit) && limit > 0) return 'CONNECTED'
+    return 'PENDING'
+  }
+
+  const computePhoneLabel = (rawPhone, fallbackId) => {
+    const digits = String(rawPhone || '').replace(/\D/g, '')
+    const last4 = digits ? digits.slice(-4) : String(fallbackId || '').slice(-4)
+    return last4 ? `Final Fone ${last4}` : 'Final Fone'
+  }
+
+  const getQualityRank = (rating) => {
+    switch (String(rating || '').trim().toLowerCase()) {
+      case 'green':
+      case 'high':
+        return 0
+      case 'yellow':
+      case 'orange':
+      case 'medium':
+        return 1
+      case 'red':
+      case 'low':
+        return 2
+      default:
+        return 3
     }
   }
 
-  const fetchTemplatesByChannel = async (accountId) => {
-    if (!accountId) return []
-    
-    try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-        body: JSON.stringify({ id_account: accountId })
+  const mapPhoneStatusApi = (value) => {
+    const v = String(value || '').trim().toUpperCase()
+    if (v === 'CONNECTED') return { label: 'Conectado', color: '#22c55e' }
+    if (v === 'BANNED') return { label: 'Banido', color: '#ef4444' }
+    if (v === 'PENDING') return { label: 'Pendente', color: '#ffc107' }
+    if (v === 'DISCONNECTED') return { label: 'Desconectado', color: '#ef4444' }
+    if (v === 'CONNECTING') return { label: 'Conectando', color: '#f59e0b' }
+    if (!v) return { label: '-', color: '#6c757d' }
+    return { label: v, color: '#6c757d' }
+  }
+
+  const mapQualityApi = (value) => {
+    const v = String(value || '').trim().toUpperCase()
+    if (v === 'GREEN' || v === 'HIGH') return { label: 'Boa', color: '#22c55e' }
+    if (v === 'RED' || v === 'LOW') return { label: 'Ruim', color: '#ef4444' }
+    if (v === 'YELLOW' || v === 'ORANGE' || v === 'MEDIUM') return { label: 'Média', color: '#ffc107' }
+    if (v === 'UNKNOWN') return { label: 'Sem status', color: '#6c757d' }
+    if (!v) return { label: '-', color: '#6c757d' }
+    return { label: v, color: '#6c757d' }
+  }
+
+  const fetchGraphPhoneInfoByToken = async (phoneIdsByToken) => {
+    const entries = Array.from(phoneIdsByToken.entries())
+    if (entries.length === 0) return new Map()
+
+    const out = new Map()
+    const chunkIds = (ids, size) => {
+      const arr = Array.isArray(ids) ? ids : []
+      const chunkSize = Math.max(1, Number(size) || 1)
+      const chunks = []
+      for (let i = 0; i < arr.length; i += chunkSize) chunks.push(arr.slice(i, i + chunkSize))
+      return chunks
+    }
+
+    const concurrency = 3
+    for (let i = 0; i < entries.length; i += concurrency) {
+      const batch = entries.slice(i, i + concurrency)
+      const results = await Promise.allSettled(
+        batch.map(async ([token, idsSet]) => {
+          const tokenClean = String(token || '').trim()
+          if (!tokenClean || tokenClean === '-') return
+
+          const ids = Array.from(idsSet || []).filter(Boolean)
+          for (const chunk of chunkIds(ids, 50)) {
+            const params = new URLSearchParams({
+              ids: chunk.join(','),
+              fields:
+                'id,display_phone_number,verified_name,status,quality_rating,health_status,code_verification_status,account_mode',
+              access_token: tokenClean
+            })
+            const url = `https://graph.facebook.com/v24.0/?${params.toString()}`
+            const res = await fetch(url, { method: 'GET' })
+            const raw = await res.text().catch(() => '')
+            if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
+
+            const parsed = raw ? JSON.parse(raw) : {}
+            if (parsed?.error) throw new Error(parsed.error?.message || 'Erro ao buscar status do Graph API.')
+
+            chunk.forEach((id) => {
+              const row = parsed?.[id]
+              if (row) out.set(String(id), row)
+            })
+          }
+        })
+      )
+
+      results.forEach((r) => {
+        if (r.status === 'rejected') console.warn('Falha ao buscar status no Graph API:', r.reason)
       })
-      
-      if (response.ok) {
-        const data = await response.json()
-        if (Array.isArray(data)) {
-          return data
-        } else if (data && Array.isArray(data.data)) {
-          return data.data
-        } else if (data && data.body && Array.isArray(data.body)) {
-          return data.body
-        } else {
-          return []
+    }
+
+    return out
+  }
+
+  const fetchChannels = async () => {
+    setLoadingChannels(true)
+    try {
+      const response = await fetch('https://n8n.apivieiracred.store/webhook/bm-get', { method: 'GET' })
+      const raw = await response.text().catch(() => '')
+      if (!response.ok) throw new Error(raw || response.statusText || `HTTP ${response.status}`)
+
+      const parsed = raw ? JSON.parse(raw) : []
+      const rows = Array.isArray(parsed) ? parsed : []
+
+      const phoneMap = new Map()
+      const templatesByPhone = new Map()
+      const phoneIdsByToken = new Map()
+
+      rows.forEach((item) => {
+        const phoneId = item?.telefone_id
+        if (!phoneId) return
+        const token = String(item?.bm_token || item?.token || '').trim()
+        if (token && token !== '-') {
+          const currentSet = phoneIdsByToken.get(token) || new Set()
+          currentSet.add(String(phoneId))
+          phoneIdsByToken.set(token, currentSet)
         }
-      } else {
-        return mockTemplates
+
+        const phoneDigits = String(item?.telefone_numero || '').replace(/\D/g, '')
+        const displayPhone = formatPhoneNumberBR(phoneDigits) || formatPhoneNumberBR(String(item?.display_phone_number || ''))
+        const label = computePhoneLabel(phoneDigits, phoneId)
+        const status = derivePhoneStatus(item)
+        const quality = item?.telefone_qualidade || item?.quality_rating || 'UNKNOWN'
+
+        if (!phoneMap.has(String(phoneId))) {
+          phoneMap.set(String(phoneId), {
+            record_id: String(phoneId),
+            phone_id: String(phoneId),
+            label,
+            display_phone_number: displayPhone || (phoneDigits ? `+${phoneDigits}` : ''),
+            phone_number_raw: phoneDigits,
+            status: String(status || ''),
+            quality_rating: String(quality || 'UNKNOWN'),
+          })
+        }
+
+        const templateName = item?.modelo_nome
+        if (!templateName) return
+
+        const templateLanguage = item?.modelo_linguagem || ''
+        const templateKey = `${String(templateName)}::${String(templateLanguage)}`
+        const current = templatesByPhone.get(String(phoneId)) || new Map()
+        if (!current.has(templateKey)) {
+          current.set(templateKey, {
+            record_id: `${String(phoneId)}::${templateKey}`,
+            name: String(templateName),
+            language: String(templateLanguage),
+            status: String(item?.modelo_status || ''),
+            category: String(item?.modelo_categoria || ''),
+            message: String(item?.modelo_mensagem || item?.modelo_menssagem || ''),
+          })
+        }
+        templatesByPhone.set(String(phoneId), current)
+      })
+
+      let list = Array.from(phoneMap.values())
+
+      try {
+        const graphInfoByPhoneId = await fetchGraphPhoneInfoByToken(phoneIdsByToken)
+        if (graphInfoByPhoneId.size > 0) {
+          list = list.map((row) => {
+            const info = graphInfoByPhoneId.get(String(row?.record_id || row?.phone_id || ''))
+            if (!info) return row
+            return {
+              ...row,
+              graph_status: info.status,
+              graph_quality_rating: info.quality_rating
+            }
+          })
+        }
+      } catch (err) {
+        console.warn('Falha ao buscar status/qualidade no Graph API:', err)
       }
+
+      list.sort((a, b) => {
+        const qualityDiff =
+          getQualityRank(a.graph_quality_rating || a.quality_rating) -
+          getQualityRank(b.graph_quality_rating || b.quality_rating)
+        if (qualityDiff !== 0) return qualityDiff
+
+        const aKey = a.phone_number_raw || a.display_phone_number || ''
+        const bKey = b.phone_number_raw || b.display_phone_number || ''
+        return String(aKey).localeCompare(String(bKey))
+      })
+
+      const templatesObj = {}
+      templatesByPhone.forEach((map, phoneId) => {
+        templatesObj[phoneId] = Array.from(map.values())
+      })
+
+      const selectedIds = new Set(selectedChannels.map((c) => String(c?.record_id)))
+      const refreshedSelected = selectedIds.size > 0 ? list.filter((c) => selectedIds.has(String(c.record_id))) : []
+
+      setChannels(list)
+      setChannelTemplates(templatesObj)
+      if (selectedIds.size > 0) setSelectedChannels(refreshedSelected)
     } catch (error) {
-      console.error('Erro ao buscar templates:', error)
-      return mockTemplates
+      console.error('Erro ao carregar dados do bm-get:', error)
+      setChannels(mockChannels)
+      setChannelTemplates({})
+    } finally {
+      setLoadingChannels(false)
     }
   }
 
@@ -130,7 +321,6 @@ export default function MultiploDisparos() {
       })
     } else {
       setSelectedChannels([])
-      setChannelTemplates({})
       setSelectedTemplates({})
       setExpandedChannels(new Set())
       setChannelBatchSizes({})
@@ -143,11 +333,6 @@ export default function MultiploDisparos() {
     
     if (isSelected) {
       setSelectedChannels(prev => prev.filter(c => c.record_id !== channelId))
-      setChannelTemplates(prev => {
-        const newTemplates = { ...prev }
-        delete newTemplates[channelId]
-        return newTemplates
-      })
       setSelectedTemplates(prev => {
         const newSelected = { ...prev }
         delete newSelected[channelId]
@@ -175,8 +360,6 @@ export default function MultiploDisparos() {
   }
 
   const toggleChannelExpansion = async (channelId) => {
-    const isCurrentlyExpanded = expandedChannels.has(channelId)
-    
     setExpandedChannels(prev => {
       const newExpanded = new Set(prev)
       if (newExpanded.has(channelId)) {
@@ -186,21 +369,6 @@ export default function MultiploDisparos() {
       }
       return newExpanded
     })
-    
-    if (!isCurrentlyExpanded && !channelTemplates[channelId]) {
-      const channel = selectedChannels.find(c => c.record_id === channelId)
-      if (channel && channel.id_account) {
-        console.log('Carregando templates para canal:', channel.account_name, 'ID:', channel.id_account)
-        const templates = await fetchTemplatesByChannel(channel.id_account)
-        console.log('Templates encontrados:', templates)
-        setChannelTemplates(prev => ({
-          ...prev,
-          [channelId]: templates
-        }))
-      } else {
-        console.log('Canal sem id_account:', channel)
-      }
-    }
   }
 
   const selectTemplate = (channelId, template) => {
@@ -222,15 +390,39 @@ export default function MultiploDisparos() {
   }
 
   const getStatusText = (status) => {
-    if (!status) return 'Indefinido'
-    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
+    const normalized = String(status || '').trim().toLowerCase()
+    switch (normalized) {
+      case 'connected':
+        return 'Conectado'
+      case 'pending':
+        return 'Pendente'
+      case 'flagged':
+        return 'Sinalizado'
+      case 'disconnected':
+        return 'Desconectado'
+      case 'connecting':
+        return 'Conectando'
+      case 'failed':
+        return 'Falha'
+      default:
+        return status ? String(status) : 'Indefinido'
+    }
   }
 
   const getStatusBadgeClass = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'connected': return 'status-badge status-connected'
-      case 'flagged': return 'status-badge status-flagged'
-      default: return 'status-badge status-undefined'
+    switch (String(status || '').trim().toLowerCase()) {
+      case 'connected':
+        return 'status-badge status-connected'
+      case 'pending':
+      case 'connecting':
+        return 'status-badge status-pending'
+      case 'flagged':
+        return 'status-badge status-flagged'
+      case 'disconnected':
+      case 'failed':
+        return 'status-badge status-error'
+      default:
+        return 'status-badge status-undefined'
     }
   }
 
@@ -302,11 +494,11 @@ export default function MultiploDisparos() {
 
   const getQualityText = (rating) => {
     switch(rating?.toLowerCase()) {
-      case 'green': return 'High'
+      case 'green': return 'Alta'
       case 'yellow':
-      case 'orange': return 'Medium'
-      case 'red': return 'Low'
-      default: return 'Medium'
+      case 'orange': return 'Média'
+      case 'red': return 'Baixa'
+      default: return 'Média'
     }
   }
 
@@ -496,7 +688,7 @@ export default function MultiploDisparos() {
         const batchSize = getChannelBatchSize(channel.record_id)
         
         return {
-          channel: `${channel.account_name} - ${channel.display_phone_number}`,
+          channel: `${channel.label || channel.account_name || 'Final Fone'} - ${channel.display_phone_number || ''}`.trim(),
           phone_id: channel.phone_id || channel.record_id,
           display_phone_number: channel.display_phone_number,
           template: template.name,
@@ -827,7 +1019,7 @@ export default function MultiploDisparos() {
                   <>
                     {csvData.length > 10000 && (
                       <div className="alert alert-warning mt-3">
-                        ⚠� <strong>Arquivo muito grande!</strong><br />
+                        ⚠️ <strong>Arquivo muito grande!</strong><br />
                         Seu arquivo contém <strong>{csvData.length.toLocaleString('pt-BR')} contatos</strong>. 
                         Não é aconselhado usar arquivos tão grandes, pois o processamento pode levar 
                         <strong>mais tempo do que esperado</strong>. Considere dividir em arquivos menores.
@@ -851,7 +1043,7 @@ export default function MultiploDisparos() {
                                   : `${configuredQuantity} contato(s)`
                                 return (
                                   <li key={channelId}>
-                                    {channel.account_name}: {displayQuantity}
+                                    {channel.label || channel.account_name || channel.name}: {displayQuantity}
                                   </li>
                                 )
                               })}
@@ -895,9 +1087,9 @@ export default function MultiploDisparos() {
                           const clampedQuantity = availableContacts > 0 ? Math.min(configuredQuantity, availableContacts) : configuredQuantity
                           const clampNote = availableContacts > 0 && configuredQuantity > availableContacts ? ' (limitado ao arquivo)' : ''
 
-                          return (
-                            <div key={channelId} className="p-2 border rounded small" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
-                              <strong>{channel.account_name}</strong><br />
+                            return (
+                              <div key={channelId} className="p-2 border rounded small" style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}>
+                              <strong>{channel.label || channel.account_name || channel.name}</strong><br />
                               <small className="opacity-75">{channel.display_phone_number}</small>
                               {template && (
                                 <div className="mt-1">
@@ -1038,10 +1230,10 @@ export default function MultiploDisparos() {
                                   )}
                                 </div>
                               </th>
-                              <th className="fw-bold">Nome Canal</th>
+                              <th className="fw-bold">Final (4 dígitos)</th>
                               <th className="fw-bold">Número</th>
-                              <th className="fw-bold text-center">Status</th>
-                              <th className="fw-bold text-center">Quality Rating</th>
+                              <th className="fw-bold text-center">Status (API)</th>
+                              <th className="fw-bold text-center">Qualidade (API)</th>
                               <th width="80" className="text-center">Templates</th>
                             </tr>
                           </thead>
@@ -1050,6 +1242,9 @@ export default function MultiploDisparos() {
                               const isSelected = selectedChannels.find(c => c.record_id === channel.record_id)
                               const isExpanded = expandedChannels.has(channel.record_id)
                               const templates = channelTemplates[channel.record_id] || []
+                              const channelLast4 = getLast4Digits(channel.phone_number_raw || channel.display_phone_number || channel.phone)
+                              const statusRaw = String(channel.graph_status || channel.status || '').trim()
+                              const qualityRaw = String(channel.graph_quality_rating || channel.quality_rating || '').trim()
                               
                               return (
                                 <React.Fragment key={channel.record_id}>
@@ -1064,33 +1259,47 @@ export default function MultiploDisparos() {
                                       />
                                     </td>
                                     <td onClick={() => toggleChannelSelection(channel)} className="fw-medium">
-                                      {channel.account_name || channel.name}
+                                      {channelLast4 || channel.label || channel.account_name || channel.name}
                                     </td>
                                     <td onClick={() => toggleChannelSelection(channel)} className="font-monospace">
                                       {channel.display_phone_number || channel.phone}
                                     </td>
                                     <td className="text-center">
-                                      <span className={getStatusBadgeClass(channel.status)}>
-                                        {getStatusText(channel.status)}
-                                      </span>
+                                      {(() => {
+                                        const { label, color } = mapPhoneStatusApi(statusRaw)
+                                        return (
+                                          <span className="d-inline-flex align-items-center justify-content-center gap-2">
+                                            <span
+                                              className="rounded-circle"
+                                              style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: color }}
+                                              aria-hidden
+                                            />
+                                            <span className="fw-medium">{label}</span>
+                                          </span>
+                                        )
+                                      })()}
                                     </td>
                                     <td className="text-center">
-                                      <div className="d-flex align-items-center justify-content-center">
-                                        <div 
-                                          className="me-2" 
-                                          style={{
-                                            width: '12px', 
-                                            height: '12px', 
-                                            borderRadius: '50%',
-                                            backgroundColor: getQualityColor(channel.quality_rating),
-                                            border: '2px solid rgba(0,0,0,0.1)', 
-                                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                                          }} 
-                                        />
-                                        <small className="text-muted fw-medium">
-                                          {getQualityText(channel.quality_rating)}
-                                        </small>
-                                      </div>
+                                      {(() => {
+                                        const { label, color } = mapQualityApi(qualityRaw)
+                                        return (
+                                          <span className="d-inline-flex align-items-center justify-content-center gap-2">
+                                            <span
+                                              className="rounded-circle"
+                                              style={{
+                                                width: 8,
+                                                height: 8,
+                                                display: 'inline-block',
+                                                backgroundColor: color,
+                                                border: '2px solid rgba(0,0,0,0.1)',
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                                              }}
+                                              aria-hidden
+                                            />
+                                            <span className="fw-medium text-muted">{label}</span>
+                                          </span>
+                                        )
+                                      })()}
                                     </td>
                                     <td className="text-center">
                                       {isSelected && (
@@ -1112,43 +1321,69 @@ export default function MultiploDisparos() {
                                     <tr>
                                       <td colSpan="6" className="p-0">
                                         <div className="bg-light p-3">
-                                          <h6 className="mb-3">Templates disponíveis para {channel.account_name}:</h6>
+                                          <h6 className="mb-3">Templates disponíveis para {channel.label || channel.account_name || channel.name}:</h6>
                                           {templates.length === 0 ? (
                                             <p className="text-muted mb-0">Nenhum template encontrado para este canal.</p>
                                           ) : (
-                                            <div className="row">
-                                              {templates.map((template) => (
-                                                <div key={template.record_id} className="col-12 mb-2">
-                                                  <div className="form-check">
-                                                    <input 
-                                                      className="form-check-input" 
-                                                      type="radio" 
-                                                      name={`template_${channel.record_id}`} 
-                                                      id={`template_${channel.record_id}_${template.record_id}`} 
-                                                      checked={selectedTemplates[channel.record_id]?.record_id === template.record_id} 
-                                                      onChange={() => selectTemplate(channel.record_id, template)} 
-                                                      style={{ cursor: 'pointer' }} 
-                                                    />
-                                                    <label 
-                                                      className="form-check-label d-flex align-items-center justify-content-between w-100" 
-                                                      htmlFor={`template_${channel.record_id}_${template.record_id}`} 
-                                                      style={{ cursor: 'pointer' }}
-                                                    >
-                                                      <div>
-                                                        <strong>{template.name}</strong>
-                                                        <div className="small text-muted mt-1">
-                                                          <span className={getTemplateStatusBadgeClass(template.status)}>
-                                                            {getTemplateStatusText(template.status)}
-                                                          </span>
-                                                          <span className={`${getTemplateCategoryBadgeClass(template.category)} ms-2`}>
-                                                            {getTemplateCategoryText(template.category)}
-                                                          </span>
+                                            <div className="row g-3">
+                                              <div className="col-12 col-md-4">
+                                                {templates.map((template) => (
+                                                  <div key={template.record_id} className="mb-2">
+                                                    <div className="form-check">
+                                                      <input
+                                                        className="form-check-input"
+                                                        type="radio"
+                                                        name={`template_${channel.record_id}`}
+                                                        id={`template_${channel.record_id}_${template.record_id}`}
+                                                        checked={selectedTemplates[channel.record_id]?.record_id === template.record_id}
+                                                        onChange={() => selectTemplate(channel.record_id, template)}
+                                                        style={{ cursor: 'pointer' }}
+                                                      />
+                                                      <label
+                                                        className="form-check-label d-flex align-items-center justify-content-between w-100"
+                                                        htmlFor={`template_${channel.record_id}_${template.record_id}`}
+                                                        style={{ cursor: 'pointer' }}
+                                                      >
+                                                        <div>
+                                                          <strong>{template.name}</strong>
+                                                          <div className="small text-muted mt-1">
+                                                            <span className={getTemplateStatusBadgeClass(template.status)}>
+                                                              {getTemplateStatusText(template.status)}
+                                                            </span>
+                                                            <span className={`${getTemplateCategoryBadgeClass(template.category)} ms-2`}>
+                                                              {getTemplateCategoryText(template.category)}
+                                                            </span>
+                                                          </div>
                                                         </div>
-                                                      </div>
-                                                    </label>
+                                                      </label>
+                                                    </div>
                                                   </div>
+                                                ))}
+                                              </div>
+                                              <div className="col-12 col-md-8">
+                                                <div className="bg-white border rounded p-3 h-100">
+                                                  <div className="d-flex align-items-center justify-content-between mb-2">
+                                                    <div className="fw-semibold">Mensagem do template</div>
+                                                    {selectedTemplates[channel.record_id]?.name && (
+                                                      <span className="badge text-bg-secondary">{selectedTemplates[channel.record_id].name}</span>
+                                                    )}
+                                                  </div>
+                                                  {selectedTemplates[channel.record_id] ? (
+                                                    selectedTemplates[channel.record_id]?.message ? (
+                                                      <div
+                                                        className="small"
+                                                        style={{ whiteSpace: 'pre-wrap', maxHeight: '260px', overflowY: 'auto' }}
+                                                      >
+                                                        {selectedTemplates[channel.record_id].message}
+                                                      </div>
+                                                    ) : (
+                                                      <div className="text-muted small">Este template não possui mensagem.</div>
+                                                    )
+                                                  ) : (
+                                                    <div className="text-muted small">Clique em um template para visualizar a mensagem.</div>
+                                                  )}
                                                 </div>
-                                              ))}
+                                              </div>
                                             </div>
                                           )}
                                         </div>

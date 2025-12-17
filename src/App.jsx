@@ -156,6 +156,14 @@ function App() {
           }
         />
         <Route
+          path="/disparador/disparar-whats"
+          element={
+            <ProtectedRoute roles={['Master']}>
+              <MultiploDisparos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/disparador/configurar-bm"
           element={
             <ProtectedRoute roles={['Master']}>

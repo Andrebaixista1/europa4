@@ -30,7 +30,10 @@ export default function SidebarNav() {
       items.push({
         label: 'Disparador',
         icon: 'FiZap',
-        children: [{ label: 'Configurar BM', to: '/disparador/configurar-bm' }]
+        children: [
+          { label: 'Disparar Whats', to: '/disparador/disparar-whats' },
+          { label: 'Configurar BM', to: '/disparador/configurar-bm' }
+        ]
       })
     }
 

@@ -200,7 +200,7 @@ function valueForKey(key, value) {
       return (
         <span className="d-inline-flex align-items-center gap-2">
           <span aria-hidden style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: '#ef4444', boxShadow: '0 0 0 2px rgba(239,68,68,0.25)' }} />
-          Nao verificado
+          Não verificado
         </span>
       )
     }
@@ -534,7 +534,7 @@ export default function GeradorSitesV3() {
     const uniq = new Set()
     for (const o of list) {
       const rawPhone = Array.isArray(o?.display_phone_number) ? (o.display_phone_number?.[0] ?? null) : o?.display_phone_number
-      if (!rawPhone) continue // Sem Telefone nao conta
+      if (!rawPhone) continue // Sem Telefone não conta
       // Usa id[1] como identificador unico do telefone quando existir; senao, usa apenas digitos
       const secId = Array.isArray(o?.id) && o.id.length > 1 ? (o.id[1] ?? null) : null
       const key = secId != null && String(secId).trim() !== ''
@@ -577,7 +577,7 @@ export default function GeradorSitesV3() {
                 className="__warn_tip"
                 style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 8, background: 'rgba(17,24,39,0.98)', color: '#e5e7eb', border: '1px solid rgba(148,163,184,0.25)', borderRadius: 8, padding: '6px 8px', fontSize: 12, maxWidth: 260, zIndex: 13000, whiteSpace: 'normal', textAlign: 'left', boxShadow: '0 8px 24px rgba(0,0,0,0.35)', pointerEvents: 'none', opacity: 0 }}
               >
-                Nao e nenhum problema, porem vi que ha mais numeros conectados alem do aconselhado para esta BM
+                Não é nenhum problema, porém vi que há mais números conectados além do aconselhado para esta BM
                 <span aria-hidden style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid rgba(17,24,39,0.98)' }} />
               </span>
               <style>{`.con-cell:hover .__warn_tip{opacity:1}`}</style>
@@ -598,7 +598,7 @@ export default function GeradorSitesV3() {
               className="__warn_tip"
               style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 8, background: 'rgba(17,24,39,0.98)', color: '#e5e7eb', border: '1px solid rgba(148,163,184,0.25)', borderRadius: 8, padding: '6px 8px', fontSize: 12, maxWidth: 260, zIndex: 13000, whiteSpace: 'normal', textAlign: 'left', boxShadow: '0 8px 24px rgba(0,0,0,0.35)', pointerEvents: 'none', opacity: 0 }}
             >
-              Nao e nenhum problema, porem vi que ha mais numeros conectados alem do aconselhado para esta BM
+              Não é nenhum problema, porém vi que há mais números conectados além do aconselhado para esta BM
               <span aria-hidden style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid rgba(17,24,39,0.98)' }} />
             </span>
             <style>{`.con-cell:hover .__warn_tip{opacity:1}`}</style>

@@ -17,7 +17,7 @@ const badgeClass = (status) => {
   const s = (status || '').toLowerCase()
   if (s.includes('verificado')) return 'text-bg-success'
   if (s.includes('ban')) return 'text-bg-danger'
-  if (s.includes('nao') || s.includes('nao')) return 'text-bg-secondary'
+  if (s.includes('não') || s.includes('nao')) return 'text-bg-secondary'
   return 'text-bg-warning'
 }
 
@@ -461,7 +461,7 @@ export default function UsuariosBmControles() {
                               <div>
                                 <div className="text-uppercase small opacity-75 mb-1">BM #{bm.id}</div>
                                 <div className="fw-bold">{bm.nome}</div>
-                                <div className="small text-secondary">Criacao BM: {formatDateTime(bm.criacao_bm)}</div>
+                                <div className="small text-secondary">Criação BM: {formatDateTime(bm.criacao_bm)}</div>
                               </div>
                             </div>
                             <div className="d-flex align-items-center gap-2">
@@ -493,7 +493,7 @@ export default function UsuariosBmControles() {
                                       <div>
                                         <div className="fw-semibold">{port.nome}</div>
                                         <div className="small text-secondary">
-                                          Limite: {port.limite} • Criacao: {formatDateTime(port.criacao_port)}
+                                          Limite: {port.limite} • Criação: {formatDateTime(port.criacao_port)}
                                         </div>
                                       </div>
                                       <span className={`badge ${badgeClass(port.status_port)}`}>{port.status_port}</span>
@@ -504,8 +504,8 @@ export default function UsuariosBmControles() {
                                         <thead>
                                           <tr>
                                             <th className="small text-uppercase text-secondary">Telefone</th>
-                                            <th className="small text-uppercase text-secondary">Cartao</th>
-                                            <th className="small text-uppercase text-secondary">Status phone</th>
+                                            <th className="small text-uppercase text-secondary">Cartão</th>
+                                            <th className="small text-uppercase text-secondary">Status do telefone</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -633,8 +633,8 @@ export default function UsuariosBmControles() {
                             onChange={(e) => handlePortifolioChange(idx, 'status', e.target.value)}
                           >
                             <option value="Verificado">Verificado</option>
-                            <option value="Nao verificado">Nao verificado</option>
-                            <option value="Em analise">Em analise</option>
+                            <option value="Nao verificado">Não verificado</option>
+                            <option value="Em analise">Em análise</option>
                             <option value="Rejeitado">Rejeitado</option>
                             <option value="Restrito">Restrito</option>
                           </select>
@@ -678,7 +678,7 @@ export default function UsuariosBmControles() {
                           {(p.telefones || []).map((t, tIdx) => (
                             <div key={tIdx} className="row g-2 align-items-end">
                               <div className="col-12 col-md-4">
-                                <label className="form-label small">Numero *</label>
+                                <label className="form-label small">Número *</label>
                                 <input
                                   className="form-control"
                                   value={t.numero}
@@ -695,14 +695,14 @@ export default function UsuariosBmControles() {
                                   onChange={(e) => handleTelefoneChange(idx, tIdx, 'status', e.target.value)}
                                 >
                                   <option value="Verificado">Verificado</option>
-                                  <option value="Nao verificado">Nao verificado</option>
-                                  <option value="Em analise">Em analise</option>
+                                  <option value="Nao verificado">Não verificado</option>
+                                  <option value="Em analise">Em análise</option>
                                   <option value="Rejeitado">Rejeitado</option>
                                   <option value="Restrito">Restrito</option>
                                 </select>
                               </div>
                               <div className="col-12 col-md-3">
-                                <label className="form-label small">Cartao *</label>
+                                <label className="form-label small">Cartão *</label>
                                 <select
                                   className="form-select"
                                   value={t.cartao}
@@ -710,7 +710,7 @@ export default function UsuariosBmControles() {
                                 >
                                   <option value="OK">OK</option>
                                   <option value="Sem Saldo">Sem Saldo</option>
-                                  <option value="Nao Cadastrado">Nao Cadastrado</option>
+                                  <option value="Nao Cadastrado">Não cadastrado</option>
                                 </select>
                               </div>
                               <div className="col-12 col-md-2 d-flex justify-content-end">

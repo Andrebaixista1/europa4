@@ -25,16 +25,16 @@ export default function ConsultaIN100() {
   const [lookupOpen, setLookupOpen] = useState(false)
   const [lookup, setLookup] = useState({
     type: null,            // 'cpf' | 'nb'
-    digits: '',            // nÃºmero enviado
+    digits: '',            // número enviado
     loading: false,
     error: null,
     response: null,        // texto cru (pretty)
-    responseObj: null,     // JSON parseado quando possÃ­vel
+    responseObj: null,     // JSON parseado quando possível
     pairs: [],             // pares chave/valor para tabela (fallback)
     curatedList: [],       // lista de linhas curadas para tabela principal
-    continueTarget: null,  // 'cpf' | 'nb' que serÃ¡ preenchido ao continuar
-    continueDigits: null,  // legado (nÃ£o utilizado nas linhas)
-    notFound: false,       // quando nenhuma informaÃ§Ã£o Ãºtil for retornada
+    continueTarget: null,  // 'cpf' | 'nb' que será preenchido ao continuar
+    continueDigits: null,  // legado (não utilizado nas linhas)
+    notFound: false,       // quando nenhuma informação útil for retornada
   })
 
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
@@ -59,8 +59,8 @@ export default function ConsultaIN100() {
     }
     return payload
   }
-  // Carrega saldos do usuÃ¡rio para preencher os cards
-  // Carrega saldos do usuÃ¡rio para preencher os cards
+  // Carrega saldos do usuário para preencher os cards
+  // Carrega saldos do usuário para preencher os cards
   const fetchSaldoUsuario = async () => {
     if (!user || !user.id) return
     try {
@@ -89,7 +89,7 @@ export default function ConsultaIN100() {
         realizadas: num(item.consultas_realizada ?? item.consultas_realizadas ?? item.realizadas ?? item.qtd_consultas),
       })
     } catch (_) {
-      // silencia erros para nÃ£o travar a UI
+      // silencia erros para não travar a UI
     }
   }
 
@@ -135,7 +135,7 @@ export default function ConsultaIN100() {
     return out
   }
 
-  // FormataÃ§Ã£o de data: usa parsing estrito do componente YYYY-MM-DD (sem efeito de timezone)
+  // Formatação de data: usa parsing estrito do componente YYYY-MM-DD (sem efeito de timezone)
   const parseISODateParts = (value) => {
     const m = String(value || '').match(/(\d{4})-(\d{2})-(\d{2})/)
     return m ? { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) } : null
@@ -162,15 +162,15 @@ export default function ConsultaIN100() {
     return age
   }
   const brCurrency = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n || 0))
-  const mapPensao = (v) => (v === 'not_payer' ? 'nao pensionista' : v || '-')
-  const mapBloqueio = (v) => (v === 'not_blocked' ? 'nao bloqueado' : v || '-')
+  const mapPensao = (v) => (v === 'not_payer' ? 'Não pensionista' : v || '-')
+  const mapBloqueio = (v) => (v === 'not_blocked' ? 'Não bloqueado' : v || '-')
   const mapTipoCredito = (v) => {
     if (!v) return '-'
-    if (v === 'magnetic_card') return 'Cartao magnetico'
+    if (v === 'magnetic_card') return 'Cartão magnético'
     if (v === 'checking_account') return 'Conta Corrente'
     return v
   }
-  const mapSituacao = (v) => (v === 'elegible' ? 'Elegivel' : v || '-')
+  const mapSituacao = (v) => (v === 'elegible' ? 'Elegível' : v || '-')
 
   const copyToClipboard = async (text, successMsg = 'Copiado!') => {
     try {
@@ -222,10 +222,10 @@ export default function ConsultaIN100() {
     const isCpf = kind === 'cpf'
     const raw = isCpf ? cpf : beneficio
     const digits = (raw || '').replace(/\D/g, '')
-    // Na lupa, permitir busca parcial para CPF e NB (mÃ­nimo 1 dÃ­gito)
-    if (isCpf && digits.length === 0) return notify.warn('Informe pelo menos 1 digito do CPF para pesquisar.')
-    // Para NB na lupa, tambÃ©m permitir menos de 10 dÃ­gitos (busca parcial)
-    if (!isCpf && digits.length === 0) return notify.warn('Informe pelo menos 1 digito do Beneficio para pesquisar.')
+    // Na lupa, permitir busca parcial para CPF e NB (mínimo 1 dígito)
+    if (isCpf && digits.length === 0) return notify.warn('Informe pelo menos 1 dígito do CPF para pesquisar.')
+    // Para NB na lupa, também permitir menos de 10 dígitos (busca parcial)
+    if (!isCpf && digits.length === 0) return notify.warn('Informe pelo menos 1 dígito do benefício para pesquisar.')
 
     setLookup({
       type: kind,
@@ -290,7 +290,7 @@ export default function ConsultaIN100() {
       // Curadoria: extrai campos principais e monta lista organizada (suporta array)
       const toCuratedList = (obj) => {
         if (!obj) return []
-        // funÃ§Ã£o para buscar valor por chaves comuns
+        // função para buscar valor por chaves comuns
         const extractAny = function walk(o, keys) {
           const lower = keys.map(k => k.toLowerCase())
           const visit = (val) => {
@@ -325,7 +325,7 @@ export default function ConsultaIN100() {
       const continueTarget = kind === 'nb' ? 'cpf' : 'nb'
       let curatedList = []
       if (json) curatedList = toCuratedList(json)
-      // Fallback: tenta extrair um Ãºnico dÃ­gito quando a estrutura nÃ£o estÃ¡ clara
+      // Fallback: tenta extrair um único dígito quando a estrutura não está clara
       let continueDigits = null
       if (!curatedList.length) {
         if (continueTarget === 'cpf') continueDigits = extractDigitsFromObj(json, ['cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) || findDigitsInText(text, 11)
@@ -356,9 +356,9 @@ export default function ConsultaIN100() {
     const MOCK_BEN = '2128805508'
     if (digits === MOCK_CPF) {
       setBeneficio(formatBeneficio(MOCK_BEN))
-      notify.success('Beneficio localizado na Macica e preenchido automaticamente.')
+      notify.success('Benefício localizado na Maciça e preenchido automaticamente.')
     } else {
-      notify.info('Nenhum Beneficio localizado na Macica para este CPF (mock).')
+      notify.info('Nenhum benefício localizado na Maciça para este CPF (mock).')
     }
   }
 
@@ -373,7 +373,7 @@ export default function ConsultaIN100() {
       const digits = cpf.replace(/\D/g, '')
       const benDigits = beneficio.replace(/\D/g, '')
       if (digits.length !== 11) return notify.warn('Informe um CPF valido (11 digitos).')
-      if (benDigits.length !== 10) return notify.warn('Informe um Beneficio valido (10 digitos).')
+      if (benDigits.length !== 10) return notify.warn('Informe um benefício válido (10 dígitos).')
       loader.begin()
       try {
         if (online) {
@@ -483,7 +483,7 @@ export default function ConsultaIN100() {
             conta_desembolso: d.conta_desembolso || null,
             digito_desembolso: d.digito_desembolso || null,
             numero_portabilidades: d.numero_portabilidades ?? 0,
-            resposta_api: d.resposta_api || 'Concluido',
+            resposta_api: d.resposta_api || 'Concluído',
             status_api: d.status_api || 'Sucesso',
             tipo: 'online',
           }
@@ -493,7 +493,7 @@ export default function ConsultaIN100() {
             try { setBancoInfo(await fetchBanco(mapped.banco_desembolso)) } catch { setBancoInfo(null) }
           }
 
-          // 3) ApÃ³s a resposta final, atualiza os saldos agregados (cards)
+          // 3) Após a resposta final, atualiza os saldos agregados (cards)
           await fetchSaldoUsuario()
           loader.end()
           notify.success('Consulta online concluida', { autoClose: 15000 })
@@ -526,7 +526,7 @@ export default function ConsultaIN100() {
             return
           }
         }
-        // validar formato mÃ­nimo esperado
+        // validar formato mínimo esperado
         if (!(typeof o.id !== 'undefined' && o.numero_beneficio && o.numero_documento && o.nome)) {
           throw new Error('Resposta incompleta (offline)')
         }
@@ -560,7 +560,7 @@ export default function ConsultaIN100() {
           conta_desembolso: o.conta_desembolso || null,
           digito_desembolso: o.digito_desembolso || null,
           numero_portabilidades: o.numero_portabilidades ?? 0,
-          resposta_api: o.resposta_api || 'Concluido',
+          resposta_api: o.resposta_api || 'Concluído',
           status_api: o.status_api || 'Sucesso',
           tipo: 'offline',
         }
@@ -603,7 +603,7 @@ export default function ConsultaIN100() {
         conta_desembolso: null,
         digito_desembolso: null,
         status_api: 'Sucesso',
-        resposta_api: 'Concluido',
+        resposta_api: 'Concluído',
         data_consulta: '2025-09-22T11:20:00.000Z',
         data_retorno_consulta: '2025-09-22T11:20:00.000Z',
         nome_representante_legal: null,
@@ -631,7 +631,7 @@ export default function ConsultaIN100() {
             </Link>
             <div>
               <h2 className="fw-bold mb-1">Consulta Individual (IN100)</h2>
-              <div className="opacity-75 small">Faca buscas individuais por CPF e Beneficio</div>
+              <div className="opacity-75 small">Faça buscas individuais por CPF e benefício</div>
             </div>
           </div>
         </div>
@@ -645,7 +645,7 @@ export default function ConsultaIN100() {
                   <div className="display-6 fw-bold">{metrics.totalCarregado}</div>
                 </div>
                 <div>
-                  <div className="small text-uppercase opacity-75">{'Disponivel'}</div>
+                    <div className="small text-uppercase opacity-75">{'Disponível'}</div>
                   <div className="display-6 fw-bold">{metrics.disponivel}</div>
                 </div>
                 <div>
@@ -673,7 +673,7 @@ export default function ConsultaIN100() {
                   <button
                     type="button"
                     className="btn btn-outline-secondary d-flex align-items-center"
-                    title="nao sabe o NB/CPF do cliente? Digite uma das informacoes e tentamos buscar no nosso banco de dados"
+                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
                     aria-label="Buscar NB/CPF no nosso banco de dados"
                     data-bs-toggle="tooltip"
                     data-bs-placement="top"
@@ -681,12 +681,12 @@ export default function ConsultaIN100() {
                   >
                     <FiSearch />
                   </button>
-                  {/* botÃ£o de copiar CPF removido conforme solicitaÃ§Ã£o */}
+                  {/* botão de copiar CPF removido conforme solicitação */}
                 </div>
               </div>
 
               <div className="mb-3">
-                <label className="form-label">Beneficio</label>
+                <label className="form-label">Benefício</label>
                 <div className="input-group align-items-stretch">
                   <input
                     type="text"
@@ -700,7 +700,7 @@ export default function ConsultaIN100() {
                   <button
                     type="button"
                     className="btn btn-outline-secondary d-flex align-items-center"
-                    title="nao sabe o NB/CPF do cliente? Digite uma das informacoes e tentamos buscar no nosso banco de dados"
+                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
                     aria-label="Buscar NB/CPF no nosso banco de dados"
                     data-bs-toggle="tooltip"
                     data-bs-placement="top"
@@ -708,7 +708,7 @@ export default function ConsultaIN100() {
                   >
                     <FiSearch />
                   </button>
-                  {/* botÃ£o de copiar NB removido conforme solicitaÃ§Ã£o */}
+                  {/* botão de copiar NB removido conforme solicitação */}
                 </div>
               </div>
 
@@ -730,18 +730,18 @@ export default function ConsultaIN100() {
             <div className="modal-dialog modal-dialog-centered modal-xl" style={{ maxWidth: 'min(95vw, 1100px)' }}>
               <div className="modal-content modal-dark">
                 <div className="modal-header">
-                  <h5 className="modal-title">Busca por {lookup.type === 'cpf' ? 'CPF' : 'Beneficio'}</h5>
+                  <h5 className="modal-title">Busca por {lookup.type === 'cpf' ? 'CPF' : 'Benefício'}</h5>
                   <button type="button" className="btn-close" aria-label="Close" disabled={lookup.loading} onClick={() => setLookupOpen(false)}></button>
                 </div>
                 <div className="modal-body">
                   <div className="mb-2">
-                    <div className="form-label mb-0">numero informado</div>
+                    <div className="form-label mb-0">Número informado</div>
                     <div className="fw-semibold">{lookup.digits}</div>
                   </div>
                   {lookup.loading && (
                     <div className="d-flex align-items-center gap-2">
                       <div className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-                      <span>Aguardando resposta do servico...</span>
+                      <span>Aguardando resposta do serviço...</span>
                     </div>
                   )}
                   {lookup.error && (
@@ -752,7 +752,7 @@ export default function ConsultaIN100() {
                       <div className="form-label mb-2">Resposta</div>
                       {lookup.notFound ? (
                         <div className="alert alert-warning mb-2" role="alert">
-                          Cliente nao encontrado para o {lookup.type === 'cpf' ? 'CPF' : 'NB'} informado.
+                          Cliente não encontrado para o {lookup.type === 'cpf' ? 'CPF' : 'NB'} informado.
                         </div>
                       ) : (
                         <div className="table-responsive">
@@ -764,7 +764,7 @@ export default function ConsultaIN100() {
                                 <th>Nascimento</th>
                                 <th>CPF</th>
                                 <th>Idade</th>
-                                <th>Acao</th>
+                                <th>Ação</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -793,7 +793,7 @@ export default function ConsultaIN100() {
                                           if (nbNorm.length !== 10) { notify.warn('NB invalido para continuar'); return }
                                           const current = beneficio.replace(/\D/g, '')
                                           if (current === nbNorm) { notify.info('NB ja presente na pesquisa') }
-                                          else { setBeneficio(formatBeneficio(nbNorm)); notify.success('NB adicionado a pesquisa') }
+                                          else { setBeneficio(formatBeneficio(nbNorm)); notify.success('NB adicionado à pesquisa') }
                                         }
                                         setLookupOpen(false)
                                         setLookup({ type: null, digits: '', loading: false, error: null, response: null, responseObj: null, pairs: [], curatedList: [], continueTarget: null, continueDigits: null, notFound: false })
@@ -808,7 +808,7 @@ export default function ConsultaIN100() {
                           </table>
                         </div>
                       )}
-                      {/* Detalhes brutos em fallback quando necessÃ¡rio */}
+                      {/* Detalhes brutos em fallback quando necessário */}
                       {(lookup.pairs?.length ?? 0) > 0 && (
                         <details>
                           <summary className="small mb-1">Ver detalhes brutos</summary>
@@ -837,7 +837,7 @@ export default function ConsultaIN100() {
                         </details>
                       )}
                       <div className="form-text mt-1">
-                        {lookup.continueTarget === 'cpf' ? 'Ao continuar, o CPF sera preenchido se identificado.' : 'Ao continuar, o Beneficio sera preenchido se identificado.'}
+                        {lookup.continueTarget === 'cpf' ? 'Ao continuar, o CPF será preenchido se identificado.' : 'Ao continuar, o Benefício será preenchido se identificado.'}
                       </div>
                     </div>
                   )}
@@ -872,8 +872,8 @@ export default function ConsultaIN100() {
                 <div className="row g-3">
                   <div className="col-12 col-md-6">
                     <div className="neo-card p-3 h-100">
-                      <div className="fw-semibold mb-2">Informacoes Basicas</div>
-                      <div className="small opacity-75">Beneficio:</div>
+                      <div className="fw-semibold mb-2">Informações básicas</div>
+                      <div className="small opacity-75">Benefício:</div>
                       <div className="mb-2">{resultado.numero_beneficio}</div>
                       <div className="small opacity-75">CPF:</div>
                       <div className="mb-2">{resultado.numero_documento}</div>
@@ -886,7 +886,7 @@ export default function ConsultaIN100() {
 
                   <div className="col-12 col-md-6">
                     <div className="neo-card p-3 h-100">
-                      <div className="fw-semibold mb-2">Informacoes Pessoais</div>
+                      <div className="fw-semibold mb-2">Informações pessoais</div>
                       <div className="small opacity-75">Pensao:</div>
                       <div className="mb-2">{mapPensao(resultado.pensao)}</div>
                       <div className="small opacity-75">Data de Nascimento:</div>
@@ -900,44 +900,44 @@ export default function ConsultaIN100() {
 
                   <div className="col-12 col-md-6">
                     <div className="neo-card p-3 h-100">
-                      <div className="fw-semibold mb-2">Informacoes do Beneficio</div>
-                      <div className="small opacity-75">Data de Concessao:</div>
+                      <div className="fw-semibold mb-2">Informações do benefício</div>
+                      <div className="small opacity-75">Data de concessão:</div>
                       <div className="mb-2">{formatDate(resultado.data_concessao)}</div>
-                      <div className="small opacity-75">Termino do Beneficio:</div>
+                      <div className="small opacity-75">Término do benefício:</div>
                       <div className="mb-2">{resultado.data_final_beneficio ? formatDate(resultado.data_final_beneficio) : '-'}</div>
-                      <div className="small opacity-75">Tipo de Credito:</div>
+                      <div className="small opacity-75">Tipo de crédito:</div>
                       <div className="mb-2">{mapTipoCredito(resultado.tipo_credito)}</div>
-                      <div className="small opacity-75">Status do Beneficio:</div>
+                      <div className="small opacity-75">Status do benefício:</div>
                       <div>{mapSituacao(resultado.situacao_beneficio)}</div>
                     </div>
                   </div>
 
                   <div className="col-12 col-md-6">
                     <div className="neo-card p-3 h-100">
-                      <div className="fw-semibold mb-2">Informacoes Financeiras</div>
-                      <div className="small opacity-75">Saldo Cartao Beneficio:</div>
+                      <div className="fw-semibold mb-2">Informações financeiras</div>
+                      <div className="small opacity-75">Saldo Cartão Benefício:</div>
                       <div className="mb-2">{brCurrency(resultado.saldo_cartao_beneficio)}</div>
-                      <div className="small opacity-75">Saldo Cartao Consignado:</div>
+                      <div className="small opacity-75">Saldo Cartão Consignado:</div>
                       <div className="mb-2">{brCurrency(resultado.saldo_cartao_consignado)}</div>
-                      <div className="small opacity-75">{'Margem Disponivel'}:</div>
+                      <div className="small opacity-75">{'Margem disponível'}:</div>
                       <div className="mb-2">{brCurrency(resultado.saldo_total_disponivel)}</div>
-                      <div className="small opacity-75">Emprestimos Ativos:</div>
+                      <div className="small opacity-75">Empréstimos ativos:</div>
                       <div>{resultado.numero_portabilidades}</div>
                     </div>
                   </div>
 
                   <div className="col-12 col-md-6">
                     <div className="neo-card p-3 h-100">
-                      <div className="fw-semibold mb-2">Informacoes Bancarias</div>
+                      <div className="fw-semibold mb-2">Informações bancárias</div>
                       <div className="small opacity-75">Banco de Desembolso:</div>
                       <div className="mb-2">{resultado.banco_desembolso}</div>
                       <div className="small opacity-75">Nome do Banco:</div>
                       <div className="mb-2">{bancoInfo?.name || '-'}</div>
-                      <div className="small opacity-75">Agencia:</div>
+                      <div className="small opacity-75">Agência:</div>
                       <div className="mb-2">{resultado.agencia_desembolso || '-'}</div>
                       <div className="small opacity-75">Conta:</div>
                       <div className="mb-2">{resultado.conta_desembolso || '-'}</div>
-                      <div className="small opacity-75">digito:</div>
+                      <div className="small opacity-75">Dígito:</div>
                       <div>{resultado.digito_desembolso || '-'}</div>
                     </div>
                   </div>
@@ -993,7 +993,7 @@ export default function ConsultaIN100() {
 
             <div className="neo-card p-0 mb-3">
               <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
-                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Informacoes da Matricula</h6>
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Informações da matrícula</h6>
               </div>
               <div className="kv-list p-3 p-md-4">
                 <div className="kv-line">
@@ -1013,19 +1013,19 @@ export default function ConsultaIN100() {
                   </div>
                 </div>
                 <div className="kv-line">
-                  <div className="kv-label">Especie:</div>
+                  <div className="kv-label">Espécie:</div>
                   <div className="kv-value">-</div>
-                  <div className="kv-label">Situacao:</div>
+                  <div className="kv-label">Situação:</div>
                   <div className="kv-value">{resultado.situacao_beneficio ? mapSituacao(resultado.situacao_beneficio) : '-'}</div>
                 </div>
                 <div className="kv-line">
-                  <div className="kv-label">Data de Concessao:</div>
+                  <div className="kv-label">Data de concessão:</div>
                   <div className="kv-value">{resultado.data_concessao ? formatDate(resultado.data_concessao) : '-'}</div>
                   <div className="kv-label">UF:</div>
                   <div className="kv-value">{resultado.estado || '-'}</div>
                 </div>
                 <div className="kv-line">
-                  <div className="kv-label">Data Despacho Beneficio:</div>
+                  <div className="kv-label">Data do despacho do benefício:</div>
                   <div className="kv-value">-</div>
                   <div className="kv-label">Representante / Procurador:</div>
                   <div className="kv-value">{resultado.nome_representante_legal || '-'}</div>
@@ -1041,7 +1041,7 @@ export default function ConsultaIN100() {
               <div className="col-12 col-lg-4">
                 <div className="neo-card stat-card h-100">
                   <div className="p-4">
-                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartao Beneficio:</div>
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartão Benefício:</div>
                     <div className="stat-value">{resultado.saldo_cartao_beneficio != null ? brCurrency(resultado.saldo_cartao_beneficio) : '-'}</div>
                   </div>
                 </div>
@@ -1049,7 +1049,7 @@ export default function ConsultaIN100() {
               <div className="col-12 col-lg-4">
                 <div className="neo-card stat-card h-100">
                   <div className="p-4">
-                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartao Consignado:</div>
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Saldo Cartão Consignado:</div>
                     <div className="stat-value">{resultado.saldo_cartao_consignado != null ? brCurrency(resultado.saldo_cartao_consignado) : '-'}</div>
                   </div>
                 </div>
@@ -1057,7 +1057,7 @@ export default function ConsultaIN100() {
               <div className="col-12 col-lg-4">
                 <div className="neo-card stat-card h-100">
                   <div className="p-4">
-                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem Disponivel:</div>
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disponível:</div>
                     <div className="stat-value">{resultado.saldo_total_disponivel != null ? brCurrency(resultado.saldo_total_disponivel) : '-'}</div>
                   </div>
                 </div>
@@ -1066,7 +1066,7 @@ export default function ConsultaIN100() {
 
             <div className="neo-card p-0 mb-4">
               <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
-                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados Bancarios</h6>
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados bancários</h6>
               </div>
               <div className="kv-list p-3 p-md-4">
                 <div className="kv-line">
@@ -1076,15 +1076,15 @@ export default function ConsultaIN100() {
                   <div className="kv-value">{bancoInfo?.name || '-'}</div>
                 </div>
                 <div className="kv-line">
-                  <div className="kv-label">Agencia:</div>
+                  <div className="kv-label">Agência:</div>
                   <div className="kv-value">{resultado.agencia_desembolso || '-'}</div>
                   <div className="kv-label">Conta:</div>
                   <div className="kv-value">{resultado.conta_desembolso || '-'}</div>
                 </div>
                 <div className="kv-line">
-                  <div className="kv-label">digito:</div>
+                  <div className="kv-label">Dígito:</div>
                   <div className="kv-value">{resultado.digito_desembolso || '-'}</div>
-                  <div className="kv-label">Tipo de Credito:</div>
+                  <div className="kv-label">Tipo de crédito:</div>
                   <div className="kv-value">{resultado.tipo_credito ? mapTipoCredito(resultado.tipo_credito) : '-'}</div>
                 </div>
               </div>
