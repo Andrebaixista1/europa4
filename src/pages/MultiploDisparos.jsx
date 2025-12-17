@@ -267,6 +267,7 @@ export default function MultiploDisparos() {
             if (!info) return row
             return {
               ...row,
+              graph_verified_name: info.verified_name,
               graph_status: info.status,
               graph_quality_rating: info.quality_rating
             }
@@ -1230,6 +1231,7 @@ export default function MultiploDisparos() {
                                   )}
                                 </div>
                               </th>
+                              <th className="fw-bold">BM Nome</th>
                               <th className="fw-bold">Final (4 dígitos)</th>
                               <th className="fw-bold">Número</th>
                               <th className="fw-bold text-center">Status (API)</th>
@@ -1243,6 +1245,7 @@ export default function MultiploDisparos() {
                               const isExpanded = expandedChannels.has(channel.record_id)
                               const templates = channelTemplates[channel.record_id] || []
                               const channelLast4 = getLast4Digits(channel.phone_number_raw || channel.display_phone_number || channel.phone)
+                              const bmNomeRaw = String(channel.graph_verified_name || '').trim()
                               const statusRaw = String(channel.graph_status || channel.status || '').trim()
                               const qualityRaw = String(channel.graph_quality_rating || channel.quality_rating || '').trim()
                               
@@ -1257,6 +1260,9 @@ export default function MultiploDisparos() {
                                         onChange={() => toggleChannelSelection(channel)} 
                                         style={{ cursor: 'pointer' }} 
                                       />
+                                    </td>
+                                    <td onClick={() => toggleChannelSelection(channel)} className="fw-medium text-truncate" title={bmNomeRaw || ''}>
+                                      {bmNomeRaw || '-'}
                                     </td>
                                     <td onClick={() => toggleChannelSelection(channel)} className="fw-medium">
                                       {channelLast4 || channel.label || channel.account_name || channel.name}
@@ -1319,7 +1325,7 @@ export default function MultiploDisparos() {
                                   
                                   {isSelected && isExpanded && (
                                     <tr>
-                                      <td colSpan="6" className="p-0">
+                                      <td colSpan="7" className="p-0">
                                         <div className="bg-light p-3">
                                           <h6 className="mb-3">Templates disponíveis para {channel.label || channel.account_name || channel.name}:</h6>
                                           {templates.length === 0 ? (
