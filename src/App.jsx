@@ -164,6 +164,14 @@ function App() {
           }
         />
         <Route
+          path="/disparador/campanhas"
+          element={
+            <ProtectedRoute roles={['Master']}>
+              <AcompanhamentoDisparos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/disparador/configurar-bm"
           element={
             <ProtectedRoute roles={['Master']}>
@@ -187,6 +195,8 @@ function App() {
           </ProtectedRoute>
         }
       /> */}
+        <Route path="/disparos/multiplos" element={<Navigate to="/disparador/disparar-whats" replace />} />
+        <Route path="/disparos/acompanhamento" element={<Navigate to="/disparador/campanhas" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

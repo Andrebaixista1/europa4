@@ -32,6 +32,7 @@ export default function SidebarNav() {
         icon: 'FiZap',
         children: [
           { label: 'Disparar Whats', to: '/disparador/disparar-whats' },
+          { label: 'Campanhas', to: '/disparador/campanhas' },
           { label: 'Configurar BM', to: '/disparador/configurar-bm' }
         ]
       })

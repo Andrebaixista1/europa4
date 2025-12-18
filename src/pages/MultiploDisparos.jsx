@@ -242,11 +242,13 @@ export default function MultiploDisparos() {
         const status = derivePhoneStatus(item)
         const quality = item?.telefone_qualidade || item?.quality_rating || 'UNKNOWN'
         const bmNome = String(item?.bm_nome || item?.bmNome || '').trim()
+        const canalId = String(item?.canal_id || item?.canalId || item?.id_canal || '').trim()
 
         if (!phoneMap.has(String(phoneId))) {
           phoneMap.set(String(phoneId), {
             record_id: String(phoneId),
             phone_id: String(phoneId),
+            canal_id: canalId,
             bm_nome: bmNome,
             bm_token: token,
             label,
@@ -255,14 +257,16 @@ export default function MultiploDisparos() {
             status: String(status || ''),
             quality_rating: String(quality || 'UNKNOWN'),
           })
-        } else if (bmNome || token) {
+        } else if (bmNome || token || canalId) {
           const existing = phoneMap.get(String(phoneId))
           if (!existing) return
           const needsBmNome = bmNome && !String(existing?.bm_nome || '').trim()
           const needsToken = token && !String(existing?.bm_token || '').trim()
-          if (needsBmNome || needsToken) {
+          const needsCanalId = canalId && !String(existing?.canal_id || '').trim()
+          if (needsBmNome || needsToken || needsCanalId) {
             phoneMap.set(String(phoneId), {
               ...existing,
+              ...(needsCanalId ? { canal_id: canalId } : {}),
               ...(needsBmNome ? { bm_nome: bmNome } : {}),
               ...(needsToken ? { bm_token: token } : {})
             })
@@ -755,6 +759,7 @@ export default function MultiploDisparos() {
         
         return {
           channel: `${channel.label || channel.account_name || 'Final Fone'} - ${channel.display_phone_number || ''}`.trim(),
+          canal_id: channel.canal_id || '',
           phone_id: channel.phone_id || channel.record_id,
           display_phone_number: channel.display_phone_number,
           bm_token: channel.bm_token || '',

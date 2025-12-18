@@ -18,13 +18,13 @@
       "title": "Múltiplos Disparos",
       "description": "Configure e agende múltiplos disparos em massa para diferentes canais.",
       "icon": "FiSend",
-      "route": "/disparos/multiplos"
+      "route": "/disparador/disparar-whats"
     },
     {
       "title": "Acompanhamento de Disparos",
       "description": "Monitore e acompanhe o status de todos os seus disparos agendados.",
       "icon": "FiActivity",
-      "route": "/disparos/acompanhamento"
+      "route": "/disparador/campanhas"
     }
   ],
   "Em Desenvolvimento": [

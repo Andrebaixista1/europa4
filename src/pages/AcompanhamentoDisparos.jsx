@@ -84,15 +84,62 @@ export default function AcompanhamentoDisparos() {
   }
 
   const normalizeStatus = (value) => {
-    if (value === null || value === undefined) return 4
-    if (typeof value === 'string') {
-      const trimmed = value.trim().toLowerCase()
-      if (!trimmed || trimmed === 'null' || trimmed === 'sem template') {
-        return 4
-      }
-    }
+    if (value === null || value === undefined) return null
     const numeric = Number(value)
-    return Number.isNaN(numeric) ? value : numeric
+    if (!Number.isNaN(numeric) && Number.isFinite(numeric)) return numeric
+    const str = String(value).trim().toLowerCase()
+    if (!str || str === 'null') return null
+
+    if (str === 'sem template' || str === 'sem_template' || str === 'no template' || str === 'no_template') return 4
+
+    if (
+      str === 'enviado' ||
+      str === 'enviada' ||
+      str === 'sent' ||
+      str === 'success' ||
+      str === 'sucesso' ||
+      str === 'ok'
+    ) {
+      return 1
+    }
+
+    if (
+      str === 'erro' ||
+      str === 'error' ||
+      str === 'falha' ||
+      str === 'failed' ||
+      str === 'failure'
+    ) {
+      return 2
+    }
+
+    if (
+      str === 'trabalhando' ||
+      str === 'processando' ||
+      str === 'working' ||
+      str === 'enviando' ||
+      str === 'em andamento'
+    ) {
+      return 3
+    }
+
+    if (
+      str === 'pendente' ||
+      str === 'pending' ||
+      str === 'aguardando' ||
+      str === 'agendado' ||
+      str === 'scheduled'
+    ) {
+      return 0
+    }
+
+    if (str.includes('envi')) return 1
+    if (str.includes('erro') || str.includes('fail') || str.includes('falha')) return 2
+    if (str.includes('trabal') || str.includes('process') || str.includes('andamento') || str.includes('enviando'))
+      return 3
+    if (str.includes('pend') || str.includes('agend') || str.includes('aguard')) return 0
+
+    return null
   }
 
   const normalizeTemplate = (value) => {
@@ -102,6 +149,73 @@ export default function AcompanhamentoDisparos() {
       return 'Sem template'
     }
     return str
+  }
+
+  const pickNonEmpty = (...values) => {
+    for (const value of values) {
+      if (value === null || value === undefined) continue
+      const str = String(value).trim()
+      if (!str || str.toLowerCase() === 'null') continue
+      return value
+    }
+    return null
+  }
+
+  const normalizeTrackingItem = (raw) => {
+    const campanha = String(pickNonEmpty(raw?.campanha, raw?.nameBatch, raw?.batchName, raw?.nomeBatch, raw?.campaign) || '').trim()
+    const templateRaw = pickNonEmpty(raw?.template, raw?.modelo_nome, raw?.templateName, raw?.nomeTemplate, raw?.template_nome)
+    const templateNormalized = normalizeTemplate(templateRaw)
+
+    const statusRaw = pickNonEmpty(raw?.sendStatus, raw?.status, raw?.send_status, raw?.status_envio)
+    const statusCode = normalizeStatus(statusRaw)
+    const sendStatus = templateNormalized === 'Sem template' ? 4 : statusCode ?? 0
+
+    const phone = pickNonEmpty(raw?.phone_client, raw?.phoneClient, raw?.phone, raw?.telefone, raw?.numero) || ''
+    const name = pickNonEmpty(raw?.nomeCliente, raw?.name, raw?.nome, raw?.cliente) || ''
+    const scheduledDateTime = pickNonEmpty(raw?.agendamento, raw?.scheduledDateTime, raw?.scheduled_date_time, raw?.dataAgendada, raw?.data_agendada)
+    const createdAt = pickNonEmpty(raw?.criado_em, raw?.createdAt, raw?.created_at, raw?.dataCriacao, raw?.data_criacao)
+
+    return {
+      ...raw,
+      nameBatch: campanha || raw?.nameBatch,
+      template: templateRaw ?? raw?.template,
+      sendStatus,
+      phone: phone ?? raw?.phone,
+      name: name ?? raw?.name,
+      scheduledDateTime: scheduledDateTime ?? raw?.scheduledDateTime,
+      criado_em: createdAt ?? raw?.criado_em
+    }
+  }
+
+  const buildCampanhasFromItems = (list) => {
+    const arr = Array.isArray(list) ? list : []
+    const grouped = arr.reduce((acc, item) => {
+      const campanha = String(item?.nameBatch || '').trim() || 'Sem nome'
+      if (!acc[campanha]) {
+        acc[campanha] = {
+          nome: campanha,
+          total: 0,
+          enviados: 0,
+          erros: 0,
+          pendentes: 0,
+          semTemplate: 0,
+          items: []
+        }
+      }
+
+      acc[campanha].total++
+      acc[campanha].items.push(item)
+
+      const status = normalizeStatus(item?.sendStatus) ?? 0
+      if (status === 1) acc[campanha].enviados++
+      else if (status === 2) acc[campanha].erros++
+      else if (status === 0 || status === 3) acc[campanha].pendentes++
+      else if (status === 4) acc[campanha].semTemplate++
+
+      return acc
+    }, {})
+
+    return Object.values(grouped)
   }
 
   const fetchData = async () => {
@@ -115,34 +229,9 @@ export default function AcompanhamentoDisparos() {
       }
       const json = await resp.json()
       const arr = Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : Array.isArray(json?.body) ? json.body : []
-      setItems(arr)
-      
-      const grouped = arr.reduce((acc, item) => {
-        const campanha = item.nameBatch || 'Sem nome'
-        if (!acc[campanha]) {
-          acc[campanha] = {
-            nome: campanha,
-            total: 0,
-            enviados: 0,
-            erros: 0,
-            pendentes: 0,
-            semTemplate: 0,
-            items: []
-          }
-        }
-        acc[campanha].total++
-        acc[campanha].items.push(item)
-        
-        const status = normalizeStatus(item.sendStatus)
-        if (status === 1) acc[campanha].enviados++
-        else if (status === 2) acc[campanha].erros++
-        else if (status === 0 || status === 3) acc[campanha].pendentes++
-        else if (status === 4) acc[campanha].semTemplate++
-        
-        return acc
-      }, {})
-      
-      setCampanhas(Object.values(grouped))
+      const normalized = arr.map(normalizeTrackingItem)
+      setItems(normalized)
+      setCampanhas(buildCampanhasFromItems(normalized))
     } catch (e) {
       // setError('Falha ao carregar acompanhamento. Tente novamente mais tarde.')
       console.error('Erro ao buscar tracking:', e)
@@ -287,8 +376,8 @@ export default function AcompanhamentoDisparos() {
   const openModal = (campanha) => {
     setSelectedCampanha(campanha)
     const sorted = [...campanha.items].sort((a, b) => {
-      const dateA = new Date(a.criado_em || 0)
-      const dateB = new Date(b.criado_em || 0)
+      const dateA = parseDateTimeToDate(a.criado_em || a.scheduledDateTime) || new Date(0)
+      const dateB = parseDateTimeToDate(b.criado_em || b.scheduledDateTime) || new Date(0)
       return dateB - dateA
     })
     setModalData(sorted)
@@ -303,6 +392,10 @@ export default function AcompanhamentoDisparos() {
 
   const handleDelete = async () => {
     if (!itemToDelete) return
+    if (!itemToDelete?.id) {
+      notify.warn('Não é possível excluir: item sem ID.')
+      return
+    }
     
     try {
       const resp = await fetch('https://n8n.apivieiracred.store/webhook/tracking-del', {
@@ -319,32 +412,7 @@ export default function AcompanhamentoDisparos() {
       setItems(prev => prev.filter(item => item.id !== itemToDelete.id))
       
       const updatedItems = items.filter(item => item.id !== itemToDelete.id)
-      const grouped = updatedItems.reduce((acc, item) => {
-        const campanha = item.nameBatch || 'Sem nome'
-        if (!acc[campanha]) {
-          acc[campanha] = {
-            nome: campanha,
-            total: 0,
-            enviados: 0,
-            erros: 0,
-            pendentes: 0,
-            semTemplate: 0,
-            items: []
-          }
-        }
-        acc[campanha].total++
-        acc[campanha].items.push(item)
-        
-        const status = normalizeStatus(item.sendStatus)
-        if (status === 1) acc[campanha].enviados++
-        else if (status === 2) acc[campanha].erros++
-        else if (status === 0 || status === 3) acc[campanha].pendentes++
-        else if (status === 4) acc[campanha].semTemplate++
-        
-        return acc
-      }, {})
-      
-      setCampanhas(Object.values(grouped))
+      setCampanhas(buildCampanhasFromItems(updatedItems))
       setShowDeleteModal(false)
       setItemToDelete(null)
       notify.success('Disparo excluído com sucesso!')
@@ -356,9 +424,14 @@ export default function AcompanhamentoDisparos() {
 
   const handleDeleteCampanha = async () => {
     if (!campanhaToDelete) return
+    const itemsWithId = (campanhaToDelete.items || []).filter(item => item?.id)
+    if (itemsWithId.length === 0) {
+      notify.warn('Não é possível excluir: campanha sem IDs de disparo.')
+      return
+    }
     
     try {
-      const deletePromises = campanhaToDelete.items.map(item => 
+      const deletePromises = itemsWithId.map(item => 
         fetch('https://n8n.apivieiracred.store/webhook/tracking-del', {
           method: 'POST',
           headers: {
