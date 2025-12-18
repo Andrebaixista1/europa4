@@ -43,6 +43,37 @@ function parseLooseList(text) {
   return []
 }
 
+function dedupeByCpfNbLogin(list) {
+  const arr = Array.isArray(list) ? list : []
+  const byKey = new Map()
+
+  const ts = (row) => {
+    const t = Date.parse(row?.data_hora_registro ?? '')
+    return Number.isFinite(t) ? t : -Infinity
+  }
+
+  for (const row of arr) {
+    if (!row) continue
+    const cpf = String(row?.numero_documento ?? '').replace(/\D/g, '')
+    const nb = String(row?.numero_beneficio ?? '').replace(/\D/g, '')
+    const login = String(row?.login ?? row?.usuario_nome ?? '').trim().toLowerCase()
+
+    const hasMainKey = Boolean(cpf || nb || login)
+    const key = hasMainKey
+      ? `cpf:${cpf}|nb:${nb}|login:${login}`
+      : [
+          String(row?.data_hora_registro ?? ''),
+          String(row?.status_api ?? '').trim(),
+          String(row?.resposta_api ?? '').trim()
+        ].join('|')
+
+    const prev = byKey.get(key)
+    if (!prev || ts(row) > ts(prev)) byKey.set(key, row)
+  }
+
+  return Array.from(byKey.values()).sort((a, b) => ts(b) - ts(a))
+}
+
 export default function HistoricoConsultas() {
   const { user } = useAuth()
   const [rows, setRows] = useState(null) // null = carregando
@@ -88,7 +119,7 @@ export default function HistoricoConsultas() {
     return () => controller.abort()
   }, [user?.id])
 
-  const items = Array.isArray(rows) ? rows : []
+  const items = useMemo(() => dedupeByCpfNbLogin(rows), [rows])
   const pages = Math.max(1, Math.ceil(items.length / pageSize))
   const currentPage = Math.min(page, pages)
   const pageItems = useMemo(() => {
