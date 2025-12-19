@@ -14,11 +14,14 @@ const parseYmdLocal = (ymd, endOfDay = false) => {
   return new Date(y, m - 1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0)
 }
 
+const CREATED_AT_OFFSET_MS = 3 * 60 * 60 * 1000
+
 const fmtDateTime = (value) => {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+  const adjusted = new Date(date.getTime() + CREATED_AT_OFFSET_MS)
+  return adjusted.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 }
 
 const fmtPhoneBR = (value) => {
@@ -205,8 +208,9 @@ export default function CampanhasZap() {
       if (startSafe || endSafe) {
         const createdAt = new Date(row?.created_at ?? '')
         if (Number.isNaN(createdAt.getTime())) return false
-        if (startSafe && createdAt < startSafe) return false
-        if (endSafe && createdAt > endSafe) return false
+        const createdAtAdjusted = new Date(createdAt.getTime() + CREATED_AT_OFFSET_MS)
+        if (startSafe && createdAtAdjusted < startSafe) return false
+        if (endSafe && createdAtAdjusted > endSafe) return false
       }
       if (!q) return true
       const haystack = [
