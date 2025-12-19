@@ -20,6 +20,7 @@ import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
 import DisparadorConfigBM from './pages/DisparadorConfigBM.jsx'
+import CampanhasZap from './pages/CampanhasZap.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 
@@ -168,6 +169,14 @@ function App() {
           element={
             <ProtectedRoute roles={['Master']}>
               <AcompanhamentoDisparos />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/disparador/campanhas-zap"
+          element={
+            <ProtectedRoute roles={['Master']}>
+              <CampanhasZap />
             </ProtectedRoute>
           }
         />

@@ -9,6 +9,16 @@ function Icon({ name, size = 20 }) {
   return <Comp size={size} />
 }
 
+function SubItemIcon({ child }) {
+  if (child?.iconSrc) {
+    return <img src={child.iconSrc} alt="" className="dash-sub-icon-img" aria-hidden="true" />
+  }
+  if (child?.icon) {
+    return <Icon name={child.icon} size={16} />
+  }
+  return null
+}
+
 export default function SidebarNav() {
   const { user } = useAuth()
   const location = useLocation()
@@ -33,6 +43,11 @@ export default function SidebarNav() {
         children: [
           { label: 'Disparar Whats', to: '/disparador/disparar-whats' },
           { label: 'Campanhas', to: '/disparador/campanhas' },
+          {
+            label: 'Campanhas Zap',
+            to: '/disparador/campanhas-zap',
+            iconSrc: 'https://chat.zapresponder.com.br/assets/logo-fill-707bdf21.svg'
+          },
           { label: 'Configurar BM', to: '/disparador/configurar-bm' }
         ]
       })
@@ -72,7 +87,13 @@ export default function SidebarNav() {
     return items
   }, [role, level])
 
-  const isActive = (path) => path && location.pathname.startsWith(path)
+  const isActive = (path) => {
+    if (!path) return false
+    const current = location.pathname
+    if (path === '/') return current === '/'
+    const normalizedPath = path.endsWith('/') && path !== '/' ? path.slice(0, -1) : path
+    return current === normalizedPath || current.startsWith(`${normalizedPath}/`)
+  }
 
   const handleEnter = () => setCollapsed(false)
   const handleLeave = () => {
@@ -123,8 +144,8 @@ export default function SidebarNav() {
               {item.children && !collapsed && isOpen && (
                 <div className="dash-submenu">
                   {item.children.map((child) => (
-                    <Link key={child.label} to={child.to} className="dash-subitem">
-                      <span className="dash-sub-bullet" aria-hidden />
+                    <Link key={child.label} to={child.to} className={`dash-subitem ${isActive(child.to) ? 'active' : ''}`}>
+                      <SubItemIcon child={child} />
                       <span>{child.label}</span>
                     </Link>
                   ))}

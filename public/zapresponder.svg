@@ -1,0 +1,17 @@
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="zapg" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E" />
+      <stop offset="1" stop-color="#16A34A" />
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="12" r="10" fill="url(#zapg)" />
+  <path
+    d="M9.2 8.4c0.6-0.7 1.5-1.1 2.5-1.1h0.6c2 0 3.7 1.6 3.7 3.7v0.6c0 1-0.4 1.9-1.1 2.5l-0.8 0.8c-0.4 0.4-0.7 0.9-0.8 1.5l-0.2 1.2-2-0.7c-0.6-0.2-1.2-0.2-1.7 0l-1.8 0.6 0.2-1.1c0.1-0.6 0-1.2-0.3-1.7l-0.4-0.7c-0.4-0.7-0.5-1.6-0.3-2.4l0.8-2.6c0.2-0.6 0.5-1.1 0.9-1.6z"
+    fill="rgba(0,0,0,0.18)"
+  />
+  <path
+    d="M14.4 7.7L10 13.2h2.9l-0.6 3.1 4.4-5.5h-2.9l0.6-3.1z"
+    fill="#FFFFFF"
+  />
+</svg>
