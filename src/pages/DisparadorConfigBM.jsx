@@ -209,6 +209,7 @@ export default function DisparadorConfigBM() {
     const v = String(value || '').trim().toLowerCase()
     if (v === 'verified') return { label: 'Verificado', color: '#22c55e' }
     if (v === 'pending') return { label: 'Em análise', color: '#CBD2D9' }
+    if (v === 'rejected') return { label: 'Rejeitado', color: '#ef4444' }
     if (v === 'pending_submission' || v === 'pending_need_more_info' || v === 'not_verified' || v === 'unverified')
       return { label: 'N\u00e3o verificado', color: '#D47B04' }
     return { label: value || '-', color: '#6c757d' }
