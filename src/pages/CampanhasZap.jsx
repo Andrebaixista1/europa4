@@ -81,34 +81,6 @@ const isFailureSendStatus = (canonical) =>
   canonical === 'ACCOUNT_BLOCKED' ||
   canonical === 'USER_NUMBER_IS_PART_OF_AN_EXPE'
 
-const sendStatusPriority = (value) => {
-  const v = canonicalSendStatus(value)
-  if (!v) return 0
-  if (v === 'ANSWERED') return 60
-  if (v === 'READ') return 50
-  if (v === 'SUCCESS') return 40
-  if (isFailureSendStatus(v)) return 30
-  if (v === 'SENDING') return 20
-  if (v === 'A ENVIAR') return 10
-  return 0
-}
-
-const uniqueContactsForRows = (rows) => {
-  const map = new Map()
-  for (const row of rows) {
-    if (!row) continue
-    const id = String(row?.id ?? 'Sem ID')
-    const phone = String(row?.client_phone ?? '').replace(/\D/g, '')
-    const name = String(row?.name_client ?? '').trim().toLowerCase()
-    const key = `${id}::${phone || name}`
-    const prev = map.get(key)
-    if (!prev || sendStatusPriority(row?.send_status) > sendStatusPriority(prev?.send_status)) {
-      map.set(key, row)
-    }
-  }
-  return Array.from(map.values())
-}
-
 const labelSendStatus = (value) => {
   const raw = String(value ?? '').trim()
   if (!raw) return '-'
@@ -258,16 +230,14 @@ export default function CampanhasZap() {
     })
   }, [items, query, dateFrom, dateTo])
 
-  const contactItems = useMemo(() => uniqueContactsForRows(baseItems), [baseItems])
-
   const sendStatusOptions = useMemo(() => {
     const set = new Set()
-    for (const row of contactItems) {
+    for (const row of baseItems) {
       const value = canonicalSendStatus(row?.send_status)
       if (value) set.add(value)
     }
     return Array.from(set).sort((a, b) => labelSendStatus(a).localeCompare(labelSendStatus(b)))
-  }, [contactItems])
+  }, [baseItems])
 
   useEffect(() => {
     if (sendStatus && !sendStatusOptions.includes(sendStatus)) setSendStatus('')
@@ -275,9 +245,9 @@ export default function CampanhasZap() {
 
   const filteredItems = useMemo(() => {
     const desired = canonicalSendStatus(sendStatus)
-    if (!desired) return contactItems
-    return contactItems.filter((row) => canonicalSendStatus(row?.send_status) === desired)
-  }, [contactItems, sendStatus])
+    if (!desired) return baseItems
+    return baseItems.filter((row) => canonicalSendStatus(row?.send_status) === desired)
+  }, [baseItems, sendStatus])
 
   const grupos = useMemo(() => {
     const map = new Map()
@@ -306,7 +276,7 @@ export default function CampanhasZap() {
   const openGroup = useMemo(() => grupos.find((g) => g.id === openId) ?? null, [grupos, openId])
   const openRows = openGroup?.rows ?? []
   const openHead = openGroup?.head ?? null
-  const openTotalContatos = openRows.length
+  const openTotalContatos = Number(openHead?.total) || openRows.length
   const openUltimoEnvio = fmtDateTime(openHead?.created_at)
   const openEnvioStats = useMemo(() => computeEnvioStats(openRows), [openRows])
   const contactStatusOptions = useMemo(() => {
@@ -584,7 +554,7 @@ export default function CampanhasZap() {
                     const head = grupo.head
                     const isOpen = openId === grupo.id
                     const statusTxt = normalizeCampanhaStatus(head)
-                    const totalLabel = grupo.rows.length
+                    const totalLabel = head?.total ?? grupo.rows.length
                     const toggle = () => setOpenId((curr) => (curr === grupo.id ? null : grupo.id))
 
                     return (
