@@ -45,20 +45,12 @@ const badgeForSendStatus = (value) => {
   const v = canonicalSendStatus(value)
   if (!v) return 'text-bg-secondary'
   if (v === 'SUCCESS') return 'text-bg-success'
+  if (v === 'SENDING') return 'text-bg-primary'
   if (v === 'READ') return 'text-bg-info'
   if (v === 'ANSWERED') return 'text-bg-primary'
   if (v === 'A ENVIAR') return 'text-bg-warning'
   if (v === 'HEALTHY_ECOSYSTEM_ENGAGEMENT') return 'text-bg-info'
-  if (
-    v === 'DONT_EXISTS' ||
-    v === 'UNSUPPORTED_POST_REQUEST' ||
-    v === 'AN_ERROR_OCCURRED' ||
-    v === 'PAYMENT_ISSUE' ||
-    v === 'ACCOUNT_BLOCKED' ||
-    v === 'USER_NUMBER_IS_PART_OF_AN_EXPE'
-  ) {
-    return 'text-bg-danger'
-  }
+  if (isFailureSendStatus(v)) return 'text-bg-danger'
   return 'text-bg-secondary'
 }
 
@@ -79,14 +71,54 @@ const canonicalSendStatus = (value) => {
   return upper
 }
 
+const isFailureSendStatus = (canonical) =>
+  canonical === 'DONT_EXISTS' ||
+  canonical === 'UNSUPPORTED_POST_REQUEST' ||
+  canonical === 'AN_ERROR_OCCURRED' ||
+  canonical === 'GENERIC_USER_ERROR' ||
+  canonical === 'GENERIC USER ERROR' ||
+  canonical === 'PAYMENT_ISSUE' ||
+  canonical === 'ACCOUNT_BLOCKED' ||
+  canonical === 'USER_NUMBER_IS_PART_OF_AN_EXPE'
+
+const sendStatusPriority = (value) => {
+  const v = canonicalSendStatus(value)
+  if (!v) return 0
+  if (v === 'ANSWERED') return 60
+  if (v === 'READ') return 50
+  if (v === 'SUCCESS') return 40
+  if (isFailureSendStatus(v)) return 30
+  if (v === 'SENDING') return 20
+  if (v === 'A ENVIAR') return 10
+  return 0
+}
+
+const uniqueContactsForRows = (rows) => {
+  const map = new Map()
+  for (const row of rows) {
+    if (!row) continue
+    const id = String(row?.id ?? 'Sem ID')
+    const phone = String(row?.client_phone ?? '').replace(/\D/g, '')
+    const name = String(row?.name_client ?? '').trim().toLowerCase()
+    const key = `${id}::${phone || name}`
+    const prev = map.get(key)
+    if (!prev || sendStatusPriority(row?.send_status) > sendStatusPriority(prev?.send_status)) {
+      map.set(key, row)
+    }
+  }
+  return Array.from(map.values())
+}
+
 const labelSendStatus = (value) => {
   const raw = String(value ?? '').trim()
   if (!raw) return '-'
   const v = canonicalSendStatus(raw)
-  if (v === 'SUCCESS') return 'ENVIADO'
+  if (v === 'SUCCESS') return 'ENTREGUE'
+  if (v === 'SENDING') return 'ENVIADO'
   if (v === 'READ') return 'LIDO'
   if (v === 'ANSWERED') return 'RESPONDIDO'
   if (v === 'AN_ERROR_OCCURRED') return 'ERRO'
+  if (v === 'GENERIC_USER_ERROR' || v === 'GENERIC USER ERROR') return 'ERRO (GENÉRICO)'
   if (v === 'PAYMENT_ISSUE') return 'PROBLEMA DE PAGAMENTO'
   if (v === 'A ENVIAR') return 'A ENVIAR'
   if (v === 'ACCOUNT_BLOCKED') return 'CONTA BLOQUEADA'
@@ -101,30 +133,23 @@ const computeEnvioStats = (rows) => {
   let entregues = 0
   let lidos = 0
   let aguardando = 0
+  let enviando = 0
   let falhados = 0
   for (const row of rows) {
     const v = canonicalSendStatus(row?.send_status)
     if (!v) continue
     if (v === 'SUCCESS') entregues += 1
+    else if (v === 'SENDING') enviando += 1
     else if (v === 'READ') lidos += 1
     else if (v === 'A ENVIAR') aguardando += 1
-    else if (
-      v === 'DONT_EXISTS' ||
-      v === 'UNSUPPORTED_POST_REQUEST' ||
-      v === 'AN_ERROR_OCCURRED' ||
-      v === 'PAYMENT_ISSUE' ||
-      v === 'ACCOUNT_BLOCKED' ||
-      v === 'USER_NUMBER_IS_PART_OF_AN_EXPE'
-    ) {
-      falhados += 1
-    }
+    else if (isFailureSendStatus(v)) falhados += 1
   }
   return {
     entregues,
     lidos,
     respondidos: rows.filter((row) => canonicalSendStatus(row?.send_status) === 'ANSWERED').length,
     aguardando,
-    enviando: 0,
+    enviando,
     falhados
   }
 }
@@ -194,7 +219,8 @@ export default function CampanhasZap() {
   }, [])
 
   const baseItems = useMemo(() => {
-    const q = String(query ?? '').trim().toLowerCase()
+    const q = String(query ?? '').toLowerCase().trimStart()
+    const qTrim = q.trim()
     const start = parseYmdLocal(dateFrom, false)
     const end = parseYmdLocal(dateTo, true)
     let startSafe = start
@@ -212,7 +238,9 @@ export default function CampanhasZap() {
         if (startSafe && createdAtAdjusted < startSafe) return false
         if (endSafe && createdAtAdjusted > endSafe) return false
       }
-      if (!q) return true
+      if (!qTrim) return true
+      const nome = String(row?.nome ?? '').toLowerCase()
+      if (qTrim.length === 1) return nome.includes(q)
       const haystack = [
         row.id,
         row.nome,
@@ -226,18 +254,20 @@ export default function CampanhasZap() {
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
-      return haystack.includes(q)
+      return haystack.includes(qTrim)
     })
   }, [items, query, dateFrom, dateTo])
 
+  const contactItems = useMemo(() => uniqueContactsForRows(baseItems), [baseItems])
+
   const sendStatusOptions = useMemo(() => {
     const set = new Set()
-    for (const row of baseItems) {
+    for (const row of contactItems) {
       const value = canonicalSendStatus(row?.send_status)
       if (value) set.add(value)
     }
     return Array.from(set).sort((a, b) => labelSendStatus(a).localeCompare(labelSendStatus(b)))
-  }, [baseItems])
+  }, [contactItems])
 
   useEffect(() => {
     if (sendStatus && !sendStatusOptions.includes(sendStatus)) setSendStatus('')
@@ -245,9 +275,9 @@ export default function CampanhasZap() {
 
   const filteredItems = useMemo(() => {
     const desired = canonicalSendStatus(sendStatus)
-    if (!desired) return baseItems
-    return baseItems.filter((row) => canonicalSendStatus(row?.send_status) === desired)
-  }, [baseItems, sendStatus])
+    if (!desired) return contactItems
+    return contactItems.filter((row) => canonicalSendStatus(row?.send_status) === desired)
+  }, [contactItems, sendStatus])
 
   const grupos = useMemo(() => {
     const map = new Map()
@@ -276,7 +306,7 @@ export default function CampanhasZap() {
   const openGroup = useMemo(() => grupos.find((g) => g.id === openId) ?? null, [grupos, openId])
   const openRows = openGroup?.rows ?? []
   const openHead = openGroup?.head ?? null
-  const openTotalContatos = Number(openHead?.total) || openRows.length
+  const openTotalContatos = openRows.length
   const openUltimoEnvio = fmtDateTime(openHead?.created_at)
   const openEnvioStats = useMemo(() => computeEnvioStats(openRows), [openRows])
   const contactStatusOptions = useMemo(() => {
@@ -554,7 +584,7 @@ export default function CampanhasZap() {
                     const head = grupo.head
                     const isOpen = openId === grupo.id
                     const statusTxt = normalizeCampanhaStatus(head)
-                    const totalLabel = head?.total ?? grupo.rows.length
+                    const totalLabel = grupo.rows.length
                     const toggle = () => setOpenId((curr) => (curr === grupo.id ? null : grupo.id))
 
                     return (
@@ -606,10 +636,10 @@ export default function CampanhasZap() {
                                     <div className="fw-semibold">{openHead?.departamento || '-'}</div>
                                   </div>
                                   <div className="d-flex flex-wrap gap-4">
-                                    <div>
-                                      <div className="small opacity-75">Total de contatos</div>
-                                      <div className="fw-semibold">{openTotalContatos}</div>
-                                    </div>
+                                      <div>
+                                        <div className="small opacity-75">Total de contatos</div>
+                                        <div className="fw-semibold">{openTotalContatos}</div>
+                                      </div>
                                     <div>
                                       <div className="small opacity-75">Último envio</div>
                                       <div className="fw-semibold">{openUltimoEnvio}</div>
@@ -622,37 +652,31 @@ export default function CampanhasZap() {
                                 </div>
 
                                 <div className="row g-2 mb-3">
-                                  <div className="col-6 col-md-2">
+                                  <div className="col-6 col-md">
                                     <div className="camp-metric">
                                       <div className="camp-metric-value text-info">{openEnvioStats.entregues}</div>
                                       <div className="camp-metric-label">Entregues</div>
                                     </div>
                                   </div>
-                                  <div className="col-6 col-md-2">
+                                  <div className="col-6 col-md">
                                     <div className="camp-metric">
                                       <div className="camp-metric-value text-success">{openEnvioStats.lidos}</div>
                                       <div className="camp-metric-label">Lidos</div>
                                     </div>
                                   </div>
-                                  <div className="col-6 col-md-2">
+                                  <div className="col-6 col-md">
                                     <div className="camp-metric">
                                       <div className="camp-metric-value text-primary">{openEnvioStats.respondidos}</div>
                                       <div className="camp-metric-label">Respondidos</div>
                                     </div>
                                   </div>
-                                  <div className="col-6 col-md-2">
+                                  <div className="col-6 col-md">
                                     <div className="camp-metric">
                                       <div className="camp-metric-value text-warning">{openEnvioStats.aguardando}</div>
                                       <div className="camp-metric-label">Aguardando</div>
                                     </div>
                                   </div>
-                                  <div className="col-6 col-md-2">
-                                    <div className="camp-metric">
-                                      <div className="camp-metric-value text-warning">{openEnvioStats.enviando}</div>
-                                      <div className="camp-metric-label">Enviando</div>
-                                    </div>
-                                  </div>
-                                  <div className="col-6 col-md-2">
+                                  <div className="col-6 col-md">
                                     <div className="camp-metric">
                                       <div className="camp-metric-value text-danger">{openEnvioStats.falhados}</div>
                                       <div className="camp-metric-label">Falhados</div>
