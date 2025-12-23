@@ -271,7 +271,15 @@ export default function CampanhasZap() {
     return parsed
   }, [filteredItems])
 
-  const totalRegistros = filteredItems.length
+  const totalRegistros = useMemo(() => {
+    let total = 0
+    for (const grupo of grupos) {
+      const rawTotal = Number(grupo?.head?.total)
+      if (Number.isFinite(rawTotal) && rawTotal > 0) total += rawTotal
+      else total += grupo?.rows?.length ?? 0
+    }
+    return total
+  }, [grupos])
   const hasFilters = Boolean(String(query ?? '').trim() || dateFrom || dateTo || sendStatus)
   const openGroup = useMemo(() => grupos.find((g) => g.id === openId) ?? null, [grupos, openId])
   const openRows = openGroup?.rows ?? []
