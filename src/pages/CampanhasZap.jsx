@@ -352,29 +352,14 @@ export default function CampanhasZap() {
   }
 
   const exportFilteredCsv = () => {
-    const rows = grupos
+    const rows = filteredItems
     if (!rows || rows.length === 0) return
 
     const stamp = new Date().toISOString().slice(0, 19).replaceAll(':', '-')
     const baseName = `campanhas-zap-${stamp}`.replace(/[^\w.-]+/g, '_')
-    const headers = ['id', 'campanha', 'departamento', 'status', 'total', 'pendentes', 'data de criação', 'mensagem', 'template']
+    const headers = ['id', 'campanha', 'departamento', 'status', 'template', 'mensagem', 'nome', 'telefone', 'data envio', 'data de criação']
     const lines = [headers.join(';')]
-    for (const grupo of rows) {
-      const head = grupo?.head ?? null
-      const values = headers.map((h) => {
-        if (h === 'id') return grupo?.id
-        if (h === 'campanha') return grupo?.nome
-        if (h === 'departamento') return head?.departamento
-        if (h === 'status') return normalizeCampanhaStatus(head)
-        if (h === 'total') return head?.total
-        if (h === 'pendentes') return head?.pendentes
-        if (h === 'data de criação') return fmtDateTime(head?.created_at)
-        if (h === 'mensagem') return head?.mensagem
-        if (h === 'template') return head?.template
-        return ''
-      })
-      lines.push(values.map((v) => csvEscape(v)).join(';'))
-    }
+    for (const row of rows) lines.push(headers.map((h) => csvEscape(csvValueForHeader(row, h))).join(';'))
     const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
