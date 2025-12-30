@@ -38,6 +38,7 @@ export default function DisparadorConfigBM() {
   const [bmRows, setBmRows] = useState([])
   const [bmRowsLoading, setBmRowsLoading] = useState(false)
   const [bmRowsError, setBmRowsError] = useState('')
+  const [bmRawById, setBmRawById] = useState({})
   const [isEditing, setIsEditing] = useState(false)
   const [bmSearch, setBmSearch] = useState('')
   const [bmStatusFilter, setBmStatusFilter] = useState('')
@@ -164,6 +165,13 @@ export default function DisparadorConfigBM() {
       if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
       const data = JSON.parse(raw)
       const arr = Array.isArray(data) ? data : []
+      const rawById = {}
+      arr.forEach((item) => {
+        const key = String(item?.bm_id || item?.bmId || '').trim()
+        if (!key) return
+        if (!rawById[key]) rawById[key] = []
+        rawById[key].push(item)
+      })
       const map = new Map()
       arr.forEach((item) => {
         const key = item?.bm_id || item?.bmId
@@ -183,10 +191,12 @@ export default function DisparadorConfigBM() {
       })
       const rows = Array.from(map.values()).sort((a, b) => (Date.parse(b.canal_data || 0) || 0) - (Date.parse(a.canal_data || 0) || 0))
       setBmRows(rows)
+      setBmRawById(rawById)
       refreshCounters(rows)
     } catch (e) {
       setBmRows([])
       setBmRowsError(e?.message || 'Falha ao buscar BMs salvas.')
+      setBmRawById({})
     } finally {
       setBmRowsLoading(false)
     }
@@ -627,6 +637,177 @@ export default function DisparadorConfigBM() {
     }
   }
 
+  const pickValue = (...values) => {
+    for (const value of values) {
+      const text = String(value ?? '').trim()
+      if (text) return text
+    }
+    return ''
+  }
+
+  const parseJsonArray = (value) => {
+    if (Array.isArray(value)) return value
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    try {
+      const parsed = JSON.parse(trimmed)
+      return Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+
+  const buildCanaisFromMemory = (rawRows) => {
+    const arr = Array.isArray(rawRows) ? rawRows : []
+    if (arr.length === 0) return []
+
+    const directRow = arr.find((item) => item?.canais !== undefined && item?.canais !== null)
+    if (directRow) {
+      const parsed = parseJsonArray(directRow.canais)
+      if (parsed) return parsed
+    }
+
+    const canaisById = new Map()
+    const phonesByChannel = new Map()
+
+    const ensureChannel = (canalId) => {
+      if (!canaisById.has(canalId)) {
+        canaisById.set(canalId, { data: '', nome: '', canalId })
+      }
+      return canaisById.get(canalId)
+    }
+
+    const ensurePhoneMap = (canalId) => {
+      if (!phonesByChannel.has(canalId)) phonesByChannel.set(canalId, new Map())
+      return phonesByChannel.get(canalId)
+    }
+
+    const ensurePhone = (phoneMap, phoneId, defaults) => {
+      if (!phoneMap.has(phoneId)) {
+        phoneMap.set(phoneId, { telefone: '-', telefoneId: phoneId, qualidade: '-', limite: '-', modelos: [], ...defaults })
+      }
+      return phoneMap.get(phoneId)
+    }
+
+    const addTemplate = (phone, template) => {
+      const nomeModelo = pickValue(template?.nomeModelo, template?.nome, template?.name)
+      if (!nomeModelo) return
+      const linguagem = pickValue(template?.linguagem, template?.language)
+      const key = `${nomeModelo}::${linguagem}`
+      if (!phone._modelKeys) phone._modelKeys = new Set()
+      if (phone._modelKeys.has(key)) return
+      phone._modelKeys.add(key)
+      phone.modelos.push({
+        nomeModelo,
+        linguagem,
+        status: pickValue(template?.status),
+        categoria: pickValue(template?.categoria, template?.category),
+        mensagem: pickValue(template?.mensagem, template?.message)
+      })
+    }
+
+    const mergePhoneFromRaw = (phoneMap, rawPhone) => {
+      const phoneId = pickValue(rawPhone?.telefoneId, rawPhone?.telefone_id, rawPhone?.phone_id, rawPhone?.phoneId)
+      if (!phoneId) return
+      const telefone = pickValue(rawPhone?.telefone, rawPhone?.telefone_numero, rawPhone?.display_phone_number, rawPhone?.phone_number)
+      const qualidade = pickValue(rawPhone?.qualidade, rawPhone?.telefone_qualidade, rawPhone?.quality_rating)
+      const limiteRaw = pickValue(rawPhone?.limite, rawPhone?.telefone_limite, rawPhone?.messaging_limit_tier)
+      const limite = limiteRaw ? formatLimit(limiteRaw) : '-'
+      const phone = ensurePhone(phoneMap, phoneId, {
+        telefone: telefone || '-',
+        telefoneId: phoneId,
+        qualidade: qualidade || '-',
+        limite
+      })
+      if (!phone.telefone || phone.telefone === '-') phone.telefone = telefone || phone.telefone
+      if (!phone.qualidade || phone.qualidade === '-') phone.qualidade = qualidade || phone.qualidade
+      if (!phone.limite || phone.limite === '-') phone.limite = limite || phone.limite
+      const modelosRaw = parseJsonArray(rawPhone?.modelos) || (Array.isArray(rawPhone?.modelos) ? rawPhone.modelos : null)
+      if (modelosRaw) {
+        modelosRaw.forEach((tpl) => addTemplate(phone, tpl))
+      }
+    }
+
+    arr.forEach((item) => {
+      const canalId = pickValue(item?.canal_id, item?.canalId, item?.id_canal)
+      if (!canalId) return
+      const channel = ensureChannel(canalId)
+      const canalData = pickValue(item?.canal_data, item?.data, item?.canalData)
+      if (!channel.data && canalData) channel.data = canalData
+      const canalNome = pickValue(item?.canal_nome, item?.canalNome, item?.nome_canal, item?.nome, item?.account_name)
+      if (!channel.nome && canalNome) channel.nome = canalNome
+
+      const phoneMap = ensurePhoneMap(canalId)
+      const telefonesRaw = parseJsonArray(item?.telefones) || (Array.isArray(item?.telefones) ? item.telefones : null)
+      if (telefonesRaw) {
+        telefonesRaw.forEach((rawPhone) => mergePhoneFromRaw(phoneMap, rawPhone))
+      }
+
+      const phoneId = pickValue(item?.telefone_id, item?.telefoneId, item?.phone_id, item?.phoneId)
+      if (!phoneId) return
+      const telefone = pickValue(item?.telefone_numero, item?.telefone, item?.display_phone_number, item?.phone_number)
+      const qualidade = pickValue(item?.telefone_qualidade, item?.qualidade, item?.quality_rating)
+      const limiteRaw = pickValue(item?.telefone_limite, item?.limite, item?.messaging_limit_tier)
+      const limite = limiteRaw ? formatLimit(limiteRaw) : '-'
+      const phone = ensurePhone(phoneMap, phoneId, {
+        telefone: telefone || '-',
+        telefoneId: phoneId,
+        qualidade: qualidade || '-',
+        limite
+      })
+      if (!phone.telefone || phone.telefone === '-') phone.telefone = telefone || phone.telefone
+      if (!phone.qualidade || phone.qualidade === '-') phone.qualidade = qualidade || phone.qualidade
+      if (!phone.limite || phone.limite === '-') phone.limite = limite || phone.limite
+
+      const templateName = pickValue(item?.modelo_nome, item?.nomeModelo, item?.template_name, item?.nome_modelo)
+      if (templateName) {
+        addTemplate(phone, {
+          nomeModelo: templateName,
+          linguagem: pickValue(item?.modelo_linguagem, item?.linguagem, item?.language),
+          status: pickValue(item?.modelo_status, item?.status),
+          categoria: pickValue(item?.modelo_categoria, item?.categoria, item?.category),
+          mensagem: pickValue(item?.modelo_mensagem, item?.mensagem, item?.modelo_menssagem, item?.message)
+        })
+      }
+    })
+
+    return Array.from(canaisById.values()).map((channel) => {
+      const phoneMap = phonesByChannel.get(channel.canalId) || new Map()
+      const telefones = Array.from(phoneMap.values()).map((phone) => {
+        if (phone._modelKeys) delete phone._modelKeys
+        return { ...phone, modelos: Array.isArray(phone.modelos) ? phone.modelos : [] }
+      })
+      return {
+        data: channel.data || '-',
+        nome: channel.nome || '-',
+        canalId: channel.canalId,
+        telefones
+      }
+    })
+  }
+
+  const buildDeleteBodyFromMemory = (row, rawRows) => {
+    const list = Array.isArray(rawRows) ? rawRows : []
+    const sample = list[0] || {}
+    const bmIdValue = pickValue(row?.bm_id, row?.bmId, sample?.bm_id, sample?.bmId)
+    const tokenValue = pickValue(row?.bm_token, row?.token, sample?.bm_token, sample?.token)
+    const nomeBmValue = pickValue(row?.bm_nome, row?.bmNome, sample?.bm_nome, sample?.bmNome, sample?.nomeBm)
+    const statusPortfolioValue = pickValue(
+      row?.bm_statusPortifolio,
+      row?.statusPortfolio,
+      sample?.bm_statusPortifolio,
+      sample?.statusPortfolio
+    )
+    return {
+      bmId: bmIdValue || '-',
+      token: tokenValue || '-',
+      nomeBm: nomeBmValue || '-',
+      statusPortfolio: statusPortfolioValue || '-',
+      canais: buildCanaisFromMemory(list)
+    }
+  }
+
   const handleDeleteRow = async (row) => {
     const idClean = String(row?.bm_id || row?.bmId || '').trim()
     const tokenClean = String(row?.bm_token || row?.token || '').trim()
@@ -635,22 +816,17 @@ export default function DisparadorConfigBM() {
       return false
     }
     if (!tokenClean) {
-      notify.warn('Este registro est\u00e1 sem token. N\u00e3o \u00e9 poss\u00edvel excluir sem chamar as APIs.')
+      notify.warn('Este registro esta sem token. Nao e possivel excluir sem enviar ao webhook.')
       return false
     }
 
     setDeletingBmId(idClean)
     try {
-      const bmInfo = await requestBmInfo(idClean, tokenClean)
-      const accountsList = await requestWhatsappAccounts(idClean, tokenClean)
-      const body = await buildBmBody({
-        idClean,
-        tokenClean,
-        nomeBmValue: bmInfo?.name || row?.bm_nome || '-',
-        statusPortfolioValue: bmInfo?.verification_status || row?.bm_statusPortifolio || '-',
-        accountsList,
-        forceFetch: true
-      })
+      const rawRows = bmRawById?.[idClean] || []
+      const body = buildDeleteBodyFromMemory(row, rawRows)
+      if (!body?.canais || body.canais.length === 0) {
+        notify.warn('Sem dados detalhados em memoria. Enviando apenas dados basicos.')
+      }
 
       const res = await fetch('https://n8n.apivieiracred.store/webhook/bm-delete-port', {
         method: 'POST',
@@ -678,7 +854,7 @@ export default function DisparadorConfigBM() {
       return
     }
     if (!tokenClean) {
-      notify.warn('Este registro est\u00e1 sem token. N\u00e3o \u00e9 poss\u00edvel excluir sem chamar as APIs.')
+      notify.warn('Este registro esta sem token. Nao e possivel excluir sem enviar ao webhook.')
       return
     }
     setDeleteRow(row)
@@ -1320,12 +1496,12 @@ export default function DisparadorConfigBM() {
           <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-md-down" style={{ '--bs-modal-width': 'min(96vw, 560px)' }}>
             <div className="modal-content modal-dark">
               <div className="modal-header">
-                <h5 className="modal-title">Confirmar exclus\u00e3o</h5>
+                <h5 className="modal-title">{'Confirmar exclus\u00e3o'}</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={closeDeleteModal} disabled={Boolean(deletingBmId)}></button>
               </div>
               <div className="modal-body">
                 <div className="small opacity-75 mb-3">
-                  Voc\u00ea tem certeza que deseja excluir esta BM? Esta a\u00e7\u00e3o enviar\u00e1 os dados para o webhook.
+                  {'Voc\u00ea tem certeza que deseja excluir esta BM? Esta a\u00e7\u00e3o enviar\u00e1 os dados para o webhook.'}
                 </div>
                 <div className="neo-card p-3">
                   <div className="row g-3">
