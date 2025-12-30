@@ -23,16 +23,18 @@ import DisparadorConfigBM from './pages/DisparadorConfigBM.jsx'
 import CampanhasZap from './pages/CampanhasZap.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
+import { SidebarProvider } from './context/SidebarContext.jsx'
 
 function App() {
   const location = useLocation()
   const hideSidebar = location.pathname === '/' || location.pathname.startsWith('/login')
 
   return (
-    <div className="app-shell">
-      {!hideSidebar && <SidebarNav />}
-      <div className={`app-main ${hideSidebar ? '' : 'with-sidebar'}`}>
-        <Routes>
+    <SidebarProvider>
+      <div className="app-shell">
+        {!hideSidebar && <SidebarNav />}
+        <div className={`app-main ${hideSidebar ? '' : 'with-sidebar'}`}>
+          <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route
@@ -206,10 +208,11 @@ function App() {
       /> */}
         <Route path="/disparos/multiplos" element={<Navigate to="/disparador/disparar-whats" replace />} />
         <Route path="/disparos/acompanhamento" element={<Navigate to="/disparador/campanhas" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }
 

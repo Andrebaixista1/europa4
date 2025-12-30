@@ -5,12 +5,15 @@ import { useLoading } from '../context/LoadingContext.jsx'
 import NovidadesModal from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
 import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiActivity } from 'react-icons/fi'
+import { useSidebar } from '../context/SidebarContext.jsx'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
   const loader = useLoading()
   const location = useLocation()
+  const { toggle: toggleSidebar } = useSidebar()
   const isDashboard = location.pathname.startsWith('/dashboard')
+  const hasSidebar = !(location.pathname === '/' || location.pathname.startsWith('/login'))
   const [isNovidadesModalOpen, setIsNovidadesModalOpen] = useState(false)
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -213,6 +216,9 @@ export default function TopNav() {
             aria-controls="navbarsExample"
             aria-expanded="false"
             aria-label="Toggle navigation"
+            onClick={() => {
+              if (hasSidebar) toggleSidebar()
+            }}
           >
             <span className="navbar-toggler-icon"></span>
           </button>

@@ -637,6 +637,12 @@ export default function CampanhasZap() {
                                   </div>
                                   <div className="col-6 col-md">
                                     <div className="camp-metric">
+                                      <div className="camp-metric-value text-primary">{openEnvioStats.enviando}</div>
+                                      <div className="camp-metric-label">Enviados</div>
+                                    </div>
+                                  </div>
+                                  <div className="col-6 col-md">
+                                    <div className="camp-metric">
                                       <div className="camp-metric-value text-warning">{openEnvioStats.aguardando}</div>
                                       <div className="camp-metric-label">Aguardando</div>
                                     </div>

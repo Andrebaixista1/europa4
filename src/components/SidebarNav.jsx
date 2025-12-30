@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles } from '../utils/roles.js'
+import { useSidebar } from '../context/SidebarContext.jsx'
 
 function Icon({ name, size = 20 }) {
   const Comp = Fi[name] || Fi.FiSquare
@@ -24,8 +25,10 @@ export default function SidebarNav() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(true)
   const [openMenu, setOpenMenu] = useState(null)
+  const { isOpen: mobileOpen, close: closeSidebar } = useSidebar()
   const role = user?.role
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
+  const prevPath = useRef(location.pathname)
 
   const menu = useMemo(() => {
     const isMaster = role === Roles.Master
@@ -95,66 +98,126 @@ export default function SidebarNav() {
     return current === normalizedPath || current.startsWith(`${normalizedPath}/`)
   }
 
-  const handleEnter = () => setCollapsed(false)
+  const handleEnter = () => {
+    if (!mobileOpen) setCollapsed(false)
+  }
   const handleLeave = () => {
-    setCollapsed(true)
-    setOpenMenu(null)
+    if (!mobileOpen) {
+      setCollapsed(true)
+      setOpenMenu(null)
+    }
+  }
+  const handleNavClick = () => {
+    if (mobileOpen) closeSidebar()
+  }
+  const handleToggle = () => {
+    if (mobileOpen) {
+      closeSidebar()
+      return
+    }
+    setCollapsed((v) => !v)
   }
 
+  useEffect(() => {
+    if (prevPath.current !== location.pathname) {
+      prevPath.current = location.pathname
+      if (mobileOpen) closeSidebar()
+    }
+  }, [location.pathname, mobileOpen, closeSidebar])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const media = window.matchMedia('(max-width: 992px)')
+    const sync = () => {
+      if (!media.matches && mobileOpen) closeSidebar()
+    }
+    sync()
+    if (media.addEventListener) {
+      media.addEventListener('change', sync)
+    } else {
+      media.addListener(sync)
+    }
+    return () => {
+      if (media.addEventListener) {
+        media.removeEventListener('change', sync)
+      } else {
+        media.removeListener(sync)
+      }
+    }
+  }, [mobileOpen, closeSidebar])
+
+  const isCollapsed = mobileOpen ? false : collapsed
+
   return (
-    <aside
-      className={`dash-sidebar ${collapsed ? 'collapsed' : ''}`}
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-    >
-      <button
-        className="dash-toggle"
-        type="button"
-        aria-label="Alternar menu"
-        onClick={() => setCollapsed((v) => !v)}
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="dash-backdrop active"
+          aria-label="Close menu"
+          onClick={closeSidebar}
+        />
+      )}
+      <aside
+        id="sidebar-nav"
+        className={`dash-sidebar ${isCollapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
       >
-        <img src="/neo-logo.svg" alt="Nova Europa" className="dash-toggle-icon" />
-      </button>
+        <button
+          className="dash-toggle"
+          type="button"
+          aria-label="Toggle menu"
+          onClick={handleToggle}
+        >
+          <img src="/neo-logo.svg" alt="Nova Europa" className="dash-toggle-icon" />
+        </button>
 
-      <div className="dash-menu">
-        {menu.map((item) => {
-          const active = isActive(item.to) || item.children?.some((c) => isActive(c.to))
-          const isOpen = openMenu === item.label
-          return (
-            <div key={item.label}>
-              {item.children ? (
-                <button
-                  className={`dash-nav-link ${active ? 'active' : ''}`}
-                  type="button"
-                  onClick={() => setOpenMenu((curr) => (curr === item.label ? null : item.label))}
-                >
-                  <Icon name={item.icon} size={18} />
-                  <span className="dash-label">{item.label}</span>
-                  <span className={`dash-arrow ${isOpen ? 'open' : ''}`} aria-hidden>
-                    <Icon name="FiChevronDown" size={14} />
-                  </span>
-                </button>
-              ) : (
-                <Link className={`dash-nav-link ${active ? 'active' : ''}`} to={item.to}>
-                  <Icon name={item.icon} size={18} />
-                  <span className="dash-label">{item.label}</span>
-                </Link>
-              )}
+        <div className="dash-menu">
+          {menu.map((item) => {
+            const active = isActive(item.to) || item.children?.some((c) => isActive(c.to))
+            const isOpen = openMenu === item.label
+            return (
+              <div key={item.label}>
+                {item.children ? (
+                  <button
+                    className={`dash-nav-link ${active ? 'active' : ''}`}
+                    type="button"
+                    onClick={() => setOpenMenu((curr) => (curr === item.label ? null : item.label))}
+                  >
+                    <Icon name={item.icon} size={18} />
+                    <span className="dash-label">{item.label}</span>
+                    <span className={`dash-arrow ${isOpen ? 'open' : ''}`} aria-hidden>
+                      <Icon name="FiChevronDown" size={14} />
+                    </span>
+                  </button>
+                ) : (
+                  <Link className={`dash-nav-link ${active ? 'active' : ''}`} to={item.to} onClick={handleNavClick}>
+                    <Icon name={item.icon} size={18} />
+                    <span className="dash-label">{item.label}</span>
+                  </Link>
+                )}
 
-              {item.children && !collapsed && isOpen && (
-                <div className="dash-submenu">
-                  {item.children.map((child) => (
-                    <Link key={child.label} to={child.to} className={`dash-subitem ${isActive(child.to) ? 'active' : ''}`}>
-                      <SubItemIcon child={child} />
-                      <span>{child.label}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </aside>
+                {item.children && !isCollapsed && isOpen && (
+                  <div className="dash-submenu">
+                    {item.children.map((child) => (
+                      <Link
+                        key={child.label}
+                        to={child.to}
+                        className={`dash-subitem ${isActive(child.to) ? 'active' : ''}`}
+                        onClick={handleNavClick}
+                      >
+                        <SubItemIcon child={child} />
+                        <span>{child.label}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </aside>
+    </>
   )
 }

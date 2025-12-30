@@ -5,7 +5,7 @@ import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Roles } from '../utils/roles.js'
-import { FiCheckCircle, FiClock, FiXCircle, FiChevronsRight, FiChevronsLeft, FiRefreshCw, FiTrash2 } from 'react-icons/fi'
+import { FiCheckCircle, FiClock, FiXCircle, FiAlertTriangle, FiChevronsRight, FiChevronsLeft, FiRefreshCw, FiTrash2 } from 'react-icons/fi'
 
 export default function DisparadorConfigBM() {
   const { user } = useAuth()
@@ -44,6 +44,7 @@ export default function DisparadorConfigBM() {
   const [bmPhoneSearch, setBmPhoneSearch] = useState('')
   const [bmPhoneNumbersByBm, setBmPhoneNumbersByBm] = useState({})
   const [bmStatusByBm, setBmStatusByBm] = useState({})
+  const [bmUpdateErrorsById, setBmUpdateErrorsById] = useState({})
   const [countersLoading, setCountersLoading] = useState(false)
   const [countersError, setCountersError] = useState('')
   const [countersUpdatedAt, setCountersUpdatedAt] = useState(null)
@@ -291,6 +292,7 @@ export default function DisparadorConfigBM() {
     setCountersUpdatedAt(null)
     setBmStatusByBm({})
     setBmPhoneNumbersByBm({})
+    setBmUpdateErrorsById({})
 
     const statusByBm = new Map()
     rows.forEach((row) => {
@@ -320,6 +322,7 @@ export default function DisparadorConfigBM() {
     let totalPhones = 0
     let hasAnyError = false
     const nextPhoneNumbersByBm = {}
+    const errorByBm = new Set()
 
     try {
       const rowsWithToken = rows.filter((row) => {
@@ -333,6 +336,7 @@ export default function DisparadorConfigBM() {
         const tokenClean = String(row?.bm_token || row?.token || '').trim()
         if (!idClean || !tokenClean) return
 
+        let rowHasError = false
         try {
           const info = await requestBmInfo(idClean, tokenClean)
           if (info?.verification_status) {
@@ -343,6 +347,7 @@ export default function DisparadorConfigBM() {
           }
         } catch {
           hasAnyError = true
+          rowHasError = true
         }
 
         let accountsList = []
@@ -350,6 +355,8 @@ export default function DisparadorConfigBM() {
           accountsList = await requestWhatsappAccounts(idClean, tokenClean)
         } catch {
           hasAnyError = true
+          rowHasError = true
+          errorByBm.add(idClean)
           return
         }
 
@@ -371,8 +378,11 @@ export default function DisparadorConfigBM() {
             })
           } catch {
             hasAnyError = true
+            rowHasError = true
           }
         })
+
+        if (rowHasError) errorByBm.add(idClean)
       })
 
       if (runId !== countersRunId.current) return
@@ -397,6 +407,7 @@ export default function DisparadorConfigBM() {
         phoneNumbersOut[id] = Array.from(set || [])
       })
       setBmPhoneNumbersByBm(phoneNumbersOut)
+      setBmUpdateErrorsById(Object.fromEntries(Array.from(errorByBm).map((id) => [id, true])))
       setCountersUpdatedAt(new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }))
       if (hasAnyError) setCountersError('Algumas BMs/canais não puderam ser atualizados (token/permissões).')
     } catch (e) {
@@ -899,6 +910,7 @@ export default function DisparadorConfigBM() {
                   filteredBmRows.map((row) => {
                     const id = String(row?.bm_id || row?.bmId || '').trim()
                     const statusInfo = mapStatus(bmStatusByBm?.[id] ?? row?.bm_statusPortifolio)
+                    const hasRowError = Boolean(bmUpdateErrorsById?.[id])
                     return (
                       <tr key={row.bm_id}>
                         <td className="small text-nowrap d-none d-lg-table-cell">{formatIsoToBR(row.canal_data)}</td>
@@ -912,6 +924,16 @@ export default function DisparadorConfigBM() {
                           <span className="d-inline-flex align-items-center gap-2">
                             <span className="rounded-circle" style={{ width: 8, height: 8, display: 'inline-block', backgroundColor: statusInfo.color }} aria-hidden />
                             <span>{statusInfo.label}</span>
+                            {hasRowError && (
+                              <span
+                                className="d-inline-flex align-items-center"
+                                style={{ color: '#f59e0b' }}
+                                title="Atencao: falha ao atualizar essa BM (token/permissoes)."
+                                aria-label="Atencao: falha ao atualizar essa BM."
+                              >
+                                <FiAlertTriangle />
+                              </span>
+                            )}
                           </span>
                         </td>
                         <td className="small">
