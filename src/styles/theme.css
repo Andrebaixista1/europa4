@@ -156,9 +156,99 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
   opacity: 1;
 }
 
+/* Campaign accordion cards */
+.camp-acc-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.camp-acc-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.camp-acc-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.camp-acc-grid {
+  flex: 1;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.camp-acc-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+}
+
+.camp-acc-value {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.camp-acc-value-wrap {
+  white-space: normal;
+}
+
+@media (max-width: 992px) {
+  .camp-acc-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .camp-acc-value-wrap {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Campaign details layout */
 .camp-details {
   background: rgba(255, 255, 255, 0.02);
+}
+
+.camp-status-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.camp-status-chip {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+}
+
+.camp-status-chip.muted {
+  opacity: 0.6;
+}
+
+.camp-status-count {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.camp-status-label {
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 .camp-metric {
@@ -178,6 +268,310 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .camp-metric-label {
   font-size: 12px;
   opacity: 0.75;
+}
+
+/* Campanhas Zap download modal */
+.camp-download-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 1050;
+  padding: 16px;
+}
+
+.camp-download-modal {
+  width: min(720px, 92vw);
+  background: #ffffff;
+  color: #111827;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.18);
+  padding: 22px 24px;
+}
+
+[data-theme="dark"] .camp-download-overlay {
+  background: rgba(3, 7, 18, 0.72);
+}
+
+[data-theme="dark"] .camp-download-modal {
+  background: linear-gradient(180deg, rgba(18, 19, 26, 0.98), rgba(12, 13, 18, 0.98));
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
+  color: #e5e7eb;
+}
+
+.camp-download-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.camp-download-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.camp-download-subtitle {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+[data-theme="dark"] .camp-download-title {
+  color: #f8fafc;
+}
+
+[data-theme="dark"] .camp-download-subtitle {
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.camp-download-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.camp-download-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #d1d5db;
+}
+
+[data-theme="dark"] .camp-download-close {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(30, 41, 59, 0.6);
+  color: rgba(226, 232, 240, 0.8);
+}
+
+[data-theme="dark"] .camp-download-close:hover {
+  background: rgba(51, 65, 85, 0.8);
+  color: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.camp-download-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.camp-download-option-wrap {
+  display: grid;
+  gap: 8px;
+}
+
+.camp-download-option {
+  width: 100%;
+  min-height: 132px;
+  border-radius: 16px;
+  border: 1px solid transparent;
+  background: #f3f4f6;
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  justify-items: center;
+  text-align: center;
+  font-weight: 600;
+  color: #111827;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.camp-download-option:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+}
+
+.camp-download-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.camp-download-option--green {
+  background: #d1fae5;
+  border-color: #86efac;
+  color: #065f46;
+}
+
+.camp-download-option--blue {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+[data-theme="dark"] .camp-download-option {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+}
+
+[data-theme="dark"] .camp-download-option:hover:not(:disabled) {
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="dark"] .camp-download-option--green {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.08));
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #d1fae5;
+}
+
+[data-theme="dark"] .camp-download-option--blue {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.25), rgba(59, 130, 246, 0.1));
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #dbeafe;
+}
+
+.camp-download-option.is-open {
+  box-shadow: 0 14px 28px rgba(30, 64, 175, 0.15);
+  border-color: #60a5fa;
+}
+
+[data-theme="dark"] .camp-download-option.is-open {
+  box-shadow: 0 16px 32px rgba(30, 64, 175, 0.25);
+  border-color: rgba(96, 165, 250, 0.65);
+}
+
+.camp-download-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  display: grid;
+  place-items: center;
+}
+
+[data-theme="dark"] .camp-download-icon {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.camp-download-option-label {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+
+.camp-download-help {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+[data-theme="dark"] .camp-download-help {
+  color: rgba(226, 232, 240, 0.65);
+}
+
+.camp-download-selection {
+  margin-top: 18px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 12px;
+}
+
+[data-theme="dark"] .camp-download-selection {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.camp-download-table {
+  --bs-table-bg: transparent;
+  --bs-table-color: #111827;
+  color: #111827;
+}
+
+[data-theme="dark"] .camp-download-table {
+  --bs-table-color: #e2e8f0;
+  color: #e2e8f0;
+}
+
+.camp-download-table thead th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+[data-theme="dark"] .camp-download-table thead th {
+  color: rgba(226, 232, 240, 0.65);
+  border-bottom-color: rgba(148, 163, 184, 0.25);
+}
+
+.camp-download-table tbody td {
+  border-color: #e5e7eb;
+}
+
+[data-theme="dark"] .camp-download-table tbody td {
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.camp-download-table tbody tr:nth-child(even) td {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+[data-theme="dark"] .camp-download-table tbody tr:nth-child(even) td {
+  background: rgba(30, 41, 59, 0.45);
+}
+
+.camp-download-selection-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.camp-download-selection-count {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+[data-theme="dark"] .camp-download-selection-count {
+  color: rgba(226, 232, 240, 0.65);
+}
+
+.camp-download-empty {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+[data-theme="dark"] .camp-download-empty {
+  color: rgba(226, 232, 240, 0.65);
+}
+
+.camp-download-modal .form-check-input {
+  border-color: #94a3b8;
+}
+
+.camp-download-modal .form-check-input:checked {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+[data-theme="dark"] .camp-download-modal .form-check-input {
+  border-color: rgba(148, 163, 184, 0.7);
+  background-color: rgba(15, 23, 42, 0.6);
+}
+
+@media (max-width: 640px) {
+  .camp-download-modal {
+    padding: 18px;
+  }
+  .camp-download-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Ghost color variants */

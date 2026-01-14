@@ -5,6 +5,34 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '14/01/2026',
+    titulo: 'Downloads de campanhas em CSV',
+    descricao:
+      'Novo modal de downloads com exportacao unica para todas as campanhas do periodo ou apenas as selecionadas.',
+    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1600&q=80'
+  },
+  {
+    data: '14/01/2026',
+    titulo: 'Filtro de empresa nas campanhas',
+    descricao:
+      'Adicionamos o filtro de Empresa (Vieiracred, Prado e Sem empresa definida) para refinar campanhas por departamento.',
+    image: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1600&q=80'
+  },
+  {
+    data: '14/01/2026',
+    titulo: 'Campanhas Zap com periodo automatico',
+    descricao:
+      'Ao abrir Campanhas Zap, o sistema busca automaticamente campanhas dos ultimos 15 dias (startDate e endDate).',
+    image: 'https://images.unsplash.com/photo-1556740714-a8395b3bf30f?auto=format&fit=crop&w=1600&q=80'
+  },
+  {
+    data: '14/01/2026',
+    titulo: 'Menu Business Manager simplificado',
+    descricao:
+      'Renomeamos o menu para Business Manager e deixamos somente o acesso a Campanhas Zap no dropdown.',
+    image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80'
+  },
+  {
     data: '05/12/2025',
     titulo: 'Sidebar global e menus agrupados',
     descricao:
