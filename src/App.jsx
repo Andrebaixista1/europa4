@@ -14,12 +14,9 @@ import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 import FilaMilvus from './pages/FilaMilvus.jsx'
 import Status from './pages/Status.jsx'
-import MultiploDisparos from './pages/MultiploDisparos.jsx'
-import AcompanhamentoDisparos from './pages/AcompanhamentoDisparos.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
-import DisparadorConfigBM from './pages/DisparadorConfigBM.jsx'
 import CampanhasZap from './pages/CampanhasZap.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
@@ -159,22 +156,6 @@ function App() {
           }
         />
         <Route
-          path="/disparador/disparar-whats"
-          element={
-            <ProtectedRoute roles={['Master']}>
-              <MultiploDisparos />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/disparador/campanhas"
-          element={
-            <ProtectedRoute roles={['Master']}>
-              <AcompanhamentoDisparos />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/disparador/campanhas-zap"
           element={
             <ProtectedRoute roles={['Master']}>
@@ -182,32 +163,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/disparador/configurar-bm"
-          element={
-            <ProtectedRoute roles={['Master']}>
-              <DisparadorConfigBM />
-            </ProtectedRoute>
-          }
-        />
-        {/* <Route
-        path="/disparos/multiplos"
-        element={
-          <ProtectedRoute teamIds={[1, 1014]}>
-            <MultiploDisparos />
-          </ProtectedRoute>
-        }
-      /> */}
-        {/* <Route
-        path="/disparos/acompanhamento"
-        element={
-          <ProtectedRoute teamIds={[1, 1014]}>
-            <AcompanhamentoDisparos />
-          </ProtectedRoute>
-        }
-      /> */}
-        <Route path="/disparos/multiplos" element={<Navigate to="/disparador/disparar-whats" replace />} />
-        <Route path="/disparos/acompanhamento" element={<Navigate to="/disparador/campanhas" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

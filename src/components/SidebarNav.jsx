@@ -41,17 +41,14 @@ export default function SidebarNav() {
 
     if (isMaster) {
       items.push({
-        label: 'Disparador',
-        icon: 'FiZap',
+        label: 'Business Manager',
+        icon: 'FiFacebook',
         children: [
-          { label: 'Disparar Whats', to: '/disparador/disparar-whats' },
-          { label: 'Campanhas', to: '/disparador/campanhas' },
           {
             label: 'Campanhas Zap',
             to: '/disparador/campanhas-zap',
             iconSrc: 'https://chat.zapresponder.com.br/assets/logo-fill-707bdf21.svg'
-          },
-          { label: 'Configurar BM', to: '/disparador/configurar-bm' }
+          }
         ]
       })
     }
