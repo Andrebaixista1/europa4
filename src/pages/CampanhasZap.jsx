@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ArrowLeft, ChevronDown, CircleDot, Download, FileText, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronDown, CircleDot, Download, FileText, Table, X } from 'lucide-react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { notify } from '../utils/notify.js'
@@ -291,6 +291,26 @@ export default function CampanhasZap() {
     return '\ufeff' + lines.join('\r\n')
   }
 
+  const buildCsvContentOriginal = (rows) => {
+    if (!rows.length) return ''
+    const headers = []
+    const seen = new Set()
+    rows.forEach((item) => {
+      if (!item || typeof item !== 'object') return
+      Object.keys(item).forEach((key) => {
+        if (seen.has(key)) return
+        seen.add(key)
+        headers.push(key)
+      })
+    })
+
+    if (!headers.length) return ''
+
+    const lines = [headers, ...rows.map((item) => headers.map((key) => item?.[key] ?? ''))]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
+    return '\ufeff' + lines.join('\r\n')
+  }
+
   const exportCampanhaCsv = (group) => {
     const rows = dedupeDestinos(group?.items)
     const csv = buildCsvContent(rows)
@@ -331,6 +351,19 @@ export default function CampanhasZap() {
       })
     })
     const csv = buildCsvContent(rows)
+    if (!csv) return
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${slugify(baseName, 'campanhas')}-${rows.length}-${buildFileStamp()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportCampanhasOriginalCsv = (rows, baseName) => {
+    const csv = buildCsvContentOriginal(rows)
     if (!csv) return
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -508,6 +541,11 @@ export default function CampanhasZap() {
     const selectedGroups = groupedCampanhas.filter((group) => selectedDownloadKeys.includes(group.key))
     if (!selectedGroups.length) return
     exportCampanhasCsv(selectedGroups, 'campanhas-selecionadas')
+  }
+
+  const handleDownloadAllOriginal = () => {
+    if (!filteredCampanhas.length) return
+    exportCampanhasOriginalCsv(filteredCampanhas, 'campanhas-originais')
   }
 
   const toggleCampanha = (key) => {
@@ -1054,6 +1092,22 @@ export default function CampanhasZap() {
                   </span>
                   <span className="camp-download-option-label">Download Campanhas Selecionadas</span>
                 </button>
+              </div>
+              <div className="camp-download-option-wrap">
+                <button
+                  type="button"
+                  className="camp-download-option camp-download-option--amber"
+                  onClick={handleDownloadAllOriginal}
+                  disabled={filteredCampanhas.length === 0}
+                >
+                  <span className="camp-download-icon">
+                    <Table size={28} />
+                  </span>
+                  <span className="camp-download-option-label">Download Colunas Originais</span>
+                </button>
+                <div className="camp-download-help">
+                  Exporta todas as colunas exatamente como vem da API.
+                </div>
               </div>
             </div>
             {showDownloadSelecionadas && (

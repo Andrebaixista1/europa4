@@ -183,6 +183,7 @@ export default function Dashboard() {
     if (!iso) return '-'
     const d = new Date(iso)
     if (Number.isNaN(d)) return '-'
+    d.setHours(d.getHours() + 3)
     return d.toLocaleTimeString('pt-BR', { hour12: false })
   }
 

@@ -10,7 +10,9 @@ import '../styles/historico.css'
 function fmtDateTime(iso) {
   if (!iso) return '-'
   const d = new Date(iso)
-  return isNaN(d) ? '-' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
+  if (isNaN(d)) return '-'
+  d.setHours(d.getHours() + 3)
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 function fmtDate(iso) {
   if (!iso) return '-'
