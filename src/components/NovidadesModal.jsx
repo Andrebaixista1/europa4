@@ -6,6 +6,13 @@ import '../styles/novidades-modal.css'
 export const novidadesList = [
   {
     data: '17/01/2026',
+    titulo: 'Consulta IN100 BMG chegando',
+    descricao:
+      'Estamos adicionando a consulta IN100 BMG. Em breve, mais uma rota para validar clientes e ampliar as possibilidades de consulta direto no dashboard.',
+    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
+  },
+  {
+    data: '17/01/2026',
     titulo: 'Historico IN100 com Verificar',
     descricao:
       'Mesmo que voce saia da pagina ou atualize, acesse Consultas > Historico e clique no icone de Verificar para ver a consulta do cliente em tempo real.',
