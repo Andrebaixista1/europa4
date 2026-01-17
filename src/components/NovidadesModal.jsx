@@ -5,6 +5,13 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
+    data: '17/01/2026',
+    titulo: 'Historico IN100 com Verificar',
+    descricao:
+      'Mesmo que voce saia da pagina ou atualize, acesse Consultas > Historico e clique no icone de Verificar para ver a consulta do cliente em tempo real.',
+    image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80'
+  },
+  {
     data: '14/01/2026',
     titulo: 'Downloads de campanhas em CSV',
     descricao:
