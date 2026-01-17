@@ -607,9 +607,20 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .btn-icon svg { width: 16px; height: 16px; }
 
 /* Botão Novidades: azul fixo independente do tema */
-.btn-novidades { background: #2563EB; border: 1px solid #1E40AF; color: #fff !important; text-decoration: none; }
-.btn-novidades:hover { filter: brightness(0.96); border-color: #1E3A8A; }
+.btn-novidades { background: #2563EB; border: 1px solid #1E40AF; color: #fff !important; text-decoration: none; transition: transform 0.18s ease, filter 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
+.btn-novidades:hover { filter: brightness(0.96); border-color: #1E3A8A; transform: translateY(-1px); }
 .btn-novidades:active { filter: brightness(0.9); }
+.btn-novidades.is-pulsing { animation: novidadesPulse 1.6s ease-in-out infinite; will-change: transform, box-shadow; }
+.btn-novidades.is-pulsing:hover { animation: none; }
+
+@keyframes novidadesPulse {
+  0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(37, 99, 235, 0); }
+  50% { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-novidades.is-pulsing { animation: none; }
+}
 
 /* Brand logo sizing */
 .brand-logo { height: 24px; width: auto; display: block; }

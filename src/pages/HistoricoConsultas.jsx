@@ -183,6 +183,7 @@ export default function HistoricoConsultas() {
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('')
   const [dateFilter, setDateFilter] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [selectedRow, setSelectedRow] = useState(null)
   const [detailData, setDetailData] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -318,6 +319,8 @@ export default function HistoricoConsultas() {
 
   const filteredItems = useMemo(() => {
     if (!items.length) return []
+    const term = String(searchTerm || '').trim().toLowerCase()
+    const digits = term.replace(/\D/g, '')
     return items.filter((row) => {
       if (statusFilter) {
         const status = String(row?.status_api ?? '').trim()
@@ -328,9 +331,17 @@ export default function HistoricoConsultas() {
         if (!d) return false
         if (getDateKey(d) !== dateFilter) return false
       }
+      if (term) {
+        const name = String(row?.nome ?? '').toLowerCase()
+        const cpf = String(row?.numero_documento ?? '').replace(/\D/g, '')
+        const nb = String(row?.numero_beneficio ?? '').replace(/\D/g, '')
+        const matchName = name.includes(term)
+        const matchDigits = digits ? (cpf.includes(digits) || nb.includes(digits)) : false
+        if (!matchName && !matchDigits) return false
+      }
       return true
     })
-  }, [items, statusFilter, dateFilter])
+  }, [items, statusFilter, dateFilter, searchTerm])
   const pages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
   const currentPage = Math.min(page, pages)
   const pageItems = useMemo(() => {
@@ -341,7 +352,7 @@ export default function HistoricoConsultas() {
   const endIndex = Math.min(currentPage * pageSize, filteredItems.length)
 
   // Sempre volta para a primeira página ao recarregar os dados
-  useEffect(() => { setPage(1) }, [items.length, statusFilter, dateFilter])
+  useEffect(() => { setPage(1) }, [items.length, statusFilter, dateFilter, searchTerm])
 
   const stats = useMemo(() => {
     const total = filteredItems.length
@@ -469,6 +480,16 @@ export default function HistoricoConsultas() {
                 <div className="opacity-75 small mb-2 text-uppercase">Filtros</div>
                 <div className="d-flex flex-column gap-2">
                   <div>
+                    <label className="form-label small opacity-75 mb-1" htmlFor="hc-search">Buscar</label>
+                    <input
+                      id="hc-search"
+                      className="form-control form-control-sm"
+                      placeholder="Nome, CPF ou NB"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                  <div>
                     <label className="form-label small opacity-75 mb-1" htmlFor="hc-status-filter">Status</label>
                     <select
                       id="hc-status-filter"
@@ -502,11 +523,12 @@ export default function HistoricoConsultas() {
                     type="button"
                     className="btn btn-outline-light btn-sm"
                     onClick={() => {
+                      setSearchTerm('')
                       setStatusFilter('')
                       setDateFilter('')
                       setPage(1)
                     }}
-                    disabled={!statusFilter && !dateFilter}
+                    disabled={!statusFilter && !dateFilter && !searchTerm}
                   >
                     Limpar filtros
                   </button>

@@ -1,8 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
-import NovidadesModal from './NovidadesModal.jsx'
+import NovidadesModal, { novidadesList } from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
 import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiActivity } from 'react-icons/fi'
 import { useSidebar } from '../context/SidebarContext.jsx'
@@ -22,6 +22,12 @@ export default function TopNav() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const hasTodayNovidade = useMemo(() => {
+    if (!user?.id) return false
+    const today = new Date()
+    const todayKey = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`
+    return novidadesList.some((item) => String(item?.data || '').trim() === todayKey)
+  }, [user?.id])
 
   // Status API temporariamente desativado
   // const [statusMajor, setStatusMajor] = useState(null) // 'ok' | 'lenta' | 'falha' | null
@@ -83,6 +89,12 @@ export default function TopNav() {
       }
     }
   }, [user, isDashboard])
+
+  const shouldPulse = hasTodayNovidade && !isNovidadesModalOpen
+
+  const handleNovidadesOpen = () => {
+    setIsNovidadesModalOpen(true)
+  }
 
   const resetPasswordState = () => {
     setCurrentPassword('')
@@ -184,24 +196,14 @@ export default function TopNav() {
 
             {/* Botão Novidades ao lado da logo */}
             <button
-              onClick={() => setIsNovidadesModalOpen(true)}
-              className="btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2"
+              onClick={handleNovidadesOpen}
+              className={`btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2${shouldPulse ? ' is-pulsing' : ''}`}
               style={{
                 fontSize: '0.875rem',
                 border: '1px solid #1E40AF',
                 transition: 'transform 0.15s ease, filter 0.2s ease, border-color 0.2s ease',
                 backgroundColor: '#2563EB',
                 color: '#fff'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#2563EB';
-                e.currentTarget.style.borderColor = '#1E40AF';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#2563EB';
-                e.currentTarget.style.borderColor = '#1E40AF';
-                e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
               <FiStar size={14} className="opacity-75" />
