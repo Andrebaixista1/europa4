@@ -1,40 +1,65 @@
 import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { FiSearch, FiArrowLeft, FiCheck, FiUser, FiHash, FiCalendar, FiInfo, FiDollarSign, FiCopy } from 'react-icons/fi'
-import { Tooltip as BsTooltip } from 'bootstrap'
+import { FiArrowLeft, FiUser, FiHash, FiCalendar, FiInfo, FiDollarSign, FiCopy } from 'react-icons/fi'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { notify } from '../utils/notify.js'
 import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Link } from 'react-router-dom'
+import { normalizeRole, Roles } from '../utils/roles.js'
+
+const QUALIBANKING_LOGO = 'https://quali.joinbank.com.br/quali/assets/images/logo/logo-auth.svg'
+const BMG_LOGO = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
+const BMG_LOGIN = import.meta.env.login_bmg || import.meta.env.VITE_LOGIN_BMG || ''
+const BMG_PASSWORD = import.meta.env.senha_bmg || import.meta.env.VITE_SENHA_BMG || ''
+const BMG_SOAP_URL = import.meta.env.VITE_BMG_SOAP_URL || '/api/bmg'
+const BMG_SOAP_ACTION = import.meta.env.VITE_BMG_SOAP_ACTION || 'inserirSolicitacao'
+const UF_OPTIONS = [
+  'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO',
+  'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI',
+  'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
+]
 
 export default function ConsultaIN100() {
   const { user } = useAuth()
+  const normalizedRole = normalizeRole(user?.role || user?.Role, user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia)
+  const isMasterRole = normalizedRole === Roles.Master
+  const teamName = (user?.equipe_nome || user?.team_name || user?.teamName || '').toString().toLowerCase()
+  const isMasterTeam = teamName === 'master'
+  const canUseBmg = isMasterRole || isMasterTeam
   const [cpf, setCpf] = useState('')
   const [beneficio, setBeneficio] = useState('')
-  const [online, setOnline] = useState(true)
+  const online = true
   const loader = useLoading()
-  const [showTip, setShowTip] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [bancoInfo, setBancoInfo] = useState(null)
   const resultRef = useRef(null)
   const formRef = useRef(null)
-
-  // Modal de busca (CPF ou NB)
-  const [lookupOpen, setLookupOpen] = useState(false)
-  const [lookup, setLookup] = useState({
-    type: null,            // 'cpf' | 'nb'
-    digits: '',            // número enviado
-    loading: false,
-    error: null,
-    response: null,        // texto cru (pretty)
-    responseObj: null,     // JSON parseado quando possível
-    pairs: [],             // pares chave/valor para tabela (fallback)
-    curatedList: [],       // lista de linhas curadas para tabela principal
-    continueTarget: null,  // 'cpf' | 'nb' que será preenchido ao continuar
-    continueDigits: null,  // legado (não utilizado nas linhas)
-    notFound: false,       // quando nenhuma informação útil for retornada
+  const [providerModalOpen, setProviderModalOpen] = useState(false)
+  const [bmgModalOpen, setBmgModalOpen] = useState(false)
+  const [bmgStep, setBmgStep] = useState('form')
+  const [bmgStatus, setBmgStatus] = useState('idle')
+  const [bmgResponse, setBmgResponse] = useState('')
+  const [bmgError, setBmgError] = useState('')
+  const [bmgRawResponse, setBmgRawResponse] = useState('')
+  const [bmgRequest, setBmgRequest] = useState(null)
+  const [bmgPesquisarStatus, setBmgPesquisarStatus] = useState('idle')
+  const [bmgPesquisarError, setBmgPesquisarError] = useState('')
+  const [bmgPesquisarRaw, setBmgPesquisarRaw] = useState('')
+  const [bmgNumeroSolicitacao, setBmgNumeroSolicitacao] = useState('')
+  const [bmgToken, setBmgToken] = useState('')
+  const [bmgAvulsaStatus, setBmgAvulsaStatus] = useState('idle')
+  const [bmgAvulsaError, setBmgAvulsaError] = useState('')
+  const [bmgAvulsaRaw, setBmgAvulsaRaw] = useState('')
+  const [bmgResultado, setBmgResultado] = useState(null)
+  const [bmgForm, setBmgForm] = useState({
+    nomeCompleto: '',
+    dataNascimento: '',
+    cidade: '',
+    estado: '',
+    ddd: '',
+    telefone: '',
   })
 
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
@@ -97,19 +122,6 @@ export default function ConsultaIN100() {
     fetchSaldoUsuario()
   }, [user])
 
-  // Inicializa tooltips Bootstrap nos elementos que tiverem data-bs-toggle="tooltip"
-  useEffect(() => {
-    const nodes = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    const instances = nodes.map((el) => {
-      try {
-        return new BsTooltip(el, { placement: 'top', trigger: 'hover focus', delay: { show: 500, hide: 100 }, container: 'body', animation: true })
-      } catch {
-        return null
-      }
-    })
-    return () => { instances.forEach((t) => t && t.dispose && t.dispose()) }
-  }, [])
-
   const formatCpf = (value) => {
     const v = value.replace(/\D/g, '').slice(0, 11)
     const parts = []
@@ -133,6 +145,12 @@ export default function ConsultaIN100() {
     if (p3) out = `${p1}.${p2}.${p3}`
     if (p4) out = `${p1}.${p2}.${p3}-${p4}`
     return out
+  }
+  const formatBeneficioDisplay = (value) => {
+    const digits = String(value || '').replace(/\D/g, '')
+    if (!digits) return ''
+    const padded = digits.padStart(10, '0').slice(0, 10)
+    return formatBeneficio(padded)
   }
 
   // Formatação de data: usa parsing estrito do componente YYYY-MM-DD (sem efeito de timezone)
@@ -171,6 +189,215 @@ export default function ConsultaIN100() {
     return v
   }
   const mapSituacao = (v) => (v === 'elegible' ? 'Elegível' : v || '-')
+
+  const parseBmgDateValue = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw || raw.startsWith('0001-01-01')) return null
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+      const d = new Date(raw)
+      return isNaN(d) ? null : d
+    }
+    const match = raw.match(/\b([A-Za-z]{3})\s+([A-Za-z]{3})\s+(\d{1,2}).*?(\d{4})\b/)
+    if (match) {
+      const months = {
+        Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+        Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+      }
+      const monthIdx = months[match[2]]
+      if (monthIdx == null) return null
+      const day = Number(match[3])
+      const year = Number(match[4])
+      const d = new Date(year, monthIdx, day)
+      return isNaN(d) ? null : d
+    }
+    const asDate = new Date(raw)
+    return isNaN(asDate) ? null : asDate
+  }
+
+  const formatBmgDate = (value) => {
+    const raw = String(value || '').trim()
+    if (!raw || raw.startsWith('0001-01-01')) return '-'
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return formatDate(raw)
+    const match = raw.match(/\b([A-Za-z]{3})\s+([A-Za-z]{3})\s+(\d{1,2}).*?(\d{4})\b/)
+    if (match) {
+      const months = {
+        Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+        Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+      }
+      const mm = months[match[2]] || '01'
+      const dd = String(match[3]).padStart(2, '0')
+      return `${dd}/${mm}/${match[4]}`
+    }
+    const asDate = new Date(raw)
+    if (!isNaN(asDate)) return asDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+    return raw
+  }
+  const formatBmgTime = (value) => {
+    const d = parseBmgDateValue(value)
+    if (!d) return '--:--'
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' })
+  }
+  const idadeFromDate = (dateObj) => {
+    if (!dateObj || isNaN(dateObj)) return null
+    const t = new Date()
+    let age = t.getFullYear() - dateObj.getFullYear()
+    const m = t.getMonth() - dateObj.getMonth()
+    if (m < 0 || (m === 0 && t.getDate() < dateObj.getDate())) age--
+    return age
+  }
+  const bmgAgeFrom = (value) => {
+    const d = parseBmgDateValue(value)
+    return d ? idadeFromDate(d) : null
+  }
+  const bmgMoney = (value) => {
+    if (value == null) return '-'
+    const n = Number(String(value).replace(',', '.'))
+    if (Number.isNaN(n)) return '-'
+    return brCurrency(n)
+  }
+  const mapBool = (value) => {
+    const v = String(value || '').toLowerCase()
+    if (v === 'true') return 'Sim'
+    if (v === 'false') return 'Não'
+    return value || '-'
+  }
+
+  const xmlEscape = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+
+  const buildBmgEnvelope = (payload) => `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://webservice.econsig.bmg.com">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <web:inserirSolicitacao>
+      <solicitacaoIN100>
+        <login>${xmlEscape(payload.login)}</login>
+        <senha>${xmlEscape(payload.senha)}</senha>
+        <cidade>${xmlEscape(payload.cidade)}</cidade>
+        <cpf>${xmlEscape(payload.cpf)}</cpf>
+        <dataNascimento>${xmlEscape(payload.dataNascimento)}</dataNascimento>
+        <ddd>${xmlEscape(payload.ddd)}</ddd>
+        <estado>${xmlEscape(payload.estado)}</estado>
+        <matricula>${xmlEscape(payload.matricula)}</matricula>
+        <nome>${xmlEscape(payload.nome)}</nome>
+        <telefone>${xmlEscape(payload.telefone)}</telefone>
+      </solicitacaoIN100>
+    </web:inserirSolicitacao>
+  </soapenv:Body>
+</soapenv:Envelope>`
+
+  const buildPesquisarEnvelope = (payload) => `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://webservice.econsig.bmg.com">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <web:pesquisar>
+      <FiltroConsultaIN100>
+        <login>${xmlEscape(payload.login)}</login>
+        <senha>${xmlEscape(payload.senha)}</senha>
+        <cpf>${xmlEscape(payload.cpf)}</cpf>
+        <periodoInicial>${xmlEscape(payload.periodoInicial)}</periodoInicial>
+        <periodoFinal>${xmlEscape(payload.periodoFinal)}</periodoFinal>
+        <numeroSolicitacao></numeroSolicitacao>
+      </FiltroConsultaIN100>
+    </web:pesquisar>
+  </soapenv:Body>
+</soapenv:Envelope>`
+
+  const buildAvulsaEnvelope = (payload) => `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://webservice.econsig.bmg.com">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <web:realizarConsultaAvulsa>
+      <FiltroConsultaAvulsaIN100>
+        <login>${xmlEscape(payload.login)}</login>
+        <senha>${xmlEscape(payload.senha)}</senha>
+        <numeroSolicitacao>${xmlEscape(payload.numeroSolicitacao)}</numeroSolicitacao>
+        <token>${xmlEscape(payload.token)}</token>
+      </FiltroConsultaAvulsaIN100>
+    </web:realizarConsultaAvulsa>
+  </soapenv:Body>
+</soapenv:Envelope>`
+
+  const parseBmgSoapResponse = (xmlText) => {
+    if (!xmlText) return { message: '', fault: 'Resposta vazia do BMG.' }
+    try {
+      const doc = new DOMParser().parseFromString(xmlText, 'text/xml')
+      if (doc.getElementsByTagName('parsererror').length) {
+        return { message: '', fault: 'Nao foi possivel interpretar a resposta do BMG.' }
+      }
+      const getText = (tag) => doc.getElementsByTagName(tag)[0]?.textContent?.trim() || ''
+      const message = getText('inserirSolicitacaoReturn')
+      const fault = getText('faultstring') || getText('Fault')
+      return { message, fault }
+    } catch {
+      const match = xmlText.match(/<inserirSolicitacaoReturn[^>]*>([\s\S]*?)<\/inserirSolicitacaoReturn>/i)
+      if (match) {
+        return { message: match[1].replace(/<[^>]+>/g, '').trim(), fault: '' }
+      }
+      return { message: '', fault: 'Resposta invalida do BMG.' }
+    }
+  }
+
+  const parseNumeroSolicitacao = (xmlText) => {
+    if (!xmlText) return ''
+    try {
+      const doc = new DOMParser().parseFromString(xmlText, 'text/xml')
+      const nodes = Array.from(doc.getElementsByTagName('numeroSolicitacao'))
+      for (const node of nodes) {
+        const value = (node?.textContent || '').trim()
+        if (value) return value
+      }
+    } catch { /* ignore */ }
+    const match = xmlText.match(/<numeroSolicitacao[^>]*>([^<]+)<\/numeroSolicitacao>/i)
+    return match ? match[1].trim() : ''
+  }
+
+  const parseAvulsaResponse = (xmlText) => {
+    if (!xmlText) return null
+    try {
+      const doc = new DOMParser().parseFromString(xmlText, 'text/xml')
+      const consulta = doc.getElementsByTagName('consulta')[0]
+      const getChild = (node, tag) => node?.getElementsByTagName(tag)[0]?.textContent?.trim() || ''
+      const getText = (tag) => doc.getElementsByTagName(tag)[0]?.textContent?.trim() || ''
+      return {
+        cpf: getChild(consulta, 'cpf') || getText('cpf'),
+        numeroBeneficio: getChild(consulta, 'numeroBeneficio') || getText('numeroBeneficio'),
+        nome: getChild(consulta, 'nomeBeneficiario') || getText('nome'),
+        dataNascimento: getChild(consulta, 'dataNascimento') || getText('dataNascimento'),
+        dataConsulta: getChild(consulta, 'dataConsulta') || getText('dataConsulta'),
+        especie: getChild(consulta, 'especie'),
+        qtdEmprestimos: getChild(consulta, 'qtdEmprestimosAtivosSuspesnsos'),
+        contaCorrente: getChild(consulta, 'contaCorrente'),
+        agenciaPagadora: getChild(consulta, 'agenciaPagadora'),
+        cidade: getText('cidade'),
+        estado: getChild(consulta, 'ufPagamento'),
+        dataDespachoBeneficio: getChild(consulta, 'dataDespachoBeneficio'),
+        elegivelEmprestimo: getChild(consulta, 'elegivelEmprestimo'),
+        margemDisponivel: getChild(consulta, 'margemDisponivel'),
+        margemDisponivelCartao: getChild(consulta, 'margemDisponivelCartao'),
+        margemDisponivelRcc: getChild(consulta, 'margemDisponivelRcc'),
+        valorComprometido: getChild(consulta, 'valorComprometido'),
+        valorLimiteCartao: getChild(consulta, 'valorLimiteCartao'),
+        valorLimiteRcc: getChild(consulta, 'valorLimiteRcc'),
+        valorMaximoComprometimento: getChild(consulta, 'valorMaximoComprometimento'),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  const buildDateWithOffset = (daysFromToday) => {
+    const now = new Date()
+    const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysFromToday)
+    const y = target.getFullYear()
+    const m = String(target.getMonth() + 1).padStart(2, '0')
+    const d = String(target.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}T00:00:00`
+  }
 
   const copyToClipboard = async (text, successMsg = 'Copiado!') => {
     try {
@@ -217,132 +444,66 @@ export default function ConsultaIN100() {
     }
   }
 
-  // Abre modal e envia POST para consulta por CPF/NB
-  const openLookupModal = async (kind) => {
-    const isCpf = kind === 'cpf'
-    const raw = isCpf ? cpf : beneficio
-    const digits = (raw || '').replace(/\D/g, '')
-    // Na lupa, permitir busca parcial para CPF e NB (mínimo 1 dígito)
-    if (isCpf && digits.length === 0) return notify.warn('Informe pelo menos 1 dígito do CPF para pesquisar.')
-    // Para NB na lupa, também permitir menos de 10 dígitos (busca parcial)
-    if (!isCpf && digits.length === 0) return notify.warn('Informe pelo menos 1 dígito do benefício para pesquisar.')
+  const getConsultaInput = () => {
+    if (Number(metrics.disponivel) <= 0) {
+      notify.warn('Sem saldo disponivel para realizar consultas.')
+      return null
+    }
+    const digits = cpf.replace(/\D/g, '')
+    let benDigits = beneficio.replace(/\D/g, '')
+    if (digits.length !== 11) {
+      notify.warn('Informe um CPF valido (11 digitos).')
+      return null
+    }
+    if (benDigits.length > 10) {
+      notify.warn('Informe um beneficio valido (10 digitos).')
+      return null
+    }
+    if (benDigits.length < 10) {
+      benDigits = benDigits.padStart(10, '0')
+    }
+    return { digits, benDigits }
+  }
 
-    setLookup({
-      type: kind,
-      digits,
-      loading: true,
-      error: null,
-      response: null,
-      responseObj: null,
-      pairs: [],
-      curatedList: [],
-      continueTarget: kind === 'nb' ? 'cpf' : 'nb',
-      continueDigits: null,
-      notFound: false,
-    })
-    setLookupOpen(true)
-    try {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 60000)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-nbcpf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: isCpf ? 'cpf' : 'nb', numero: digits }),
-        signal: controller.signal,
-      })
-      clearTimeout(timeout)
-      const text = await res.text().catch(() => '')
-      let display = text
-      let json = null
-      try { json = JSON.parse(text); display = JSON.stringify(json, null, 2) } catch { /* texto simples */ }
-
-      const extractDigitsFromObj = (o, keys) => {
-        if (!o) return null
-        const lower = keys.map(k => k.toLowerCase())
-        const visit = (val) => {
-          if (val == null) return null
-          if (Array.isArray(val)) { for (const it of val) { const r = visit(it); if (r) return r } return null }
-          if (typeof val === 'object') {
-            for (const [k, v] of Object.entries(val)) {
-              if (lower.includes(String(k).toLowerCase())) {
-                const d = String(v ?? '').replace(/\D/g, '')
-                if (d) return d
-              }
-              const nested = visit(v); if (nested) return nested
-            }
-            return null
-          }
-          return null
-        }
-        return visit(o)
-      }
-
-      const findDigitsInText = (t, len) => {
-        if (!t) return null
-        const hint = len === 11 ? /(cpf)[^\d]{0,20}(\d{11})/i : /(beneficio|nb)[^\d]{0,20}(\d{10})/i
-        const hintMatch = t.match(hint)
-        if (hintMatch) return hintMatch[2]
-        const re = new RegExp(`\\b\\d{${len}}\\b`)
-        const m = t.match(re)
-        return m ? m[0] : null
-      }
-
-      // Curadoria: extrai campos principais e monta lista organizada (suporta array)
-      const toCuratedList = (obj) => {
-        if (!obj) return []
-        // função para buscar valor por chaves comuns
-        const extractAny = function walk(o, keys) {
-          const lower = keys.map(k => k.toLowerCase())
-          const visit = (val) => {
-            if (val == null) return null
-            if (Array.isArray(val)) { for (const it of val) { const r = visit(it); if (r != null) return r } return null }
-            if (typeof val === 'object') {
-              for (const [k, v] of Object.entries(val)) {
-                if (lower.includes(String(k).toLowerCase())) return v
-                const nested = visit(v); if (nested != null) return nested
-              }
-              return null
-            }
-            return null
-          }
-          return visit(o)
-        }
-        const makeRow = (source) => {
-          const findVal = (keys) => extractAny(source, keys)
-          const nbDigits = String(findVal(['nb', 'numero_beneficio', 'beneficio', 'nr_beneficio', 'num_beneficio']) ?? '').replace(/\D/g, '')
-          const cpfDigits = String(findVal(['nu_cpf', 'cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) ?? '').replace(/\D/g, '')
-          const nome = findVal(['nome_segurado', 'nome', 'nome_beneficiario', 'nome_cliente']) || ''
-          const nascimentoRaw = findVal(['dt_nascimento', 'data_nascimento', 'nascimento']) || null
-          const parts = parseISODateParts(nascimentoRaw)
-          const nascStr = parts ? partsToBR(parts) : (nascimentoRaw ? formatDate(nascimentoRaw) : '')
-          const idadeCalc = parts ? idadeFrom(`${parts.y}-${String(parts.m).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`) : (nascimentoRaw ? idadeFrom(nascimentoRaw) : '')
-          return { nbDigits, cpfDigits, nome: String(nome || ''), nascStr, idade: idadeCalc }
-        }
-        const list = Array.isArray(obj) ? obj.map(makeRow) : [makeRow(obj)]
-        return list
-      }
-
-      const continueTarget = kind === 'nb' ? 'cpf' : 'nb'
-      let curatedList = []
-      if (json) curatedList = toCuratedList(json)
-      // Fallback: tenta extrair um único dígito quando a estrutura não está clara
-      let continueDigits = null
-      if (!curatedList.length) {
-        if (continueTarget === 'cpf') continueDigits = extractDigitsFromObj(json, ['cpf', 'numero_documento', 'documento', 'nr_cpf', 'num_cpf']) || findDigitsInText(text, 11)
-        else continueDigits = extractDigitsFromObj(json, ['nb', 'numero_beneficio', 'beneficio', 'nr_beneficio', 'num_beneficio']) || findDigitsInText(text, 10)
-      }
-      const likelyEmpty = (!json) || (Array.isArray(json) && json.length === 0) || (typeof json === 'object' && !Array.isArray(json) && Object.keys(json || {}).length === 0)
-      const hasData = curatedList.some(r => r.nbDigits || r.cpfDigits || r.nome || r.nascStr)
-      const notFound = !hasData && (likelyEmpty || (!continueDigits && String(text || '').trim().length > 0))
-
-      if (!res.ok) {
-        setLookup((s) => ({ ...s, loading: false, error: `Erro ${res.status}: ${res.statusText || 'Falha ao consultar'}`, response: display, responseObj: json, pairs: (curatedList[0] ? [] : []), curatedList, continueTarget, continueDigits, notFound }))
-        return
-      }
-      setLookup((s) => ({ ...s, loading: false, error: null, response: display, responseObj: json, pairs: [], curatedList, continueTarget, continueDigits, notFound }))
-    } catch (err) {
-      const msg = err?.name === 'AbortError' ? 'Tempo esgotado aguardando a resposta.' : (err?.message || 'Erro ao consultar')
-      setLookup((s) => ({ ...s, loading: false, error: msg }))
+  const getBmgInput = () => {
+    const digitsOnly = (value) => String(value || '').replace(/\D/g, '')
+    const nomeCompleto = bmgForm.nomeCompleto.trim()
+    const dataNascimento = bmgForm.dataNascimento
+    const cidade = bmgForm.cidade.trim()
+    const estado = bmgForm.estado.trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2)
+    const ddd = digitsOnly(bmgForm.ddd).slice(0, 2)
+    const telefone = digitsOnly(bmgForm.telefone)
+    if (!nomeCompleto) {
+      notify.warn('Informe o nome completo.')
+      return null
+    }
+    if (!dataNascimento) {
+      notify.warn('Informe a data de nascimento.')
+      return null
+    }
+    if (!cidade) {
+      notify.warn('Informe a cidade.')
+      return null
+    }
+    if (estado.length !== 2) {
+      notify.warn('Informe o estado com 2 letras.')
+      return null
+    }
+    if (ddd.length !== 2) {
+      notify.warn('Informe o DDD.')
+      return null
+    }
+    if (telefone.length < 8) {
+      notify.warn('Informe o telefone.')
+      return null
+    }
+    return {
+      nomeCompleto,
+      dataNascimento: `${dataNascimento}T00:00:00`,
+      cidade,
+      estado,
+      ddd,
+      telefone,
     }
   }
 
@@ -362,28 +523,239 @@ export default function ConsultaIN100() {
     }
   }
 
-  const onSubmit = async (e) => {
-    e.preventDefault()
-    loader.begin()
+  const openProviderModal = (event) => {
+    event?.preventDefault?.()
+    if (!getConsultaInput()) return
+    setResultado(null)
+    setBancoInfo(null)
+    setBmgResultado(null)
+    setProviderModalOpen(true)
+  }
+
+  const handleBmgSubmit = (event) => {
+    event?.preventDefault?.()
+    if (!canUseBmg) {
+      notify.warn('Apenas Master pode consultar no BMG.')
+      return
+    }
+    const input = getConsultaInput()
+    if (!input) return
+    const bmgData = getBmgInput()
+    if (!bmgData) return
+    setBmgStep('response')
+    onSubmit(null, 'bmg', bmgData, input)
+  }
+
+  const submitBmg = async (input, bmgData) => {
+    if (!canUseBmg) {
+      notify.warn('Apenas Master pode consultar no BMG.')
+      return
+    }
+    if (!BMG_SOAP_URL) {
+      setBmgStatus('error')
+      setBmgError('URL do BMG nao configurada. Defina VITE_BMG_SOAP_URL no .env.')
+      notify.error('URL do BMG nao configurada. Defina VITE_BMG_SOAP_URL no .env.')
+      return
+    }
+    if (!BMG_LOGIN || !BMG_PASSWORD) {
+      setBmgStatus('error')
+      setBmgError('Credenciais do BMG nao configuradas.')
+      notify.error('Credenciais do BMG nao configuradas.')
+      return
+    }
+    const payload = {
+      login: BMG_LOGIN,
+      senha: BMG_PASSWORD,
+      cidade: bmgData.cidade.toUpperCase(),
+      cpf: input.digits,
+      dataNascimento: bmgData.dataNascimento,
+      ddd: bmgData.ddd,
+      estado: bmgData.estado.toUpperCase(),
+      matricula: input.benDigits,
+      nome: bmgData.nomeCompleto.toUpperCase(),
+      telefone: bmgData.telefone,
+    }
+    setBmgStatus('loading')
+    setBmgResponse('')
+    setBmgError('')
+    setBmgRawResponse('')
+    setBmgRequest(payload)
     try {
-      if (Number(metrics.disponivel) <= 0) {
-        notify.warn('Sem saldo disponivel para realizar consultas.')
+      loader.begin()
+      const headers = { 'Content-Type': 'text/xml;charset=UTF-8', SOAPAction: BMG_SOAP_ACTION }
+      const res = await fetch(BMG_SOAP_URL, {
+        method: 'POST',
+        headers,
+        body: buildBmgEnvelope(payload),
+      })
+      const text = await res.text()
+      if (!text || !text.trim()) {
+        const msg = `Resposta vazia do BMG (HTTP ${res.status}).`
+        throw new Error(msg)
+      }
+      setBmgRawResponse(text)
+      const parsed = parseBmgSoapResponse(text)
+      if (!res.ok) {
+        const reason = parsed.fault || `Erro HTTP ${res.status}`
+        throw new Error(reason)
+      }
+      if (parsed.fault) {
+        setBmgStatus('error')
+        setBmgError(parsed.fault)
+        notify.error(parsed.fault)
         return
       }
-      const digits = cpf.replace(/\D/g, '')
-      const benDigits = beneficio.replace(/\D/g, '')
-      if (digits.length !== 11) return notify.warn('Informe um CPF valido (11 digitos).')
-      if (benDigits.length !== 10) return notify.warn('Informe um benefício válido (10 dígitos).')
+      setBmgStatus('success')
+      setBmgResponse(parsed.message || 'Resposta recebida do BMG.')
+      notify.success('Solicitacao enviada ao BMG.', { autoClose: 6000 })
+    } catch (err) {
+      setBmgStatus('error')
+      setBmgError(err?.message || 'Erro ao consultar BMG.')
+      notify.error(err?.message || 'Erro ao consultar BMG.')
+    } finally {
+      loader.end()
+    }
+  }
+
+  const pesquisarBmg = async (cpfDigits) => {
+    if (!canUseBmg) {
+      setBmgPesquisarStatus('error')
+      setBmgPesquisarError('Apenas Master pode consultar no BMG.')
+      return
+    }
+    if (!BMG_SOAP_URL) {
+      setBmgPesquisarStatus('error')
+      setBmgPesquisarError('URL do BMG nao configurada.')
+      return
+    }
+    if (!BMG_LOGIN || !BMG_PASSWORD) {
+      setBmgPesquisarStatus('error')
+      setBmgPesquisarError('Credenciais do BMG nao configuradas.')
+      return
+    }
+    const payload = {
+      login: BMG_LOGIN,
+      senha: BMG_PASSWORD,
+      cpf: cpfDigits,
+      periodoInicial: buildDateWithOffset(-89), // 90 dias atras a partir de amanha
+      periodoFinal: buildDateWithOffset(1),
+    }
+    setBmgPesquisarStatus('loading')
+    setBmgPesquisarError('')
+    setBmgPesquisarRaw('')
+    setBmgNumeroSolicitacao('')
+    try {
+      loader.begin()
+      const res = await fetch(BMG_SOAP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml;charset=UTF-8', SOAPAction: 'pesquisar' },
+        body: buildPesquisarEnvelope(payload),
+      })
+      const text = await res.text()
+      if (!text || !text.trim()) {
+        throw new Error(`Resposta vazia do BMG (HTTP ${res.status}).`)
+      }
+      setBmgPesquisarRaw(text)
+      if (!res.ok) {
+        const parsed = parseBmgSoapResponse(text)
+        throw new Error(parsed.fault || `Erro HTTP ${res.status}`)
+      }
+      const numeroSolicitacao = parseNumeroSolicitacao(text)
+      if (!numeroSolicitacao) {
+        throw new Error('Numero da solicitacao nao encontrado.')
+      }
+      setBmgNumeroSolicitacao(numeroSolicitacao)
+      setBmgPesquisarStatus('success')
+      return numeroSolicitacao
+    } catch (err) {
+      setBmgPesquisarStatus('error')
+      setBmgPesquisarError(err?.message || 'Erro ao pesquisar solicitacao.')
+      throw err
+    } finally {
+      loader.end()
+    }
+  }
+
+  const enviarTokenBmg = async () => {
+    if (!canUseBmg) {
+      notify.warn('Apenas Master pode consultar no BMG.')
+      return
+    }
+    if (!bmgNumeroSolicitacao || !bmgToken) {
+      notify.warn('Informe o token recebido via SMS.')
+      return
+    }
+    if (!BMG_SOAP_URL) {
+      setBmgAvulsaStatus('error')
+      setBmgAvulsaError('URL do BMG nao configurada.')
+      return
+    }
+    setBmgAvulsaStatus('loading')
+    setBmgAvulsaError('')
+    setBmgAvulsaRaw('')
+    try {
+      loader.begin()
+      const payload = {
+        login: BMG_LOGIN,
+        senha: BMG_PASSWORD,
+        numeroSolicitacao: bmgNumeroSolicitacao,
+        token: bmgToken,
+      }
+      const res = await fetch(BMG_SOAP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml;charset=UTF-8', SOAPAction: 'realizarConsultaAvulsa' },
+        body: buildAvulsaEnvelope(payload),
+      })
+      const text = await res.text()
+      if (!text || !text.trim()) {
+        throw new Error(`Resposta vazia do BMG (HTTP ${res.status}).`)
+      }
+      setBmgAvulsaRaw(text)
+      if (!res.ok) {
+        const parsed = parseBmgSoapResponse(text)
+        throw new Error(parsed.fault || `Erro HTTP ${res.status}`)
+      }
+      const parsedResult = parseAvulsaResponse(text)
+      if (parsedResult) setBmgResultado(parsedResult)
+      setBmgAvulsaStatus('success')
+      notify.success('Token validado. Consulta BMG concluida.', { autoClose: 6000 })
+      setResultado(null)
+      setBancoInfo(null)
+      setBmgModalOpen(false)
+    } catch (err) {
+      setBmgAvulsaStatus('error')
+      setBmgAvulsaError(err?.message || 'Erro ao validar token.')
+      notify.error(err?.message || 'Erro ao validar token.')
+    } finally {
+      loader.end()
+    }
+  }
+
+  const onSubmit = async (e, provider = 'qualibanking', bmgOverride = null, inputOverride = null) => {
+    e?.preventDefault?.()
+    const input = inputOverride || getConsultaInput()
+    if (!input) return
+    if (provider === 'bmg') {
+      const bmgData = bmgOverride || getBmgInput()
+      if (!bmgData) return
+      await submitBmg(input, bmgData)
+      return
+    }
+    setBmgResultado(null)
+    const { digits, benDigits } = input
+    try {
       loader.begin()
       try {
         if (online) {
           // 1) Dispara consulta online
           const urlConsulta = 'https://n8n.apivieiracred.store/webhook/consulta-online'
           const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
+          const limiteDisponivel = Number(metrics.disponivel ?? 0)
           const consultaPayload = {
             id: (typeof user?.id !== 'undefined' ? user.id : user),
             cpf: digits,
             nb: benDigits,
+            limite_disponivel: limiteDisponivel,
           }
           if (equipeId != null) {
             consultaPayload.equipe_id = equipeId
@@ -420,7 +792,7 @@ export default function ConsultaIN100() {
             const resResposta = await fetch(urlResposta, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
+              body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits, limite_disponivel: limiteDisponivel })
             })
             if (resResposta.ok) {
               const dataTry = await resResposta.json().catch(() => null)
@@ -503,10 +875,11 @@ export default function ConsultaIN100() {
         const urlRespostaOffline = 'https://n8n.apivieiracred.store/webhook/resposta-api'
         // Aguarda 5s antes de buscar a resposta offline
         await new Promise(r => setTimeout(r, 5000))
+        const limiteDisponivel = Number(metrics.disponivel ?? 0)
         const resOff = await fetch(urlRespostaOffline, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits })
+          body: JSON.stringify({ id: user?.id, cpf: digits, nb: benDigits, limite_disponivel: limiteDisponivel })
         })
         if (!resOff.ok) throw new Error('Falha na consulta (offline)')
         const dataOff = await resOff.json().catch(() => null)
@@ -619,6 +992,36 @@ export default function ConsultaIN100() {
 
   }
 
+  const bmgSteps = ['form', 'response', 'token']
+  const bmgStepLabels = { form: 'Dados', response: 'Validação', token: 'Token SMS' }
+  const bmgStepIndex = bmgSteps.indexOf(bmgStep)
+  const bmgProgressValue = bmgStepIndex >= 0 ? Math.round(((bmgStepIndex + 1) / bmgSteps.length) * 100) : 0
+  const bmgProgress = (
+    <div className="mb-3">
+      <div className="d-flex align-items-center justify-content-between small mb-2">
+        {bmgSteps.map((step) => (
+          <span key={step} className={bmgStep === step ? 'fw-semibold' : 'opacity-75'}>
+            {bmgStepLabels[step]}
+          </span>
+        ))}
+      </div>
+      <div className="progress" style={{ height: 6, background: 'rgba(255,255,255,0.08)' }}>
+        <div
+          className="progress-bar"
+          role="progressbar"
+          style={{ width: `${bmgProgressValue}%`, backgroundColor: '#f36c21' }}
+          aria-valuenow={bmgProgressValue}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        />
+      </div>
+    </div>
+  )
+
+  const normalizeBmgMessage = (value) => String(value || '').replace(/\s+/g, ' ').trim()
+  const BMG_TOKEN_SUCCESS_MSG = 'Foi enviado um TOKEN de validação no celular indicado. Gentileza coletá-lo com o cliente e informá-lo no serviço realizarConsultaAvulsa.'
+  const isBmgTokenSuccess = normalizeBmgMessage(bmgResponse) === normalizeBmgMessage(BMG_TOKEN_SUCCESS_MSG)
+
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
@@ -657,7 +1060,7 @@ export default function ConsultaIN100() {
           </div>
 
           <div className="col-12 col-lg-7">
-            <form className="neo-card neo-lg p-4 h-100" onSubmit={onSubmit} ref={formRef}>
+            <form className="neo-card neo-lg p-4 h-100" onSubmit={openProviderModal} ref={formRef}>
               <div className="mb-3">
                 <label className="form-label">CPF</label>
                 <div className="input-group align-items-stretch">
@@ -670,17 +1073,6 @@ export default function ConsultaIN100() {
                     onChange={(e) => setCpf(formatCpf(e.target.value))}
                     required
                   />
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary d-flex align-items-center"
-                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
-                    aria-label="Buscar NB/CPF no nosso banco de dados"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="top"
-                    onClick={() => openLookupModal('cpf')}
-                  >
-                    <FiSearch />
-                  </button>
                   {/* botão de copiar CPF removido conforme solicitação */}
                 </div>
               </div>
@@ -697,24 +1089,8 @@ export default function ConsultaIN100() {
                     onChange={(e) => setBeneficio(formatBeneficio(e.target.value))}
                     required
                   />
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary d-flex align-items-center"
-                    title="Não sabe o NB/CPF do cliente? Digite uma das informações e tentamos buscar no nosso banco de dados"
-                    aria-label="Buscar NB/CPF no nosso banco de dados"
-                    data-bs-toggle="tooltip"
-                    data-bs-placement="top"
-                    onClick={() => openLookupModal('nb')}
-                  >
-                    <FiSearch />
-                  </button>
                   {/* botão de copiar NB removido conforme solicitação */}
                 </div>
-              </div>
-
-              <div className="form-check mb-3">
-                <input className="form-check-input" type="checkbox" id="chk-online" checked={online} onChange={(e) => setOnline(e.target.checked)} />
-                <label className="form-check-label" htmlFor="chk-online">Consultar Online</label>
               </div>
 
               <div>
@@ -724,140 +1100,478 @@ export default function ConsultaIN100() {
           </div>
         </div>
 
-        {/* Modal de Acompanhamento da Busca CPF/NB */}
-        {lookupOpen && (
-          <div className="modal fade show" style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }} role="dialog" aria-modal="true">
-            <div className="modal-dialog modal-dialog-centered modal-xl" style={{ maxWidth: 'min(95vw, 1100px)' }}>
+        {providerModalOpen && (
+          <div
+            className="modal fade show"
+            style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 'min(92vw, 720px)' }}>
               <div className="modal-content modal-dark">
                 <div className="modal-header">
-                  <h5 className="modal-title">Busca por {lookup.type === 'cpf' ? 'CPF' : 'Benefício'}</h5>
-                  <button type="button" className="btn-close" aria-label="Close" disabled={lookup.loading} onClick={() => setLookupOpen(false)}></button>
+                  <h5 className="modal-title">Escolha o provedor</h5>
+                  <button type="button" className="btn-close" aria-label="Close" onClick={() => setProviderModalOpen(false)}></button>
                 </div>
                 <div className="modal-body">
-                  <div className="mb-2">
-                    <div className="form-label mb-0">Número informado</div>
-                    <div className="fw-semibold">{lookup.digits}</div>
-                  </div>
-                  {lookup.loading && (
-                    <div className="d-flex align-items-center gap-2">
-                      <div className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></div>
-                      <span>Aguardando resposta do serviço...</span>
+                  <div className="small opacity-75 mb-3">Selecione onde deseja consultar.</div>
+                  <div className="row g-3">
+                    <div className="col-12 col-md-6">
+                      <button
+                        type="button"
+                        className="btn btn-outline-light w-100 p-3 d-flex flex-column align-items-center gap-2"
+                        onClick={() => {
+                          setProviderModalOpen(false)
+                          onSubmit(null, 'qualibanking')
+                        }}
+                      >
+                        <img
+                          src={QUALIBANKING_LOGO}
+                          alt="Qualibanking"
+                          style={{ width: '160px', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+                        />
+                        <span className="fw-semibold">Consultar no Qualibanking</span>
+                      </button>
                     </div>
-                  )}
-                  {lookup.error && (
-                    <div className="text-danger small mt-2">{lookup.error}</div>
-                  )}
-                  {lookup.response && (
-                    <div className="mt-3">
-                      <div className="form-label mb-2">Resposta</div>
-                      {lookup.notFound ? (
-                        <div className="alert alert-warning mb-2" role="alert">
-                          Cliente não encontrado para o {lookup.type === 'cpf' ? 'CPF' : 'NB'} informado.
-                        </div>
-                      ) : (
-                        <div className="table-responsive">
-                          <table className="table table-sm table-lookup align-middle mb-2">
-                            <thead>
-                              <tr>
-                                <th>NB</th>
-                                <th>Nome</th>
-                                <th>Nascimento</th>
-                                <th>CPF</th>
-                                <th>Idade</th>
-                                <th>Ação</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(lookup.curatedList && lookup.curatedList.length > 0 ? lookup.curatedList : [{ nbDigits: null, nome: null, nascStr: null, cpfDigits: null, idade: null }]).map((row, idx) => (
-                                <tr key={idx}>
-                                  <td className="small">{row.nbDigits ? formatBeneficio(row.nbDigits) : '-'}</td>
-                                  <td className="small" style={{ maxWidth: '28ch', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.nome || ''}>{row.nome || '-'}</td>
-                                  <td className="small">{row.nascStr || '-'}</td>
-                                  <td className="small">{row.cpfDigits ? formatCpf(row.cpfDigits) : '-'}</td>
-                                  <td className="small">{row.idade !== '' && row.idade != null ? String(row.idade) : '-'}</td>
-                                  <td className="small">
-                                    <button
-                                      type="button"
-                                      className="btn btn-success btn-sm d-inline-flex align-items-center"
-                                      title="Adicionar"
-                                      aria-label="Adicionar"
-                                      onClick={() => {
-                                        if (lookup.continueTarget === 'cpf') {
-                                          const cpfNorm = String(row.cpfDigits || '').replace(/\D/g, '')
-                                          if (cpfNorm.length !== 11) { notify.warn('CPF invalido para continuar'); return }
-                                          const current = cpf.replace(/\D/g, '')
-                                          if (current === cpfNorm) { notify.info('CPF ja presente na pesquisa') }
-                                          else { setCpf(formatCpf(cpfNorm)); notify.success('CPF adicionado a pesquisa') }
-                                        } else {
-                                          const nbNorm = String(row.nbDigits || '').replace(/\D/g, '')
-                                          if (nbNorm.length !== 10) { notify.warn('NB invalido para continuar'); return }
-                                          const current = beneficio.replace(/\D/g, '')
-                                          if (current === nbNorm) { notify.info('NB ja presente na pesquisa') }
-                                          else { setBeneficio(formatBeneficio(nbNorm)); notify.success('NB adicionado à pesquisa') }
-                                        }
-                                        setLookupOpen(false)
-                                        setLookup({ type: null, digits: '', loading: false, error: null, response: null, responseObj: null, pairs: [], curatedList: [], continueTarget: null, continueDigits: null, notFound: false })
-                                      }}
-                                    >
-                                      <FiCheck />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                      {/* Detalhes brutos em fallback quando necessário */}
-                      {(lookup.pairs?.length ?? 0) > 0 && (
-                        <details>
-                          <summary className="small mb-1">Ver detalhes brutos</summary>
-                          {lookup.pairs && lookup.pairs.length > 0 ? (
-                            <div className="table-responsive">
-                              <table className="table table-sm table-lookup align-middle mb-0">
-                                <thead>
-                                  <tr>
-                                    <th style={{ width: '40%' }}>Campo</th>
-                                    <th>Valor</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {lookup.pairs.slice(0, 25).map(([k, v], idx) => (
-                                    <tr key={idx}>
-                                      <td className="text-muted small">{k}</td>
-                                      <td className="small" style={{ wordBreak: 'break-word' }}>{String(v)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : (
-                            <pre className="small" style={{ whiteSpace: 'pre-wrap' }}>{lookup.response}</pre>
-                          )}
-                        </details>
-                      )}
-                      <div className="form-text mt-1">
-                        {lookup.continueTarget === 'cpf' ? 'Ao continuar, o CPF será preenchido se identificado.' : 'Ao continuar, o Benefício será preenchido se identificado.'}
+                    {canUseBmg && (
+                      <div className="col-12 col-md-6">
+                        <button
+                          type="button"
+                          className="btn btn-outline-light w-100 p-3 d-flex flex-column align-items-center gap-2"
+                          onClick={() => {
+                            setProviderModalOpen(false)
+                            setBmgModalOpen(true)
+                            setBmgStep('form')
+                            setBmgStatus('idle')
+                            setBmgResponse('')
+                            setBmgError('')
+                            setBmgRawResponse('')
+                            setBmgRequest(null)
+                            setBmgPesquisarStatus('idle')
+                            setBmgPesquisarError('')
+                            setBmgPesquisarRaw('')
+                            setBmgNumeroSolicitacao('')
+                            setBmgToken('')
+                            setBmgAvulsaStatus('idle')
+                            setBmgAvulsaError('')
+                            setBmgAvulsaRaw('')
+                            setBmgResultado(null)
+                          }}
+                        >
+                          <img
+                            src={BMG_LOGO}
+                            alt="BMG"
+                            style={{ width: '160px', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+                          />
+                          <span className="fw-semibold">Consultar no BMG</span>
+                          <span className="small text-center" style={{ color: '#f36c21' }}>
+                            Voce ira precisar de dados pessoais do cliente para consultar
+                          </span>
+                        </button>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    disabled={lookup.loading}
-                    onClick={() => {
-                      setLookupOpen(false)
-                      setLookup({ type: null, digits: '', loading: false, error: null, response: null, responseObj: null, pairs: [], curatedList: [], continueTarget: null, continueDigits: null })
-                    }}
-                  >
-                    Fechar
+                  <button type="button" className="btn btn-secondary" onClick={() => setProviderModalOpen(false)}>
+                    Cancelar
                   </button>
                 </div>
               </div>
             </div>
           </div>
+        )}
+
+        {bmgModalOpen && (
+          <div
+            className="modal fade show"
+            style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 'min(92vw, 760px)' }}>
+              <div
+                className="modal-content modal-dark"
+                style={{
+                  background:
+                    'radial-gradient(260px 260px at 0% 0%, rgba(243,108,33,0.6) 0%, rgba(243,108,33,0.25) 35%, rgba(20,20,20,0) 60%), linear-gradient(180deg, #0b0b0b 0%, #141414 100%)',
+                }}
+              >
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    {bmgStep === 'form' && 'Dados adicionais para consulta BMG'}
+                    {bmgStep === 'response' && 'Validação'}
+                    {bmgStep === 'token' && 'Token SMS'}
+                  </h5>
+                  <button type="button" className="btn-close" aria-label="Close" onClick={() => setBmgModalOpen(false)}></button>
+                </div>
+                {bmgStep === 'form' && (
+                  <form onSubmit={handleBmgSubmit}>
+                    <div className="modal-body">
+                      {bmgProgress}
+                      <div className="row g-3 mb-2">
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">CPF</label>
+                          <input type="text" className="form-control" value={formatCpf(cpf)} readOnly />
+                        </div>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">NB</label>
+                        <input type="text" className="form-control" value={formatBeneficioDisplay(beneficio)} readOnly />
+                        </div>
+                      </div>
+                      <div className="row g-3">
+                        <div className="col-12">
+                          <label className="form-label">Nome Completo</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={bmgForm.nomeCompleto}
+                            onChange={(e) => setBmgForm((prev) => ({ ...prev, nomeCompleto: e.target.value }))}
+                            required
+                          />
+                        </div>
+                        <div className="col-12 col-md-6">
+                          <label className="form-label">Data de Nascimento</label>
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={bmgForm.dataNascimento}
+                            onChange={(e) => setBmgForm((prev) => ({ ...prev, dataNascimento: e.target.value }))}
+                            required
+                          />
+                        </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label">Cidade</label>
+                        <input
+                          type="text"
+                          className="form-control text-uppercase"
+                          value={bmgForm.cidade}
+                          onChange={(e) =>
+                            setBmgForm((prev) => ({
+                              ...prev,
+                              cidade: e.target.value.toUpperCase(),
+                            }))
+                          }
+                          required
+                        />
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <label className="form-label">Estado</label>
+                        <select
+                          className="form-select text-uppercase"
+                          value={bmgForm.estado}
+                          onChange={(e) =>
+                            setBmgForm((prev) => ({
+                              ...prev,
+                              estado: e.target.value.toUpperCase(),
+                            }))
+                          }
+                          required
+                        >
+                          <option value="">Selecione</option>
+                          {UF_OPTIONS.map((uf) => (
+                            <option key={uf} value={uf}>{uf}</option>
+                          ))}
+                        </select>
+                      </div>
+                        <div className="col-12">
+                          <div className="form-text" style={{ color: '#f36c21' }}>
+                            Para receber o token, por favor coloque o proprio numero do telefone para isso.
+                          </div>
+                        </div>
+                        <div className="col-6 col-md-3">
+                          <label className="form-label">DDD</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="form-control"
+                            value={bmgForm.ddd}
+                            onChange={(e) =>
+                              setBmgForm((prev) => ({
+                                ...prev,
+                                ddd: e.target.value.replace(/\D/g, '').slice(0, 2),
+                              }))
+                            }
+                            required
+                          />
+                        </div>
+                        <div className="col-6 col-md-3">
+                          <label className="form-label">Telefone</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            className="form-control"
+                            value={bmgForm.telefone}
+                            onChange={(e) =>
+                              setBmgForm((prev) => ({
+                                ...prev,
+                                telefone: e.target.value.replace(/\D/g, '').slice(0, 11),
+                              }))
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={() => setBmgModalOpen(false)}>
+                        Cancelar
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        Enviar Token
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {bmgStep === 'response' && (
+                  <>
+                    <div className="modal-body">
+                      {bmgProgress}
+                      <div className="d-flex flex-column gap-3">
+                        {bmgRequest && (
+                          <div className="small opacity-75">
+                            CPF: {formatCpf(String(bmgRequest.cpf))} • NB: {formatBeneficioDisplay(String(bmgRequest.matricula))}
+                          </div>
+                        )}
+                        {bmgPesquisarStatus === 'loading' && (
+                          <div className="small text-warning">Buscando numero da solicitacao...</div>
+                        )}
+                        {bmgPesquisarStatus === 'error' && (
+                          <div className="text-danger">{bmgPesquisarError || 'Erro ao buscar numero da solicitacao.'}</div>
+                        )}
+                        {bmgStatus === 'loading' && (
+                          <div className="opacity-75">Enviando solicitacao ao BMG e aguardando retorno...</div>
+                        )}
+                        {bmgStatus === 'error' && (
+                          <div className="text-danger">{bmgError || 'Erro ao consultar BMG.'}</div>
+                        )}
+                        {bmgStatus === 'success' && (
+                          <div className={`fw-semibold ${isBmgTokenSuccess ? 'text-success' : ''}`}>
+                            {bmgResponse || 'Resposta recebida do BMG.'}
+                          </div>
+                        )}
+                        {bmgStatus === 'idle' && (
+                          <div className="opacity-75">Aguardando envio.</div>
+                        )}
+                        {bmgRawResponse && (
+                          <details>
+                            <summary className="small">Ver resposta bruta</summary>
+                            <pre className="mt-2 small">{bmgRawResponse}</pre>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={() => setBmgStep('form')}>
+                        Voltar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={!isBmgTokenSuccess || bmgPesquisarStatus === 'loading'}
+                        onClick={async () => {
+                          try {
+                            const digits = cpf.replace(/\D/g, '')
+                            await pesquisarBmg(digits)
+                            setBmgStep('token')
+                          } catch {
+                            // erro exibido no estado
+                          }
+                        }}
+                      >
+                        {bmgPesquisarStatus === 'loading' ? 'Buscando...' : 'Continuar'}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {bmgStep === 'token' && (
+                  <>
+                    <div className="modal-body">
+                      {bmgProgress}
+                      <div className="d-flex flex-column gap-3">
+                        <div className="small opacity-75">
+                          Informe o token recebido via SMS para continuar.
+                        </div>
+                        <div className="row g-3">
+                          <div className="col-12 col-md-6">
+                            <label className="form-label">Número da solicitação</label>
+                            <input type="text" className="form-control" value={bmgNumeroSolicitacao} readOnly />
+                          </div>
+                          <div className="col-12 col-md-6">
+                            <label className="form-label">Token</label>
+                            <input
+                              type="text"
+                              className="form-control text-uppercase"
+                              maxLength={6}
+                              value={bmgToken}
+                              onChange={(e) => setBmgToken(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+                              placeholder="Ex: ABCD"
+                            />
+                          </div>
+                        </div>
+                        {bmgAvulsaStatus === 'error' && (
+                          <div className="text-danger">{bmgAvulsaError || 'Erro ao validar token.'}</div>
+                        )}
+                        {bmgAvulsaStatus === 'success' && (
+                          <div className="text-success">Token enviado. Resposta recebida (sem processamento).</div>
+                        )}
+                        {bmgAvulsaRaw && (
+                          <details>
+                            <summary className="small">Ver resposta bruta</summary>
+                            <pre className="mt-2 small">{bmgAvulsaRaw}</pre>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={() => setBmgStep('response')}>
+                        Voltar
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={!bmgToken || bmgAvulsaStatus === 'loading'}
+                        onClick={enviarTokenBmg}
+                      >
+                        {bmgAvulsaStatus === 'loading' ? 'Enviando...' : 'Validar Token'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {bmgResultado && (
+          <section className="mt-4 result-section">
+            <div className="neo-card result-hero bmg-hero p-4 mb-3">
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                <h5 className="mb-0 d-flex align-items-center gap-2"><FiUser /> Dados Pessoais</h5>
+                <div className="small opacity-75">
+                  Atualizado: {formatBmgDate(bmgResultado.dataConsulta)} as {formatBmgTime(bmgResultado.dataConsulta)}
+                </div>
+              </div>
+              <div className="row g-3">
+                <div className="col-12 col-lg-4">
+                  <div className="label">Nome</div>
+                  <div className="value fw-semibold">{bmgResultado.nome || '-'}</div>
+                </div>
+                <div className="col-6 col-lg-2">
+                  <div className="label d-flex align-items-center gap-1"><FiHash /> CPF</div>
+                  <div className="value d-flex align-items-center gap-2">
+                    <span>{bmgResultado.cpf ? formatCpf(String(bmgResultado.cpf)) : '-'}</span>
+                  </div>
+                </div>
+                <div className="col-6 col-lg-3">
+                  <div className="label d-flex align-items-center gap-1"><FiCalendar /> Idade</div>
+                  <div className="value">
+                    {formatBmgDate(bmgResultado.dataNascimento)}
+                    {bmgAgeFrom(bmgResultado.dataNascimento) != null && (
+                      <span className="ms-1">({bmgAgeFrom(bmgResultado.dataNascimento)} anos)</span>
+                    )}
+                  </div>
+                </div>
+                <div className="col-6 col-lg-1">
+                  <div className="label">Espécie</div>
+                  <div className="value">{bmgResultado.especie || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="neo-card p-0 mb-3 bmg-outline">
+              <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Informações da matrícula</h6>
+              </div>
+              <div className="kv-list p-3 p-md-4">
+                <div className="kv-line">
+                  <div className="kv-label">NB:</div>
+                  <div className="kv-value">{bmgResultado.numeroBeneficio ? formatBeneficioDisplay(String(bmgResultado.numeroBeneficio)) : '-'}</div>
+                  <div className="kv-label">Espécie:</div>
+                  <div className="kv-value">{bmgResultado.especie || '-'}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Data Despacho do Benefício:</div>
+                  <div className="kv-value">{formatBmgDate(bmgResultado.dataDespachoBeneficio)}</div>
+                  <div className="kv-label">Elegível Empréstimo:</div>
+                  <div className="kv-value">{mapBool(bmgResultado.elegivelEmprestimo)}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Quantidade de Empréstimos:</div>
+                  <div className="kv-value">{bmgResultado.qtdEmprestimos || '-'}</div>
+                  <div className="kv-label"></div>
+                  <div className="kv-value"></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="neo-card p-0 mb-3 bmg-outline">
+              <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Endereço</h6>
+              </div>
+              <div className="kv-list p-3 p-md-4">
+                <div className="kv-line">
+                  <div className="kv-label">Cidade:</div>
+                  <div className="kv-value">{bmgResultado.cidade || '-'}</div>
+                  <div className="kv-label">UF:</div>
+                  <div className="kv-value">{bmgResultado.estado || '-'}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="row g-3 mb-3">
+              <div className="col-12 col-lg-4">
+                <div className="neo-card stat-card bmg-card h-100">
+                  <div className="p-4">
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disponível:</div>
+                    <div className="stat-value">{bmgMoney(bmgResultado.margemDisponivel)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-12 col-lg-4">
+                <div className="neo-card stat-card bmg-card h-100">
+                  <div className="p-4">
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disp. Cartão:</div>
+                    <div className="stat-value">{bmgMoney(bmgResultado.margemDisponivelCartao)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="col-12 col-lg-4">
+                <div className="neo-card stat-card bmg-card h-100">
+                  <div className="p-4">
+                    <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disp. RCC:</div>
+                    <div className="stat-value">{bmgMoney(bmgResultado.margemDisponivelRcc)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="neo-card p-0 mb-4 bmg-outline">
+              <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados bancários</h6>
+              </div>
+              <div className="kv-list p-3 p-md-4">
+                <div className="kv-line">
+                  <div className="kv-label">Conta Corrente:</div>
+                  <div className="kv-value">{bmgResultado.contaCorrente || '-'}</div>
+                  <div className="kv-label">Agência Pagadora:</div>
+                  <div className="kv-value">{bmgResultado.agenciaPagadora || '-'}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Valor Comprometido:</div>
+                  <div className="kv-value">{bmgMoney(bmgResultado.valorComprometido)}</div>
+                  <div className="kv-label">Valor Limite Cartão:</div>
+                  <div className="kv-value">{bmgMoney(bmgResultado.valorLimiteCartao)}</div>
+                </div>
+                <div className="kv-line">
+                  <div className="kv-label">Valor Limite RCC:</div>
+                  <div className="kv-value">{bmgMoney(bmgResultado.valorLimiteRcc)}</div>
+                  <div className="kv-label">Valor Máximo Comprometimento:</div>
+                  <div className="kv-value">{bmgMoney(bmgResultado.valorMaximoComprometimento)}</div>
+                </div>
+              </div>
+            </div>
+          </section>
         )}
 
         {resultado && (
@@ -999,7 +1713,7 @@ export default function ConsultaIN100() {
                 <div className="kv-line">
                   <div className="kv-label">NB:</div>
                   <div className="kv-value d-flex align-items-center gap-2">
-                    <span>{resultado.numero_beneficio ? formatBeneficio(String(resultado.numero_beneficio)) : '-'}</span>
+                    <span>{resultado.numero_beneficio ? formatBeneficioDisplay(String(resultado.numero_beneficio)) : '-'}</span>
                     {resultado.numero_beneficio && (
                       <button
                         type="button"
