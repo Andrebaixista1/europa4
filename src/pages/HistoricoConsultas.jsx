@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { FiArrowLeft, FiDownload, FiEye, FiPrinter } from 'react-icons/fi'
+import { FiArrowLeft, FiDownload, FiEye, FiPrinter, FiUser, FiHash, FiCalendar, FiInfo, FiDollarSign } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles } from '../utils/roles.js'
 import '../styles/historico.css'
 
 const LOG_TIME_OFFSET_HOURS = 3
+const BMG_LOGO = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
 
 const getRegistroDate = (iso) => {
   if (!iso) return null
@@ -73,6 +74,29 @@ const formatTime = (iso) => (
     ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' })
     : '--:--'
 )
+
+const parseBmgDateInput = (value) => {
+  if (!value) return null
+  const raw = String(value).trim()
+  if (!raw) return null
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) return raw
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toISOString()
+}
+
+const formatBmgDate = (value) => {
+  const iso = parseBmgDateInput(value)
+  return iso ? formatDate(iso) : '-'
+}
+
+const formatBmgTime = (value) => {
+  const iso = parseBmgDateInput(value)
+  return iso ? formatTime(iso) : '--:--'
+}
 
 const idadeFrom = (iso) => {
   if (!iso) return '-'
@@ -416,6 +440,7 @@ export default function HistoricoConsultas() {
   }, [selectedRow, detailData])
   const detailUpdatedAt = detail?.data_retorno_consulta || detail?.data_consulta || detail?.data_hora_registro || null
   const detailUpdatedLabel = detailUpdatedAt ? `${formatDate(detailUpdatedAt)} as ${formatTime(detailUpdatedAt)}` : null
+  const isBmgDetail = (detail?.nome_arquivo || selectedRow?.nome_arquivo) === 'consulta_europa_individual_bmg'
   const textOrDash = (value) => {
     if (value === null || value === undefined) return '-'
     const str = String(value).trim()
@@ -427,6 +452,35 @@ export default function HistoricoConsultas() {
     ? `${formatDate(birthIso)}${birthAge !== '-' ? ` (${birthAge} anos)` : ''}`
     : '-'
   const moneyValue = (value) => (value == null ? '-' : brCurrency(value))
+  const bmgValue = (...keys) => {
+    for (const key of keys) {
+      const value = detail?.[key]
+      if (value != null && String(value).trim() !== '') return value
+    }
+    return ''
+  }
+  const bmgCpf = bmgValue('cpf', 'numero_documento', 'cpf_beneficiario')
+  const bmgNome = bmgValue('nome', 'nomeBeneficiario', 'nome_beneficiario')
+  const bmgDataNascimento = bmgValue('dataNascimento', 'data_nascimento')
+  const bmgDataConsulta = bmgValue('dataConsulta', 'data_consulta', 'data_hora_registro')
+  const bmgNumeroBeneficio = bmgValue('numeroBeneficio', 'numero_beneficio', 'matricula', 'nb')
+  const bmgEspecie = bmgValue('especie', 'esp')
+  const bmgQtdEmprestimos = bmgValue('numero_portabilidade', 'numero_portabilidades', 'qtdEmprestimos', 'qtdEmprestimosAtivosSuspesnsos', 'qtd_emprestimos', 'qtd_emprestimos_ativos')
+  const bmgCidade = bmgValue('cidade')
+  const bmgEstado = bmgValue('estado', 'uf', 'UF', 'ufPagamento')
+  const bmgDataDespacho = bmgValue('ddb', 'dataDespachoBeneficio', 'data_despacho_beneficio')
+  const bmgElegivel = bmgValue('situacao_beneficio', 'elegivelEmprestimo', 'elegivel_emprestimo')
+  const bmgMargem = bmgValue('margemDisponivel', 'margem_disponivel')
+  const bmgMargemCartao = bmgValue('margemDisponivelCartao', 'margem_disponivel_cartao')
+  const bmgMargemRcc = bmgValue('margemDisponivelRcc', 'margem_disponivel_rcc')
+  const bmgContaCorrente = bmgValue('conta_desembolso', 'contaCorrente', 'conta_corrente')
+  const bmgAgencia = bmgValue('agencia_desembolso', 'agenciaPagadora', 'agencia_pagadora')
+  const bmgValorComprometido = bmgValue('valorComprometido', 'valor_comprometido')
+  const bmgValorLimiteCartao = bmgValue('valorLimiteCartao', 'valor_limite_cartao')
+  const bmgValorLimiteRcc = bmgValue('valorLimiteRcc', 'valor_limite_rcc')
+  const bmgValorMaxComprometimento = bmgValue('valorMaximoComprometimento', 'valor_maximo_comprometimento')
+  const bmgAge = bmgDataNascimento ? idadeFrom(parseBmgDateInput(bmgDataNascimento) || bmgDataNascimento) : '-'
+  const bmgMoney = (value) => (value == null || value === '' ? '-' : brCurrency(value))
 
   return (
     <div className="hc-page bg-deep text-light min-vh-100 d-flex flex-column">
@@ -649,7 +703,12 @@ export default function HistoricoConsultas() {
           <div className="modal-dialog modal-lg modal-dialog-centered hc-modal-dialog" onClick={(event) => event.stopPropagation()}>
             <div className="modal-content modal-dark hc-modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Detalhes da consulta</h5>
+                <h5 className="modal-title d-flex align-items-center gap-2">
+                  {isBmgDetail && (
+                    <img src={BMG_LOGO} alt="BMG" width="25" height="25" style={{ objectFit: 'contain' }} />
+                  )}
+                  Detalhes da consulta
+                </h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setSelectedRow(null)}></button>
               </div>
               <div className="modal-body hc-modal-body">
@@ -677,7 +736,7 @@ export default function HistoricoConsultas() {
                 {detailError && (
                   <div className="alert alert-danger py-2 px-3 small mb-3">{detailError}</div>
                 )}
-                {detail && (
+                {detail && !isBmgDetail && (
                   <>
                     <div className="neo-card p-3 mb-3">
                       <div className="fw-semibold mb-2">Dados pessoais</div>
@@ -786,6 +845,134 @@ export default function HistoricoConsultas() {
                       </div>
                     </div>
                   </>
+                )}
+                {detail && isBmgDetail && (
+                  <section className="result-section">
+                    <div className="neo-card result-hero bmg-hero p-4 mb-3">
+                      <div className="d-flex align-items-center justify-content-between mb-3">
+                        <h5 className="mb-0 d-flex align-items-center gap-2"><FiUser /> Dados Pessoais</h5>
+                        <div className="small opacity-75">
+                          Atualizado: {formatBmgDate(bmgDataConsulta)} as {formatBmgTime(bmgDataConsulta)}
+                        </div>
+                      </div>
+                      <div className="row g-3">
+                        <div className="col-12 col-lg-4">
+                          <div className="label">Nome</div>
+                          <div className="value fw-semibold">{bmgNome || '-'}</div>
+                        </div>
+                        <div className="col-6 col-lg-2">
+                          <div className="label d-flex align-items-center gap-1"><FiHash /> CPF</div>
+                          <div className="value d-flex align-items-center gap-2">
+                            <span>{bmgCpf ? formatCpf(bmgCpf) : '-'}</span>
+                          </div>
+                        </div>
+                        <div className="col-6 col-lg-3">
+                          <div className="label d-flex align-items-center gap-1"><FiCalendar /> Idade</div>
+                          <div className="value">
+                            {formatBmgDate(bmgDataNascimento)}
+                            {bmgAge !== '-' && <span className="ms-1">({bmgAge} anos)</span>}
+                          </div>
+                        </div>
+                        <div className="col-6 col-lg-1">
+                          <div className="label">Espécie</div>
+                          <div className="value">{bmgEspecie || '-'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="neo-card p-0 mb-3 bmg-outline">
+                      <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Informações da matrícula</h6>
+                      </div>
+                      <div className="kv-list p-3 p-md-4">
+                        <div className="kv-line">
+                          <div className="kv-label">NB:</div>
+                          <div className="kv-value">{bmgNumeroBeneficio ? formatBeneficio(bmgNumeroBeneficio) : '-'}</div>
+                          <div className="kv-label">Espécie:</div>
+                          <div className="kv-value">{bmgEspecie || '-'}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Data Despacho do Benefício:</div>
+                          <div className="kv-value">{formatBmgDate(bmgDataDespacho)}</div>
+                          <div className="kv-label">Elegível Empréstimo:</div>
+                          <div className="kv-value">{bmgElegivel ? String(bmgElegivel) : '-'}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Quantidade de Empréstimos:</div>
+                          <div className="kv-value">{bmgQtdEmprestimos || '-'}</div>
+                          <div className="kv-label"></div>
+                          <div className="kv-value"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="neo-card p-0 mb-3 bmg-outline">
+                      <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Endereço</h6>
+                      </div>
+                      <div className="kv-list p-3 p-md-4">
+                        <div className="kv-line">
+                          <div className="kv-label">Cidade:</div>
+                          <div className="kv-value">{bmgCidade || '-'}</div>
+                          <div className="kv-label">UF:</div>
+                          <div className="kv-value">{bmgEstado || '-'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-12 col-lg-4">
+                        <div className="neo-card stat-card bmg-card h-100">
+                          <div className="p-4">
+                            <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disponível:</div>
+                            <div className="stat-value">{bmgMoney(bmgMargem)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-12 col-lg-4">
+                        <div className="neo-card stat-card bmg-card h-100">
+                          <div className="p-4">
+                            <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disp. Cartão:</div>
+                            <div className="stat-value">{bmgMoney(bmgMargemCartao)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-12 col-lg-4">
+                        <div className="neo-card stat-card bmg-card h-100">
+                          <div className="p-4">
+                            <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Margem disp. RCC:</div>
+                            <div className="stat-value">{bmgMoney(bmgMargemRcc)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="neo-card p-0 mb-4 bmg-outline">
+                      <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Dados bancários</h6>
+                      </div>
+                      <div className="kv-list p-3 p-md-4">
+                        <div className="kv-line">
+                          <div className="kv-label">Conta Corrente:</div>
+                          <div className="kv-value">{bmgContaCorrente || '-'}</div>
+                          <div className="kv-label">Agência Pagadora:</div>
+                          <div className="kv-value">{bmgAgencia || '-'}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Valor Comprometido:</div>
+                          <div className="kv-value">{bmgMoney(bmgValorComprometido)}</div>
+                          <div className="kv-label">Valor Limite Cartão:</div>
+                          <div className="kv-value">{bmgMoney(bmgValorLimiteCartao)}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Valor Limite RCC:</div>
+                          <div className="kv-value">{bmgMoney(bmgValorLimiteRcc)}</div>
+                          <div className="kv-label">Valor Máximo Comprometimento:</div>
+                          <div className="kv-value">{bmgMoney(bmgValorMaxComprometimento)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
                 )}
               </div>
               <div className="modal-footer">

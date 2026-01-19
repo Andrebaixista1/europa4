@@ -5,10 +5,10 @@ import '../styles/novidades-modal.css'
 
 export const novidadesList = [
   {
-    data: '17/01/2026',
-    titulo: 'Consulta IN100 BMG chegando',
+    data: '19/01/2026',
+    titulo: 'Consulta IN100 BMG liberada',
     descricao:
-      'Estamos adicionando a consulta IN100 BMG. Em breve, mais uma rota para validar clientes e ampliar as possibilidades de consulta direto no dashboard.',
+      'Agora ja e possivel consultar IN100 pelo BMG com informacoes adicionais do cliente. Para receber o token com mais facilidade, use um telefone proximo de voce.',
     image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
   },
   {

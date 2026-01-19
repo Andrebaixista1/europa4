@@ -7,7 +7,6 @@ import { notify } from '../utils/notify.js'
 import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Link } from 'react-router-dom'
-import { normalizeRole, Roles } from '../utils/roles.js'
 
 const QUALIBANKING_LOGO = 'https://quali.joinbank.com.br/quali/assets/images/logo/logo-auth.svg'
 const BMG_LOGO = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
@@ -23,11 +22,7 @@ const UF_OPTIONS = [
 
 export default function ConsultaIN100() {
   const { user } = useAuth()
-  const normalizedRole = normalizeRole(user?.role || user?.Role, user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia)
-  const isMasterRole = normalizedRole === Roles.Master
-  const teamName = (user?.equipe_nome || user?.team_name || user?.teamName || '').toString().toLowerCase()
-  const isMasterTeam = teamName === 'master'
-  const canUseBmg = isMasterRole || isMasterTeam
+  const canUseBmg = true
   const [cpf, setCpf] = useState('')
   const [beneficio, setBeneficio] = useState('')
   const online = true
@@ -53,6 +48,7 @@ export default function ConsultaIN100() {
   const [bmgAvulsaError, setBmgAvulsaError] = useState('')
   const [bmgAvulsaRaw, setBmgAvulsaRaw] = useState('')
   const [bmgResultado, setBmgResultado] = useState(null)
+  const bmgLastSentRef = useRef('')
   const [bmgForm, setBmgForm] = useState({
     nomeCompleto: '',
     dataNascimento: '',
@@ -63,6 +59,38 @@ export default function ConsultaIN100() {
   })
 
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
+
+  useEffect(() => {
+    if (!bmgResultado) return
+    const key = `${bmgResultado.cpf || ''}|${bmgResultado.numeroBeneficio || ''}|${bmgResultado.dataConsulta || ''}`
+    if (bmgLastSentRef.current === key) return
+    bmgLastSentRef.current = key
+
+    const userInfo = {
+      id: user?.id ?? null,
+      login: user?.login ?? user?.username ?? null,
+      nome: user?.nome ?? user?.name ?? null,
+      email: user?.email ?? null,
+      role: user?.role ?? user?.Role ?? null,
+      nivel: user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null,
+      equipe_id: user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null,
+      equipe_nome: user?.equipe_nome ?? user?.team_name ?? user?.teamName ?? user?.equipeNome ?? null,
+    }
+
+    const payload = {
+      tipo: 'bmg',
+      data_envio: new Date().toISOString(),
+      usuario: userInfo,
+      cliente_informado: { ...bmgForm },
+      resultado: bmgResultado,
+    }
+
+    fetch('https://n8n.apivieiracred.store/webhook/consulta-bmg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {})
+  }, [bmgResultado, bmgForm, user])
 
   const buildSaldoPayload = () => {
     const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
@@ -373,8 +401,14 @@ export default function ConsultaIN100() {
         qtdEmprestimos: getChild(consulta, 'qtdEmprestimosAtivosSuspesnsos'),
         contaCorrente: getChild(consulta, 'contaCorrente'),
         agenciaPagadora: getChild(consulta, 'agenciaPagadora'),
-        cidade: getText('cidade'),
-        estado: getChild(consulta, 'ufPagamento'),
+        cidade: getChild(consulta, 'cidade') || getText('cidade'),
+        estado:
+          getChild(consulta, 'ufPagamento') ||
+          getChild(consulta, 'uf') ||
+          getText('uf') ||
+          getText('UF') ||
+          getChild(consulta, 'estado') ||
+          getText('estado'),
         dataDespachoBeneficio: getChild(consulta, 'dataDespachoBeneficio'),
         elegivelEmprestimo: getChild(consulta, 'elegivelEmprestimo'),
         margemDisponivel: getChild(consulta, 'margemDisponivel'),
@@ -716,7 +750,11 @@ export default function ConsultaIN100() {
         throw new Error(parsed.fault || `Erro HTTP ${res.status}`)
       }
       const parsedResult = parseAvulsaResponse(text)
-      if (parsedResult) setBmgResultado(parsedResult)
+      if (parsedResult) {
+        if (!parsedResult.estado) parsedResult.estado = bmgForm.estado
+        if (!parsedResult.cidade) parsedResult.cidade = bmgForm.cidade
+        setBmgResultado(parsedResult)
+      }
       setBmgAvulsaStatus('success')
       notify.success('Token validado. Consulta BMG concluida.', { autoClose: 6000 })
       setResultado(null)
