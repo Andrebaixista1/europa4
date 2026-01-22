@@ -3,13 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Sparkles, X, Calendar, Rocket } from 'lucide-react'
 import '../styles/novidades-modal.css'
 
-export const novidadesList = [
+const novidadesListRaw = [
   {
     data: '19/01/2026',
     titulo: 'Consulta IN100 BMG liberada',
     descricao:
       'Agora ja e possivel consultar IN100 pelo BMG com informacoes adicionais do cliente. Para receber o token com mais facilidade, use um telefone proximo de voce.',
-    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
+    image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s',
+    disabled: true,
   },
   {
     data: '17/01/2026',
@@ -86,6 +87,8 @@ export const novidadesList = [
       'Agora o controle de usuários no Vanguard é real-time conectado e 100% atualizado.',
   },
 ]
+
+export const novidadesList = novidadesListRaw.filter((novidade) => !novidade.disabled)
 
 const overlayTransition = { duration: 0.2 }
 const modalTransition = { type: 'spring', stiffness: 280, damping: 24 }

@@ -1,0 +1,2 @@
+# Instrucoes do usuario
+- NUNCA MAIS MUDE LOGIN OU SENHA SEM QUE EU PECA.

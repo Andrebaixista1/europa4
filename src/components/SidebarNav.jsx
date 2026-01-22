@@ -68,7 +68,8 @@ export default function SidebarNav() {
         icon: 'FiBriefcase',
         children: [
           { label: 'Gestão de Recargas', to: '/recargas' },
-          { label: 'Controle Planejamento', to: '/admin/controle-planejamento' }
+          { label: 'Controle Planejamento', to: '/admin/controle-planejamento' },
+          { label: 'Relatórios', to: '/admin/relatorios' }
         ]
       })
     }

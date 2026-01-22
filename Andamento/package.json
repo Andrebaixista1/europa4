@@ -1,0 +1,11 @@
+{
+  "name": "andamento-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mssql": "^10.0.4"
+  }
+}

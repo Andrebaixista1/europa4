@@ -8,8 +8,6 @@ import { useEffect } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Link } from 'react-router-dom'
 
-const QUALIBANKING_LOGO = 'https://quali.joinbank.com.br/quali/assets/images/logo/logo-auth.svg'
-const BMG_LOGO = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS97AcZMfvJCYV7XD9jPurcnuo_xYVK6IElXA&s'
 const BMG_LOGIN = import.meta.env.login_bmg || import.meta.env.VITE_LOGIN_BMG || ''
 const BMG_PASSWORD = import.meta.env.senha_bmg || import.meta.env.VITE_SENHA_BMG || ''
 const BMG_SOAP_URL = import.meta.env.VITE_BMG_SOAP_URL || '/api/bmg'
@@ -22,7 +20,7 @@ const UF_OPTIONS = [
 
 export default function ConsultaIN100() {
   const { user } = useAuth()
-  const canUseBmg = true
+  const canUseBmg = false
   const [cpf, setCpf] = useState('')
   const [beneficio, setBeneficio] = useState('')
   const online = true
@@ -31,7 +29,7 @@ export default function ConsultaIN100() {
   const [bancoInfo, setBancoInfo] = useState(null)
   const resultRef = useRef(null)
   const formRef = useRef(null)
-  const [providerModalOpen, setProviderModalOpen] = useState(false)
+  const [providerChoice, setProviderChoice] = useState('qualibanking')
   const [bmgModalOpen, setBmgModalOpen] = useState(false)
   const [bmgStep, setBmgStep] = useState('form')
   const [bmgStatus, setBmgStatus] = useState('idle')
@@ -61,7 +59,7 @@ export default function ConsultaIN100() {
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
 
   useEffect(() => {
-    if (!bmgResultado) return
+    if (!canUseBmg || !bmgResultado) return
     const key = `${bmgResultado.cpf || ''}|${bmgResultado.numeroBeneficio || ''}|${bmgResultado.dataConsulta || ''}`
     if (bmgLastSentRef.current === key) return
     bmgLastSentRef.current = key
@@ -90,7 +88,7 @@ export default function ConsultaIN100() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }).catch(() => {})
-  }, [bmgResultado, bmgForm, user])
+  }, [bmgResultado, bmgForm, canUseBmg, user])
 
   const buildSaldoPayload = () => {
     const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
@@ -557,13 +555,41 @@ export default function ConsultaIN100() {
     }
   }
 
-  const openProviderModal = (event) => {
+  const openBmgModal = () => {
+    setBmgModalOpen(true)
+    setBmgStep('form')
+    setBmgStatus('idle')
+    setBmgResponse('')
+    setBmgError('')
+    setBmgRawResponse('')
+    setBmgRequest(null)
+    setBmgPesquisarStatus('idle')
+    setBmgPesquisarError('')
+    setBmgPesquisarRaw('')
+    setBmgNumeroSolicitacao('')
+    setBmgToken('')
+    setBmgAvulsaStatus('idle')
+    setBmgAvulsaError('')
+    setBmgAvulsaRaw('')
+    setBmgResultado(null)
+  }
+
+  const handleSearch = (event) => {
     event?.preventDefault?.()
-    if (!getConsultaInput()) return
+    const input = getConsultaInput()
+    if (!input) return
     setResultado(null)
     setBancoInfo(null)
     setBmgResultado(null)
-    setProviderModalOpen(true)
+    if (providerChoice === 'bmg') {
+      if (!canUseBmg) {
+        notify.warn('Consulta BMG desativada.')
+        return
+      }
+      openBmgModal()
+      return
+    }
+    onSubmit(null, 'qualibanking', null, input)
   }
 
   const handleBmgSubmit = (event) => {
@@ -1098,7 +1124,7 @@ export default function ConsultaIN100() {
           </div>
 
           <div className="col-12 col-lg-7">
-            <form className="neo-card neo-lg p-4 h-100" onSubmit={openProviderModal} ref={formRef}>
+            <form className="neo-card neo-lg p-4 h-100" onSubmit={handleSearch} ref={formRef}>
               <div className="mb-3">
                 <label className="form-label">CPF</label>
                 <div className="input-group align-items-stretch">
@@ -1131,6 +1157,36 @@ export default function ConsultaIN100() {
                 </div>
               </div>
 
+              <div className="mb-3">
+                <label className="form-label">Consulta</label>
+                <div className="d-flex flex-wrap gap-3">
+                  <div className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="provider"
+                      id="provider-qualibanking"
+                      value="qualibanking"
+                      checked={providerChoice === 'qualibanking'}
+                      onChange={() => setProviderChoice('qualibanking')}
+                    />
+                    <label className="form-check-label" htmlFor="provider-qualibanking">Consulta Qualibanking</label>
+                  </div>
+                  <div className="form-check">
+                    <input
+                      className="form-check-input"
+                      type="radio"
+                      name="provider"
+                      id="provider-bmg"
+                      value="bmg"
+                      checked={providerChoice === 'bmg'}
+                      onChange={() => setProviderChoice('bmg')}
+                    />
+                    <label className="form-check-label" htmlFor="provider-bmg">Consulta BMG</label>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <button type="submit" className="btn btn-primary btn-pesquisar" disabled={Number(metrics.disponivel) <= 0}>Pesquisar</button>
               </div>
@@ -1138,89 +1194,7 @@ export default function ConsultaIN100() {
           </div>
         </div>
 
-        {providerModalOpen && (
-          <div
-            className="modal fade show"
-            style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 'min(92vw, 720px)' }}>
-              <div className="modal-content modal-dark">
-                <div className="modal-header">
-                  <h5 className="modal-title">Escolha o provedor</h5>
-                  <button type="button" className="btn-close" aria-label="Close" onClick={() => setProviderModalOpen(false)}></button>
-                </div>
-                <div className="modal-body">
-                  <div className="small opacity-75 mb-3">Selecione onde deseja consultar.</div>
-                  <div className="row g-3">
-                    <div className="col-12 col-md-6">
-                      <button
-                        type="button"
-                        className="btn btn-outline-light w-100 p-3 d-flex flex-column align-items-center gap-2"
-                        onClick={() => {
-                          setProviderModalOpen(false)
-                          onSubmit(null, 'qualibanking')
-                        }}
-                      >
-                        <img
-                          src={QUALIBANKING_LOGO}
-                          alt="Qualibanking"
-                          style={{ width: '160px', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
-                        />
-                        <span className="fw-semibold">Consultar no Qualibanking</span>
-                      </button>
-                    </div>
-                    {canUseBmg && (
-                      <div className="col-12 col-md-6">
-                        <button
-                          type="button"
-                          className="btn btn-outline-light w-100 p-3 d-flex flex-column align-items-center gap-2"
-                          onClick={() => {
-                            setProviderModalOpen(false)
-                            setBmgModalOpen(true)
-                            setBmgStep('form')
-                            setBmgStatus('idle')
-                            setBmgResponse('')
-                            setBmgError('')
-                            setBmgRawResponse('')
-                            setBmgRequest(null)
-                            setBmgPesquisarStatus('idle')
-                            setBmgPesquisarError('')
-                            setBmgPesquisarRaw('')
-                            setBmgNumeroSolicitacao('')
-                            setBmgToken('')
-                            setBmgAvulsaStatus('idle')
-                            setBmgAvulsaError('')
-                            setBmgAvulsaRaw('')
-                            setBmgResultado(null)
-                          }}
-                        >
-                          <img
-                            src={BMG_LOGO}
-                            alt="BMG"
-                            style={{ width: '160px', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
-                          />
-                          <span className="fw-semibold">Consultar no BMG</span>
-                          <span className="small text-center" style={{ color: '#f36c21' }}>
-                            Voce ira precisar de dados pessoais do cliente para consultar
-                          </span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setProviderModalOpen(false)}>
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {bmgModalOpen && (
+        {canUseBmg && bmgModalOpen && (
           <div
             className="modal fade show"
             style={{ display: 'block', background: 'rgba(0,0,0,0.5)', position: 'fixed', inset: 0, zIndex: 1050 }}
@@ -1481,7 +1455,7 @@ export default function ConsultaIN100() {
           </div>
         )}
 
-        {bmgResultado && (
+        {canUseBmg && bmgResultado && (
           <section className="mt-4 result-section">
             <div className="neo-card result-hero bmg-hero p-4 mb-3">
               <div className="d-flex align-items-center justify-content-between mb-3">
