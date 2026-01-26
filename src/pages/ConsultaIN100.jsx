@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
-import { FiArrowLeft, FiUser, FiHash, FiCalendar, FiInfo, FiDollarSign, FiCopy } from 'react-icons/fi'
+import { FiArrowLeft, FiUser, FiHash, FiCalendar, FiInfo, FiDollarSign, FiCopy, FiSearch } from 'react-icons/fi'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { notify } from '../utils/notify.js'
 import { useEffect } from 'react'
@@ -193,7 +193,13 @@ export default function ConsultaIN100() {
     if (isNaN(d)) return '-'
     return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
   }
-  const formatTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }) : '--:--')
+  const formatTime = (iso) => {
+    if (!iso) return '--:--'
+    const d = new Date(iso)
+    if (isNaN(d)) return '--:--'
+    d.setHours(d.getHours() + 3)
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' })
+  }
   const idadeFrom = (iso) => {
     if (!iso) return '-'
     const parts = parseISODateParts(iso)
@@ -208,11 +214,26 @@ export default function ConsultaIN100() {
   const brCurrency = (n) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(n || 0))
   const mapPensao = (v) => (v === 'not_payer' ? 'Não pensionista' : v || '-')
   const mapBloqueio = (v) => (v === 'not_blocked' ? 'Não bloqueado' : v || '-')
+  const toTitleCase = (value) => String(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+
   const mapTipoCredito = (v) => {
-    if (!v) return '-'
-    if (v === 'magnetic_card') return 'Cartão magnético'
-    if (v === 'checking_account') return 'Conta Corrente'
-    return v
+    if (v == null || v === '') return '-'
+    const raw = String(v).trim()
+    const num = Number(raw.replace(',', '.'))
+    if (!Number.isNaN(num) && num === 2) return 'Cartão Magnético'
+    const normalized = raw.toLowerCase().replace(/[_-]+/g, ' ').trim()
+    if (normalized === 'magnetic card' || normalized === 'cartao magnetico' || normalized === 'cartão magnético') {
+      return 'Cartão Magnético'
+    }
+    if (normalized === 'checking account' || normalized === 'conta corrente') {
+      return 'Conta Corrente'
+    }
+    return toTitleCase(raw)
   }
   const mapSituacao = (v) => (v === 'elegible' ? 'Elegível' : v || '-')
 
@@ -451,6 +472,24 @@ export default function ConsultaIN100() {
     }
   }
 
+  const openConsultaMacica = (cpfValue, nbValue) => {
+    let cpfDigits = String(cpfValue ?? '').replace(/\D/g, '')
+    let nbDigits = String(nbValue ?? '').replace(/\D/g, '')
+    if (cpfDigits.length > 0 && cpfDigits.length < 11) {
+      cpfDigits = cpfDigits.padStart(11, '0')
+    }
+    if (nbDigits.length > 0 && nbDigits.length < 10) {
+      nbDigits = nbDigits.padStart(10, '0')
+    }
+    if (!cpfDigits || !nbDigits) {
+      notify.warn('CPF/NB inválidos para consultar a Maciça.')
+      return
+    }
+    const baseUrl = window.location.origin || ''
+    const url = `${baseUrl}/consulta/cliente-argus/?cpf=${cpfDigits}&nb=${nbDigits}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   const normalizeStatus = (value) => (value || '')
     .toString()
     .normalize('NFD')
@@ -590,6 +629,12 @@ export default function ConsultaIN100() {
       return
     }
     onSubmit(null, 'qualibanking', null, input)
+  }
+
+  const handleBmgDisabled = (event) => {
+    event?.preventDefault?.()
+    notify.warn('Consulta BMG desativada.')
+    setProviderChoice('qualibanking')
   }
 
   const handleBmgSubmit = (event) => {
@@ -1180,9 +1225,9 @@ export default function ConsultaIN100() {
                       id="provider-bmg"
                       value="bmg"
                       checked={providerChoice === 'bmg'}
-                      onChange={() => setProviderChoice('bmg')}
+                      onChange={handleBmgDisabled}
                     />
-                    <label className="form-check-label" htmlFor="provider-bmg">Consulta BMG</label>
+                    <label className="form-check-label opacity-50" style={{ cursor: 'not-allowed' }} htmlFor="provider-bmg">Consulta BMG</label>
                   </div>
                 </div>
               </div>
@@ -1679,10 +1724,19 @@ export default function ConsultaIN100() {
               </div>
             </section>
             {/* Novo layout de resposta */}
+            <div className="d-flex justify-content-end mb-2">
+              <button type="button" className="btn btn-primary btn-sm btn-pesquisar d-inline-flex align-items-center gap-2">
+                <FiSearch />
+                Consultar Maciça
+              </button>
+            </div>
+
             <div className="neo-card result-hero p-4 mb-3">
               <div className="d-flex align-items-center justify-content-between mb-3">
                 <h5 className="mb-0 d-flex align-items-center gap-2"><FiUser /> Dados Pessoais</h5>
-                <div className="small opacity-75">Atualizado: {formatDate(resultado.data_retorno_consulta)} as {formatTime(resultado.data_retorno_consulta)}</div>
+                <div className="d-flex flex-column align-items-end gap-2">
+                  <div className="small opacity-75">Atualizado: {formatDate(resultado.data_retorno_consulta)} as {formatTime(resultado.data_retorno_consulta)}</div>
+                </div>
               </div>
               <div className="row g-3">
                 <div className="col-12 col-lg-4">

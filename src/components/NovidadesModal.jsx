@@ -5,6 +5,13 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '26/01/2026',
+    titulo: 'Consulta Maciça (Argus) disponível',
+    descricao:
+      'Nova página de Consulta Maciça para visualizar dados do cliente, propostas, endereços e histórico IN100 com paginação e atualização rápida.',
+    image: 'https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7?auto=format&fit=crop&w=1600&q=80',
+  },
+  {
     data: '19/01/2026',
     titulo: 'Consulta IN100 BMG liberada',
     descricao:
