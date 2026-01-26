@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import SupervisionPanel from './pages/SupervisionPanel.jsx'
 import OperationPanel from './pages/OperationPanel.jsx'
 import ConsultaIN100 from './pages/ConsultaIN100.jsx'
+import ClienteArgus from './pages/ClienteArgus.jsx'
 import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
@@ -153,6 +154,14 @@ function App() {
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
               <ConsultaIN100 />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/consulta/cliente-argus/*"
+          element={
+            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
+              <ClienteArgus />
             </ProtectedRoute>
           }
         />

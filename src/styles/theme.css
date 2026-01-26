@@ -681,6 +681,16 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .stat-title { opacity: 0.9; font-weight: 600; }
 .stat-value { font-size: 1.4rem; font-weight: 800; }
 .stat-footer { border-top: 1px solid var(--border); opacity: 0.9; }
+.proposta-date { font-weight: 700; color: var(--info); }
+
+.fade-swap { animation: fadeSwap 0.25s ease; }
+@keyframes fadeSwap {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fade-swap { animation: none; }
+}
 
 /* BMG orange cards */
 .bmg-card { border-color: var(--border); background: linear-gradient(180deg, rgba(243,108,33,0.08), transparent); }
@@ -976,7 +986,7 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 }
 
 .dash-sidebar {
-  width: 240px;
+  width: 280px;
   background: linear-gradient(180deg, rgba(14, 14, 18, 0.95), rgba(6, 6, 8, 0.96));
   border-right: 1px solid rgba(255, 255, 255, 0.05);
   padding: 16px 14px;
@@ -1059,6 +1069,7 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
   gap: 8px;
   padding: 8px 10px;
   width: 100%;
+  white-space: nowrap;
   border-radius: 10px;
   text-decoration: none;
   color: #cfd6e3;

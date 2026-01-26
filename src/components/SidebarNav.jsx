@@ -39,25 +39,12 @@ export default function SidebarNav() {
       { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' }
     ]
 
-    if (isMaster) {
-      items.push({
-        label: 'Business Manager',
-        icon: 'FiFacebook',
-        children: [
-          {
-            label: 'Campanhas Zap',
-            to: '/disparador/campanhas-zap',
-            iconSrc: 'https://chat.zapresponder.com.br/assets/logo-fill-707bdf21.svg'
-          }
-        ]
-      })
-    }
-
     items.push({
       label: 'Consultas',
       icon: 'FiSearch',
       children: [
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
+        { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
         { label: 'Histórico de Consultas', to: '/consultas/historico' }
       ]
     })
