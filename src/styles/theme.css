@@ -663,18 +663,21 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .section-bar { border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.03); }
 [data-theme="dark"] .section-bar { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); }
 
-.kv-list { gap: 10px; }
+.kv-list { gap: 10px; container-type: inline-size; }
 
 /* Toasts acima de tudo */
 .neo-toast-container { z-index: 200000 !important; }
 /* Garantir acima de qualquer modal/overlay */
 .Toastify__toast-container { z-index: 2147483647 !important; }
-.kv-line { display: grid; grid-template-columns: 180px 1fr; row-gap: 6px; column-gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--border); }
+.kv-line { display: grid; grid-template-columns: minmax(140px, 200px) minmax(0, 1fr); row-gap: 10px; column-gap: 22px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--border); }
 .kv-line:last-child { border-bottom: 0; }
 .kv-label { opacity: 0.85; font-size: 0.9rem; }
-.kv-value { font-weight: 600; }
-@media (min-width: 992px) {
-  .kv-line { grid-template-columns: 180px 1fr 180px 1fr; }
+.kv-value { font-weight: 600; min-width: 0; word-break: break-word; }
+@container (min-width: 900px) {
+  .kv-line { grid-template-columns: minmax(160px, 220px) minmax(0, 1fr) minmax(160px, 220px) minmax(0, 1fr); }
+}
+@media (max-width: 575.98px) {
+  .kv-line { grid-template-columns: 1fr; }
 }
 
 .stat-card { display: flex; flex-direction: column; justify-content: space-between; }
@@ -690,6 +693,34 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 }
 @media (prefers-reduced-motion: reduce) {
   .fade-swap { animation: none; }
+}
+
+.tab-switcher .tab-btn {
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+[data-theme="dark"] .tab-switcher .tab-btn {
+  background: rgba(255,255,255,0.04);
+}
+.tab-switcher .tab-btn.is-active {
+  background: linear-gradient(180deg, rgba(0,199,255,0.28), rgba(0,199,255,0.14));
+  border-color: rgba(0,199,255,0.6);
+  color: #e9f9ff;
+  box-shadow: 0 8px 20px rgba(0,199,255,0.18);
+}
+[data-theme="light"] .tab-switcher .tab-btn.is-active {
+  color: #0b1a33;
+}
+
+.tab-panel { animation: tabFade 0.25s ease; }
+@keyframes tabFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel { animation: none; }
 }
 
 /* BMG orange cards */

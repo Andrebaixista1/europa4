@@ -102,8 +102,11 @@ const toTitleCase = (value) => String(value)
 const mapTipoCredito = (value) => {
   if (value == null || value === '') return '-'
   const raw = String(value).trim()
-  const num = Number(raw.replace(',', '.'))
-  if (!Number.isNaN(num) && num === 2) return 'Cartão Magnético'
+  if (!raw) return '-'
+  const numericRaw = raw.replace(',', '.')
+  if (/^-?\d+(\.\d+)?$/.test(numericRaw)) {
+    return raw
+  }
   const normalized = raw.toLowerCase().replace(/[_-]+/g, ' ').trim()
   if (normalized === 'magnetic card' || normalized === 'cartao magnetico' || normalized === 'cartão magnético') {
     return 'Cartão Magnético'
@@ -190,6 +193,35 @@ const formatCurrencyBlank = (value) => (
 )
 const formatNumber = (value) => new Intl.NumberFormat('pt-BR').format(Number(value ?? 0))
 
+const toNumber = (value) => {
+  if (value == null || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  const raw = String(value).trim()
+  if (!raw) return null
+  const hasComma = raw.includes(',')
+  const hasDot = raw.includes('.')
+  let normalized = raw.replace(/\s/g, '')
+  if (hasComma && hasDot) {
+    normalized = normalized.replace(/\./g, '').replace(',', '.')
+  } else {
+    normalized = normalized.replace(',', '.')
+  }
+  const num = Number(normalized)
+  return Number.isNaN(num) ? null : num
+}
+
+const formatMoneyValue = (value) => {
+  const num = toNumber(value)
+  return num == null ? '-' : brCurrency(num)
+}
+
+const stripZeroCents = (value) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  if (/^-?\d+[.,]00$/.test(raw)) return raw.replace(/[.,]00$/, '')
+  return raw
+}
+
 const mapSituacaoBeneficio = (value) => {
   if (!value) return ''
   if (value === 'elegible') return 'Elegível'
@@ -231,7 +263,7 @@ const formatCompetencia = (value) => {
   if (month < 1 || month > 12) return '-'
   const maxDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
   if (day < 1 || day > maxDay) return '-'
-  return `${match[1]}-${match[2]}-${match[3]}`
+  return `${match[3]}/${match[2]}/${match[1]}`
 }
 
 const extractErrorMessage = (payload) => {
@@ -451,7 +483,9 @@ const normalizeClientePayload = (payload) => {
         selected.data_despacho_beneficio ??
         selected.dataDespachoBeneficio ??
         selected.dataDespacho ??
-        selected.ddb,
+        selected.ddb ??
+        selected.DDB ??
+        selected['DDB'],
       ),
       comp_ini_desconto: selected.comp_ini_desconto_tratado ??
         selected.comp_ini_desconto ??
@@ -491,7 +525,15 @@ const normalizeClientePayload = (payload) => {
       valor_beneficio: selected.vl_beneficio_tratado ??
         selected.vl_beneficio ??
         selected.valor_beneficio ??
-        selected.valorBeneficio,
+        selected.valorBeneficio ??
+        selected.VALOR_BENEFICIO ??
+        selected['VALOR_BENEFICIO'],
+      valor_beneficio_margens: selected.VALOR_BENEFICIO ??
+        selected['VALOR_BENEFICIO'] ??
+        selected.valor_beneficio ??
+        selected.valorBeneficio ??
+        selected.vl_beneficio_tratado ??
+        selected.vl_beneficio,
       valor_parcela: selected.vl_parcela_tratado ??
         selected.vl_parcela ??
         selected.valor_parcela ??
@@ -516,6 +558,41 @@ const normalizeClientePayload = (payload) => {
         selected.saldoTotalDisponivel ??
         selected.margem_disponivel ??
         selected.margemDisponivel,
+      margem_disponivel: selected.margem_disponivel ??
+        selected.margemDisponivel ??
+        selected.saldo_total_disponivel ??
+        selected.saldoTotalDisponivel ??
+        selected.MARGEM_DISPONIVEL ??
+        selected['MARGEM_DISPONIVEL'],
+      margem_rmc: selected.margem_rmc ??
+        selected.margemRmc ??
+        selected.margem_disponivel_cartao ??
+        selected.margemDisponivelCartao ??
+        selected.margem_cartao ??
+        selected.margemCartao ??
+        selected.margem_disponivel_rmc ??
+        selected.margemDisponivelRmc ??
+        selected.MARGEM_RMC ??
+        selected['MARGEM_RMC'],
+      margem_rcc: selected.margem_rcc ??
+        selected.margemRcc ??
+        selected.margem_disponivel_rcc ??
+        selected.margemDisponivelRcc ??
+        selected.margem_rcc_disponivel ??
+        selected.margemRccDisponivel ??
+        selected.MARGEM_RCC ??
+        selected['MARGEM_RCC'] ??
+        selected['Margem RCC'],
+      total_valor_liberado: selected.total_valor_liberado ??
+        selected.totalValorLiberado ??
+        selected.valor_total_liberado ??
+        selected.valorTotalLiberado ??
+        selected.total_valor ??
+        selected.totalValor ??
+        selected.Total_Valor_Liberado_02801 ??
+        selected['Total_Valor_Liberado_02801'] ??
+        selected['Total_Valor_Liberado(0.02801)'] ??
+        selected['Total_Valor_Liberado_0.02801'],
       banco_desembolso: selected.banco_desembolso ??
         selected.bancoDesembolso ??
         selected.banco ??
@@ -629,6 +706,7 @@ export default function ClienteArgus() {
   const [in100BancoInfo, setIn100BancoInfo] = useState(null)
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
   const [showIn100Confirm, setShowIn100Confirm] = useState(false)
+  const [activeTab, setActiveTab] = useState('margens')
   const lastQueryRef = useRef('')
   const in100RequestRef = useRef(0)
 
@@ -742,6 +820,7 @@ export default function ClienteArgus() {
     setIn100Index(0)
     setIn100Loading(false)
     setIn100BancoInfo(null)
+    setActiveTab('margens')
 
     const in100RequestId = bumpIn100Request()
     void fetchIn100(cpfDigits, nbDigits, in100RequestId)
@@ -775,6 +854,7 @@ export default function ClienteArgus() {
 
       setClientes(normalized)
       setClienteIndex(0)
+      setActiveTab('margens')
     } catch (error) {
       notify.error(error?.message || 'Erro ao consultar Maciça.')
       if (resetOnFail) {
@@ -900,6 +980,16 @@ export default function ClienteArgus() {
   const propostaIdLabel = cliente?.contrato_empres != null && String(cliente.contrato_empres).trim() !== ''
     ? String(cliente.contrato_empres)
     : '-'
+  const margemRmcValue = cliente?.margem_rmc
+  const margemDisponivelValue = cliente?.margem_disponivel ?? cliente?.saldo_total_disponivel
+  const margemRccValue = cliente?.margem_rcc
+  const totalValorLiberadoValue = (() => {
+    const base = toNumber(cliente?.total_valor_liberado)
+    if (base != null) return base
+    const margem = toNumber(margemDisponivelValue)
+    if (margem == null) return null
+    return margem / 0.02801
+  })()
   const totalPropostas = clientes.length
   const paginaLabel = totalPropostas ? `${clienteIndex + 1} de ${totalPropostas}` : '-'
   const in100BancoNome = formatBlankValue(
@@ -944,6 +1034,19 @@ export default function ClienteArgus() {
       rows.push(row)
     })
     return rows
+  }, [clientes])
+
+  const beneficiosList = useMemo(() => {
+    const seen = new Set()
+    return clientes
+      .map((item) => digitsOnly(item?.numero_beneficio))
+      .filter((digits) => {
+        if (!digits) return false
+        if (seen.has(digits)) return false
+        seen.add(digits)
+        return true
+      })
+      .map((digits) => formatBeneficioDisplay(digits))
   }, [clientes])
   const handlePrevProposta = () => {
     setClienteIndex((current) => {
@@ -1130,6 +1233,18 @@ export default function ClienteArgus() {
                   <div className="label">UF</div>
                   <div className="value">{cliente?.estado || '-'}</div>
                 </div>
+                <div className="col-12 col-lg-2">
+                  <div className="label">Benefícios (NB)</div>
+                  <div className="value d-flex flex-column gap-1">
+                    {beneficiosList.length > 0 ? (
+                      beneficiosList.map((nb) => (
+                        <span key={nb}>{nb}</span>
+                      ))
+                    ) : (
+                      <span>-</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1172,7 +1287,99 @@ export default function ClienteArgus() {
             </div>
 
 
-            <div className="neo-card p-0 mb-4">
+            <div className="tab-switcher d-flex flex-wrap gap-2 mb-3" role="tablist" aria-label="Abas principais">
+              <button
+                type="button"
+                role="tab"
+                id="tab-margens"
+                aria-selected={activeTab === 'margens'}
+                aria-controls="tab-panel-margens"
+                className={`btn btn-sm tab-btn ${activeTab === 'margens' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('margens')}
+              >
+                Margens do Cliente
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-proposta"
+                aria-selected={activeTab === 'proposta'}
+                aria-controls="tab-panel-proposta"
+                className={`btn btn-sm tab-btn ${activeTab === 'proposta' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('proposta')}
+              >
+                Emprestimos Maciça
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-in100"
+                aria-selected={activeTab === 'in100'}
+                aria-controls="tab-panel-in100"
+                className={`btn btn-sm tab-btn ${activeTab === 'in100' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('in100')}
+              >
+                Histórico IN100
+              </button>
+            </div>
+
+            {activeTab === 'margens' && (
+            <div className="neo-card p-0 mb-4 tab-panel" role="tabpanel" id="tab-panel-margens" aria-labelledby="tab-margens">
+              <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                <div>
+                  <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Margens do Cliente</h6>
+                </div>
+                <div className="d-flex align-items-center gap-3">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
+                    onClick={handlePrevProposta}
+                    disabled={totalPropostas <= 1 || clienteIndex === 0}
+                    title="Proposta anterior"
+                    aria-label="Proposta anterior"
+                  >
+                    <FiChevronLeft />
+                  </button>
+                  <div className="small opacity-75">{paginaLabel}</div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
+                    onClick={handleNextProposta}
+                    disabled={totalPropostas <= 1 || clienteIndex >= totalPropostas - 1}
+                    title="Próxima proposta"
+                    aria-label="Próxima proposta"
+                  >
+                    <FiChevronRight />
+                  </button>
+                </div>
+              </div>
+              <div className="p-3 p-md-4 fade-swap" key={`margens-${clienteIndex}`}>
+                <div className="kv-list">
+                  <div className="kv-line">
+                    <div className="kv-label">DDB:</div>
+                    <div className="kv-value">{cliente?.data_despacho_beneficio ? formatDate(cliente.data_despacho_beneficio) : '-'}</div>
+                    <div className="kv-label">Valor benefício:</div>
+                    <div className="kv-value">{formatMoneyValue(cliente?.valor_beneficio_margens ?? cliente?.valor_beneficio)}</div>
+                  </div>
+                  <div className="kv-line">
+                    <div className="kv-label">Margem RMC:</div>
+                    <div className="kv-value">{formatMoneyValue(margemRmcValue)}</div>
+                    <div className="kv-label">Margem disponível:</div>
+                    <div className="kv-value">{formatMoneyValue(margemDisponivelValue)}</div>
+                  </div>
+                  <div className="kv-line">
+                    <div className="kv-label">Margem RCC:</div>
+                    <div className="kv-value">{formatMoneyValue(margemRccValue)}</div>
+                    <div className="kv-label">Valor Liberado:</div>
+                    <div className="kv-value">{formatMoneyValue(totalValorLiberadoValue)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            )}
+
+            {activeTab === 'proposta' && (
+            <div className="neo-card p-0 mb-4 tab-panel" role="tabpanel" id="tab-panel-proposta" aria-labelledby="tab-proposta">
               <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
                 <div>
                   <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Proposta - {propostaIdLabel}</h6>
@@ -1251,19 +1458,19 @@ export default function ClienteArgus() {
                       <div className="kv-list p-3 p-md-4">
                         <div className="kv-line">
                           <div className="kv-label">Banco:</div>
-                          <div className="kv-value">{cliente?.banco_desembolso || '-'}</div>
+                          <div className="kv-value">{cliente?.banco_desembolso ? stripZeroCents(cliente.banco_desembolso) : '-'}</div>
                           <div className="kv-label">Nome do Banco:</div>
                           <div className="kv-value">{bancoInfo?.name || '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Agência:</div>
-                          <div className="kv-value">{cliente?.agencia_desembolso || '-'}</div>
+                          <div className="kv-value">{cliente?.agencia_desembolso ? stripZeroCents(cliente.agencia_desembolso) : '-'}</div>
                           <div className="kv-label">Conta:</div>
-                          <div className="kv-value">{cliente?.conta_desembolso || '-'}</div>
+                          <div className="kv-value">{cliente?.conta_desembolso ? stripZeroCents(cliente.conta_desembolso) : '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Tipo de crédito:</div>
-                          <div className="kv-value">{cliente?.tipo_credito ? mapTipoCredito(cliente.tipo_credito) : '-'}</div>
+                          <div className="kv-value">{cliente?.tipo_credito ? stripZeroCents(mapTipoCredito(cliente.tipo_credito)) : '-'}</div>
                         </div>
                       </div>
                     </div>
@@ -1303,8 +1510,10 @@ export default function ClienteArgus() {
                 </div>
               </div>
             </div>
+            )}
 
-            <div className="neo-card p-0 mb-4">
+            {activeTab === 'in100' && (
+            <div className="neo-card p-0 mb-4 tab-panel" role="tabpanel" id="tab-panel-in100" aria-labelledby="tab-in100">
               <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
                 <div>
                   <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Últimas consultas IN100</h6>
@@ -1445,6 +1654,7 @@ export default function ClienteArgus() {
                 </div>
               </div>
             </div>
+            )}
 
           </section>
         )}
