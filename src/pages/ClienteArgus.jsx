@@ -888,20 +888,6 @@ export default function ClienteArgus() {
       notify.warn('URL sem CPF/NB validos.')
       return
     }
-    if (cpfDigits.length !== 11 || nbDigits.length !== 10) {
-      setClientes([])
-      setClienteIndex(0)
-      setBancoInfo(null)
-      setIn100List([])
-      setIn100Index(0)
-      setIn100Loading(false)
-      setIn100BancoInfo(null)
-      setCpf('')
-      setBeneficio('')
-      notify.warn('URL com CPF/NB invalidos.')
-      return
-    }
-
     setCpf(formatCpf(cpfDigits))
     setBeneficio(formatBeneficio(nbDigits))
     handleLookup(cpfDigits, nbDigits, { resetOnFail: true })
@@ -949,12 +935,8 @@ export default function ClienteArgus() {
     event.preventDefault()
     const cpfDigits = digitsOnly(cpf)
     const nbDigits = digitsOnly(beneficio)
-    if (cpfDigits.length !== 11) {
-      notify.warn('CPF invalido.')
-      return
-    }
-    if (nbDigits.length !== 10) {
-      notify.warn('NB invalido.')
+    if (!cpfDigits || !nbDigits) {
+      notify.warn('Informe CPF e NB para continuar.')
       return
     }
     handleLookup(cpfDigits, nbDigits, { resetOnFail: true })
@@ -1074,8 +1056,8 @@ export default function ClienteArgus() {
     if (in100Loading) return
     const cpfDigits = digitsOnly(cpf) || digitsOnly(cliente?.numero_documento)
     const nbDigits = digitsOnly(beneficio) || digitsOnly(cliente?.numero_beneficio)
-    if (cpfDigits.length !== 11 || nbDigits.length !== 10) {
-      notify.warn('CPF/NB inválidos para consultar IN100.')
+    if (!cpfDigits || !nbDigits) {
+      notify.warn('Informe CPF e NB para consultar IN100.')
       return
     }
     const requestId = bumpIn100Request()
