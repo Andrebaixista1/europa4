@@ -31,6 +31,17 @@ function Badge({ status }) {
   return <span className={`badge ${cls}`}>{label}</span>
 }
 
+const formatLoginWithAgencia = (value, agenciaCode) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const code = String(agenciaCode ?? '').trim()
+  if (!code) return raw
+  const base = raw.split('@')[0].trim()
+  if (!base) return ''
+  return `${base}@${code}`
+}
+const parseLoginBase = (value) => String(value ?? '').split('@')[0].trim()
+
 const ROWS_PER_PAGE = 50
 
 export default function AdminControlePlanejamento() {
@@ -138,17 +149,79 @@ export default function AdminControlePlanejamento() {
     return Array.from(new Set((items || []).map(i => i.cargo).filter(Boolean))).sort()
   }, [items])
 
-  // Atualiza empresa/grupo ao escolher agência
+  const agenciaNomes = useMemo(() => {
+    if (!addAgencia || addAgencia === ADD_NEW_AGENCIA) return []
+    const seen = new Set()
+    const list = []
+    for (const it of (items || [])) {
+      if (!it || String(it.codigo) !== String(addAgencia)) continue
+      const nome = String(it.nome || it.empresa || '').trim()
+      if (!nome || seen.has(nome)) continue
+      seen.add(nome)
+      list.push(nome)
+    }
+    return list.sort()
+  }, [items, addAgencia])
+
+  const agenciaGrupos = useMemo(() => {
+    if (!addAgencia || addAgencia === ADD_NEW_AGENCIA) return []
+    const seen = new Set()
+    const list = []
+    for (const it of (items || [])) {
+      if (!it || String(it.codigo) !== String(addAgencia)) continue
+      const gp = String(it.grupo || '').trim()
+      if (!gp || seen.has(gp)) continue
+      seen.add(gp)
+      list.push(gp)
+    }
+    return list.sort()
+  }, [items, addAgencia])
+
+  const isAgencia19930 = useMemo(() => String(addAgencia) === '19930', [addAgencia])
+
+  // Atualiza empresa/grupo ao escolher agência (preserva seleção do usuário quando válida)
   useEffect(() => {
-    if (!addAgencia) { setAddEmpresa(''); setAddGrupo(''); setAddNome(''); return }
-    if (addAgencia === ADD_NEW_AGENCIA) { setAddEmpresa(''); setAddGrupo(''); setAddNome(''); return }
+    if (!addAgencia) {
+      setAddEmpresa('')
+      setAddGrupo('')
+      setAddNome('')
+      return
+    }
+    if (addAgencia === ADD_NEW_AGENCIA) {
+      setAddEmpresa('')
+      setAddGrupo('')
+      setAddNome('')
+      return
+    }
     const found = agencias.find(a => String(a.codigo) === String(addAgencia))
     setAddEmpresa(found?.empresa || '')
-    setAddGrupo(found?.grupo || '')
-    setAddNome(found?.nome || found?.empresa || '')
-  }, [addAgencia, agencias])
+    setAddGrupo((prev) => {
+      const current = String(prev || '').trim()
+      if (current && agenciaGrupos.includes(current)) return current
+      if (isAgencia19930 && agenciaGrupos.includes('MATRIZ')) return 'MATRIZ'
+      const fromFound = String(found?.grupo || '').trim()
+      if (fromFound && agenciaGrupos.includes(fromFound)) return fromFound
+      return agenciaGrupos[0] || ''
+    })
+    setAddNome((prev) => {
+      const current = String(prev || '').trim()
+      if (current && agenciaNomes.includes(current)) return current
+      if (isAgencia19930 && agenciaNomes.includes('VIEIRACRED')) return 'VIEIRACRED'
+      const fromFound = String(found?.nome || found?.empresa || '').trim()
+      if (fromFound && agenciaNomes.includes(fromFound)) return fromFound
+      return agenciaNomes[0] || ''
+    })
+  }, [addAgencia, agencias, agenciaGrupos, agenciaNomes, isAgencia19930])
 
   const isNewAgencia = useMemo(() => addAgencia === ADD_NEW_AGENCIA, [addAgencia])
+  const shouldChooseNome = useMemo(() => !isNewAgencia && agenciaNomes.length > 1, [isNewAgencia, agenciaNomes.length])
+  const shouldChooseGrupo = useMemo(() => !isNewAgencia && agenciaGrupos.length > 1, [isNewAgencia, agenciaGrupos.length])
+  const loginAgenciaCode = useMemo(() => {
+    if (!addAgencia) return ''
+    if (addAgencia === ADD_NEW_AGENCIA) return String(addNovaAgencia || '').trim()
+    return String(addAgencia).trim()
+  }, [addAgencia, addNovaAgencia])
+
 
   // Datas derivadas
   const addRenovacao = useMemo(() => addDataCadastro, [addDataCadastro])
@@ -174,6 +247,8 @@ export default function AdminControlePlanejamento() {
       if (!addEmpresa?.trim()) return notify.error('Informe a empresa')
       if (!addGrupo?.trim()) return notify.error('Selecione o grupo')
     }
+    if (!isNewAgencia && shouldChooseNome && !addNome) return notify.error('Selecione o nome')
+    if (!isNewAgencia && shouldChooseGrupo && !addGrupo) return notify.error('Selecione o grupo')
     if (!addLogin) return notify.error('Informe o login')
     // nome será enviado igual ao campo empresa
     if (!addCargo) return notify.error('Selecione um cargo')
@@ -185,7 +260,7 @@ export default function AdminControlePlanejamento() {
       data_cadastro: addDataCadastro,
       empresa: addEmpresa,
       grupo: addGrupo,
-      login: addLogin,
+      login: formatLoginWithAgencia(addLogin, loginAgenciaCode),
       nome: addNome,
       renovacao: addRenovacao,
       status: 'Ativo',
@@ -612,15 +687,22 @@ export default function AdminControlePlanejamento() {
                   <input className="form-control" value={addEmpresa} onChange={e => setAddEmpresa(e.target.value)} disabled={!isNewAgencia} placeholder={isNewAgencia ? 'Digite a empresa' : 'Selecione uma agência'} />
                 </div>
                 <div className="col-12 col-md-6 col-lg-6">
-                  <label className="form-label small">Nome</label>
-                  <input className="form-control" value={addNome} disabled placeholder="Selecione uma agência para carregar o nome" />
+                  <label className="form-label small">Nome {shouldChooseNome ? '*' : ''}</label>
+                  {shouldChooseNome ? (
+                    <select className="form-select" value={addNome} onChange={e => setAddNome(e.target.value)} required={shouldChooseNome}>
+                      <option value="">Selecione um nome</option>
+                      {agenciaNomes.map(n => (<option key={n} value={n}>{n}</option>))}
+                    </select>
+                  ) : (
+                    <input className="form-control" value={addNome} disabled placeholder="Selecione uma agência para carregar o nome" />
+                  )}
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Grupo {isNewAgencia ? '*' : ''}</label>
-                  {isNewAgencia ? (
-                    <select className="form-select" value={addGrupo} onChange={e => setAddGrupo(e.target.value)} required={isNewAgencia}>
+                  {(isNewAgencia || shouldChooseGrupo) ? (
+                    <select className="form-select" value={addGrupo} onChange={e => setAddGrupo(e.target.value)} required={isNewAgencia || shouldChooseGrupo}>
                       <option value="">Selecione um grupo</option>
-                      {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
+                      {(shouldChooseGrupo ? agenciaGrupos : grupos).map(g => (<option key={g} value={g}>{g}</option>))}
                     </select>
                   ) : (
                     <input className="form-control" value={addGrupo} disabled placeholder="Selecione uma agência" />
@@ -628,7 +710,18 @@ export default function AdminControlePlanejamento() {
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Login *</label>
-                  <input className="form-control" value={addLogin} onChange={e => setAddLogin(e.target.value)} placeholder="Digite o login" required />
+                  <div className="input-group">
+                    <input
+                      className="form-control"
+                      value={addLogin}
+                      onChange={e => setAddLogin(parseLoginBase(e.target.value))}
+                      placeholder="Digite o login"
+                      required
+                    />
+                    {loginAgenciaCode && (
+                      <span className="input-group-text">@{loginAgenciaCode}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="col-12">
                   <label className="form-label small">Cargo *</label>
