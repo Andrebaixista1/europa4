@@ -389,6 +389,7 @@ const normalizeIn100Payload = (payload) => {
         record.tipoCreditoBeneficio,
       especie: record.especie ??
         record.codigo_especie ??
+        record.CODIGO_ESPECIE ??
         record.codigoEspecie ??
         record.especieBeneficio,
     }))
@@ -437,6 +438,8 @@ const normalizeClientePayload = (payload) => {
 
     const normalized = {
       nome: selected.nome ??
+        selected.NOME ??
+        selected.Nome ??
         selected.nome_beneficiario ??
         selected.nomeBeneficiario ??
         selected.nome_cliente ??
@@ -444,6 +447,7 @@ const normalizeClientePayload = (payload) => {
         selected.nome_segurado,
       numero_documento: selected.numero_documento ??
         selected.cpf ??
+        selected.CPF ??
         selected.documento ??
         selected.numeroDocumento ??
         selected.nu_cpf ??
@@ -451,6 +455,9 @@ const normalizeClientePayload = (payload) => {
         selected.nu_cpf_tratado,
       numero_beneficio: selected.numero_beneficio ??
         selected.nb ??
+        selected.beneficio ??
+        selected.Beneficio ??
+        selected.BENEFICIO ??
         selected.numeroBeneficio ??
         selected.numero_beneficio_inss ??
         selected.numeroBeneficioInss ??
@@ -458,13 +465,19 @@ const normalizeClientePayload = (payload) => {
         selected.nb_tratado,
       data_nascimento: normalizeDateInput(
         selected.data_nascimento ??
+        selected.Data_Nascimento ??
+        selected.DATA_NASCIMENTO ??
         selected.dataNascimento ??
         selected.nascimento ??
         selected.dataNascimentoBeneficiario ??
         selected.dt_nascimento_tratado ??
         selected.dt_nascimento,
       ),
-      idade: selected.idade ?? selected.age ?? selected.idade_beneficiario,
+      idade: selected.idade ??
+        selected.Idade ??
+        selected.IDADE ??
+        selected.age ??
+        selected.idade_beneficiario,
       estado: selected.estado ?? selected.uf ?? selected.UF ?? selected.estado_pagamento ?? selected.ufPagamento,
       data_retorno_consulta: dataUpdate || dataRetorno,
       situacao_beneficio: selected.situacao_beneficio ??
@@ -513,7 +526,12 @@ const normalizeClientePayload = (payload) => {
         selected.enderecoResidencial ??
         selected.endereco_residencial,
       bairro: selected.bairro ?? selected.bairro_residencial ?? selected.bairroResidencial,
-      municipio: selected.municipio ?? selected.cidade ?? selected.municipio_residencial ?? selected.cidade_residencial,
+      municipio: selected.municipio ??
+        selected.Municipio ??
+        selected.MUNICIPIO ??
+        selected.cidade ??
+        selected.municipio_residencial ??
+        selected.cidade_residencial,
       cep: selected.cep ?? selected.cep_residencial ?? selected.cepResidencial,
       uf_endereco: selected.uf ?? selected.UF ?? selected.estado ?? selected.estado_residencial ?? selected.uf_residencial,
       nome_representante_legal: selected.nome_representante_legal ??
@@ -631,6 +649,7 @@ const normalizeClientePayload = (payload) => {
         selected.tipo_empres,
       especie: selected.especie ??
         selected.codigo_especie ??
+        selected.CODIGO_ESPECIE ??
         selected.codigoEspecie ??
         selected.especieBeneficio ??
         selected.esp,
@@ -951,6 +970,7 @@ export default function ClienteArgus() {
       })()
     : '-'
   const idadeLabel = formatAgeLabel(cliente?.idade, cliente?.data_nascimento)
+  const dataNascimentoLabel = formatDate(cliente?.data_nascimento)
   const parcelaMeta = {
     parcelas: formatMetaValue(cliente?.quant_parcelas),
     pagas: formatMetaValue(cliente?.pagas),
@@ -1147,7 +1167,7 @@ export default function ClienteArgus() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Consulta Maciça</h2>
+              <h2 className="fw-bold mb-1">Cliente Argus</h2>
               <div className="opacity-75 small">
                 {hasResult ? 'Dados carregados da consulta.' : 'Consultas direto do nosso banco de dados da Maciça.'}
               </div>
@@ -1199,7 +1219,7 @@ export default function ClienteArgus() {
                 <div className="small opacity-75">Atualizado: {updatedLabel}</div>
               </div>
               <div className="row g-3">
-                <div className="col-12 col-lg-4">
+                <div className="col-12 col-lg-3">
                   <div className="label">Nome</div>
                   <div className="value fw-semibold">{cliente?.nome || '-'}</div>
                 </div>
@@ -1208,14 +1228,18 @@ export default function ClienteArgus() {
                   <div className="value">{cliente?.numero_documento ? formatCpf(cliente.numero_documento) : '-'}</div>
                 </div>
                 <div className="col-6 col-lg-2">
+                  <div className="label d-flex align-items-center gap-1"><FiCalendar /> Data Nascimento</div>
+                  <div className="value">{dataNascimentoLabel}</div>
+                </div>
+                <div className="col-6 col-lg-1">
                   <div className="label d-flex align-items-center gap-1"><FiCalendar /> Idade</div>
                   <div className="value">{idadeLabel}</div>
                 </div>
-                <div className="col-6 col-lg-2">
+                <div className="col-6 col-lg-1">
                   <div className="label">UF</div>
                   <div className="value">{cliente?.estado || '-'}</div>
                 </div>
-                <div className="col-12 col-lg-2">
+                <div className="col-12 col-lg-3">
                   <div className="label">Benefícios (NB)</div>
                   <div className="value d-flex flex-column gap-1">
                     {beneficiosList.length > 0 ? (
@@ -1279,7 +1303,7 @@ export default function ClienteArgus() {
                 className={`btn btn-sm tab-btn ${activeTab === 'margens' ? 'is-active' : ''}`}
                 onClick={() => setActiveTab('margens')}
               >
-                Margens do Cliente
+                Margens Disponiveis
               </button>
               <button
                 type="button"
@@ -1290,7 +1314,7 @@ export default function ClienteArgus() {
                 className={`btn btn-sm tab-btn ${activeTab === 'proposta' ? 'is-active' : ''}`}
                 onClick={() => setActiveTab('proposta')}
               >
-                Emprestimos Maciça
+                Contratos
               </button>
               <button
                 type="button"
