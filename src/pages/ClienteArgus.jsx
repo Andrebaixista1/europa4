@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FiArrowLeft, FiCalendar, FiChevronLeft, FiChevronRight, FiDollarSign, FiHash, FiInfo, FiRefreshCw, FiUser } from 'react-icons/fi'
+import { FiArrowLeft, FiCalendar, FiChevronLeft, FiChevronRight, FiCopy, FiDollarSign, FiHash, FiInfo, FiRefreshCw, FiUser } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
@@ -158,6 +158,38 @@ const formatAgeLabel = (idadeValue, dataNascimento) => {
 }
 
 const formatMetaValue = (value) => (value == null || value === '' ? '-' : String(value))
+
+const formatPhoneDisplay = (value) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return '-'
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`
+  }
+  return raw
+}
+
+const copyToClipboard = async (text, successMsg = 'Copiado!') => {
+  const payload = String(text ?? '').trim()
+  if (!payload) return
+  try {
+    await navigator.clipboard.writeText(payload)
+    notify.success(successMsg, { autoClose: 2000 })
+  } catch (_) {
+    try {
+      const el = document.createElement('textarea')
+      el.value = payload
+      el.setAttribute('readonly', '')
+      el.style.position = 'absolute'
+      el.style.left = '-9999px'
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      notify.success(successMsg, { autoClose: 2000 })
+    } catch { /* ignore */ }
+  }
+}
 
 const formatCep = (value) => {
   if (value == null || value === '') return '-'
@@ -406,6 +438,27 @@ const normalizeIn100Payload = (payload) => {
   return normalized
 }
 
+const pickNestedValue = (source, keys) => {
+  if (!source || typeof source !== 'object') return undefined
+  const candidates = [
+    source,
+    source.dados,
+    source.data,
+    source.resultado,
+    source.result,
+    source.cliente,
+    source.consulta,
+  ]
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') continue
+    for (const key of keys) {
+      const value = candidate[key]
+      if (value != null && value !== '') return value
+    }
+  }
+  return undefined
+}
+
 const normalizeClientePayload = (payload) => {
   if (!payload) return null
   let source = payload
@@ -534,6 +587,21 @@ const normalizeClientePayload = (payload) => {
         selected.cidade_residencial,
       cep: selected.cep ?? selected.cep_residencial ?? selected.cepResidencial,
       uf_endereco: selected.uf ?? selected.UF ?? selected.estado ?? selected.estado_residencial ?? selected.uf_residencial,
+      celular1: pickNestedValue(selected, [
+        'celular1', 'celular_1', 'CELULAR1', 'CELULAR_1', 'CELULAR 1',
+        'telefone1', 'telefone_1', 'TELEFONE1', 'TELEFONE_1', 'TELEFONE 1',
+        'fone1', 'FONE1',
+      ]),
+      celular2: pickNestedValue(selected, [
+        'celular2', 'celular_2', 'CELULAR2', 'CELULAR_2', 'CELULAR 2',
+        'telefone2', 'telefone_2', 'TELEFONE2', 'TELEFONE_2', 'TELEFONE 2',
+        'fone2', 'FONE2',
+      ]),
+      celular3: pickNestedValue(selected, [
+        'celular3', 'celular_3', 'CELULAR3', 'CELULAR_3', 'CELULAR 3',
+        'telefone3', 'telefone_3', 'TELEFONE3', 'TELEFONE_3', 'TELEFONE 3',
+        'fone3', 'FONE3',
+      ]),
       nome_representante_legal: selected.nome_representante_legal ??
         selected.representante_legal ??
         selected.nomeRepresentanteLegal ??
@@ -1122,6 +1190,7 @@ export default function ClienteArgus() {
           const dataTry = await resResposta.json().catch(() => null)
           const first = Array.isArray(dataTry) ? (dataTry[0] || {}) : (dataTry || {})
           if (first && isResponseFinished(first.resposta_api)) {
+            notify.success('Consulta IN100 concluída.', { autoClose: 6000 })
             const normalized = normalizeIn100Payload(dataTry)
             if (normalized && normalized.length > 0) {
               setIn100List(normalized.slice(0, 5))
@@ -1225,7 +1294,20 @@ export default function ClienteArgus() {
                 </div>
                 <div className="col-6 col-lg-2">
                   <div className="label d-flex align-items-center gap-1"><FiHash /> CPF</div>
-                  <div className="value">{cliente?.numero_documento ? formatCpf(cliente.numero_documento) : '-'}</div>
+                  <div className="value value-with-action">
+                    <span className="value-text">{cliente?.numero_documento ? formatCpf(cliente.numero_documento) : '-'}</span>
+                    {!!digitsOnly(cliente?.numero_documento) && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm btn-icon"
+                        onClick={() => copyToClipboard(digitsOnly(cliente?.numero_documento), 'CPF copiado!')}
+                        title="Copiar CPF"
+                        aria-label="Copiar CPF"
+                      >
+                        <FiCopy />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="col-6 col-lg-2">
                   <div className="label d-flex align-items-center gap-1"><FiCalendar /> Data Nascimento</div>
@@ -1244,7 +1326,20 @@ export default function ClienteArgus() {
                   <div className="value d-flex flex-column gap-1">
                     {beneficiosList.length > 0 ? (
                       beneficiosList.map((nb) => (
-                        <span key={nb}>{nb}</span>
+                        <div key={nb} className="value-with-action">
+                          <span className="value-text">{nb}</span>
+                          {!!digitsOnly(nb) && (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm btn-icon"
+                              onClick={() => copyToClipboard(digitsOnly(nb), 'NB copiado!')}
+                              title="Copiar NB"
+                              aria-label="Copiar NB"
+                            >
+                              <FiCopy />
+                            </button>
+                          )}
+                        </div>
                       ))
                     ) : (
                       <span>-</span>
@@ -1325,7 +1420,7 @@ export default function ClienteArgus() {
                 className={`btn btn-sm tab-btn ${activeTab === 'in100' ? 'is-active' : ''}`}
                 onClick={() => setActiveTab('in100')}
               >
-                Histórico IN100
+                IN100
               </button>
             </div>
 
@@ -1360,24 +1455,110 @@ export default function ClienteArgus() {
                 </div>
               </div>
               <div className="p-3 p-md-4 fade-swap" key={`margens-${clienteIndex}`}>
-                <div className="kv-list">
-                  <div className="kv-line">
-                    <div className="kv-label">DDB:</div>
-                    <div className="kv-value">{cliente?.data_despacho_beneficio ? formatDate(cliente.data_despacho_beneficio) : '-'}</div>
-                    <div className="kv-label">Valor benefício:</div>
-                    <div className="kv-value">{formatMoneyValue(cliente?.valor_beneficio_margens ?? cliente?.valor_beneficio)}</div>
+                <div className="row g-3 mb-3">
+                  <div className="col-12 col-xl-5">
+                    <div className="neo-card p-0 h-100 d-flex flex-column">
+                      <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Detalhes do Benefício</h6>
+                      </div>
+                      <div className="kv-list kv-single p-3 p-md-4 flex-grow-1">
+                        <div className="kv-line">
+                          <div className="kv-label">DDB:</div>
+                          <div className="kv-value">{cliente?.data_despacho_beneficio ? formatDate(cliente.data_despacho_beneficio) : '-'}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Espécie:</div>
+                          <div className="kv-value">{cliente?.especie || '-'}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Valor benefício:</div>
+                          <div className="kv-value">{formatMoneyValue(cliente?.valor_beneficio_margens ?? cliente?.valor_beneficio)}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Valor Liberado:</div>
+                          <div className="kv-value">{formatMoneyValue(totalValorLiberadoValue)}</div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="kv-line">
-                    <div className="kv-label">Margem RMC:</div>
-                    <div className="kv-value">{formatMoneyValue(margemRmcValue)}</div>
-                    <div className="kv-label">Margem disponível:</div>
-                    <div className="kv-value">{formatMoneyValue(margemDisponivelValue)}</div>
-                  </div>
-                  <div className="kv-line">
-                    <div className="kv-label">Margem RCC:</div>
-                    <div className="kv-value">{formatMoneyValue(margemRccValue)}</div>
-                    <div className="kv-label">Valor Liberado:</div>
-                    <div className="kv-value">{formatMoneyValue(totalValorLiberadoValue)}</div>
+                  <div className="col-12 col-xl-7">
+                    <div className="d-grid gap-3">
+                      <div className="neo-card p-0">
+                        <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                          <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Margens Disponíveis</h6>
+                        </div>
+                        <div className="kv-list p-3 p-md-4">
+                          <div className="kv-line">
+                            <div className="kv-label">Margem RMC:</div>
+                            <div className="kv-value">{formatMoneyValue(margemRmcValue)}</div>
+                            <div className="kv-label">Margem RCC:</div>
+                            <div className="kv-value">{formatMoneyValue(margemRccValue)}</div>
+                          </div>
+                          <div className="kv-line">
+                            <div className="kv-label">Margem disponível:</div>
+                            <div className="kv-value">{formatMoneyValue(margemDisponivelValue)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="neo-card p-0">
+                        <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                          <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Contatos</h6>
+                        </div>
+                        <div className="kv-list p-3 p-md-4">
+                          <div className="kv-line">
+                            <div className="kv-label">Celular 1:</div>
+                            <div className="kv-value value-with-action">
+                              <span className="value-text">{formatPhoneDisplay(cliente?.celular1)}</span>
+                              {!!digitsOnly(cliente?.celular1) && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon"
+                                  onClick={() => copyToClipboard(digitsOnly(cliente?.celular1), 'Celular 1 copiado!')}
+                                  title="Copiar Celular 1"
+                                  aria-label="Copiar Celular 1"
+                                >
+                                  <FiCopy />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="kv-line">
+                            <div className="kv-label">Celular 2:</div>
+                            <div className="kv-value value-with-action">
+                              <span className="value-text">{formatPhoneDisplay(cliente?.celular2)}</span>
+                              {!!digitsOnly(cliente?.celular2) && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon"
+                                  onClick={() => copyToClipboard(digitsOnly(cliente?.celular2), 'Celular 2 copiado!')}
+                                  title="Copiar Celular 2"
+                                  aria-label="Copiar Celular 2"
+                                >
+                                  <FiCopy />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="kv-line">
+                            <div className="kv-label">Celular 3:</div>
+                            <div className="kv-value value-with-action">
+                              <span className="value-text">{formatPhoneDisplay(cliente?.celular3)}</span>
+                              {!!digitsOnly(cliente?.celular3) && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon"
+                                  onClick={() => copyToClipboard(digitsOnly(cliente?.celular3), 'Celular 3 copiado!')}
+                                  title="Copiar Celular 3"
+                                  aria-label="Copiar Celular 3"
+                                >
+                                  <FiCopy />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
