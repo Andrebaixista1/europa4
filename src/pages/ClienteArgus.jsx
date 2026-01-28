@@ -208,6 +208,53 @@ const formatCep = (value) => {
   return raw
 }
 
+const hasValue = (value) => value != null && String(value).trim() !== ''
+
+const countFilled = (record, keys) => keys.reduce(
+  (total, key) => total + (hasValue(record?.[key]) ? 1 : 0),
+  0,
+)
+
+const MARGENS_FIELDS = [
+  'data_despacho_beneficio',
+  'especie',
+  'valor_beneficio_margens',
+  'valor_beneficio',
+  'total_valor_liberado',
+  'margem_disponivel',
+  'saldo_total_disponivel',
+  'margem_rmc',
+  'margem_rcc',
+  'celular1',
+  'celular2',
+  'celular3',
+]
+const PROPOSTA_FIELDS = [
+  'contrato_empres',
+  'data_update',
+  'numero_beneficio',
+  'especie',
+  'situacao_empres',
+  'data_concessao',
+  'data_despacho_beneficio',
+  'comp_ini_desconto',
+  'comp_fim_desconto',
+  'dt_averbacao_consig',
+  'valor_beneficio',
+  'valor_parcela',
+  'valor_emprestimo',
+  'quant_parcelas',
+  'pagas',
+  'restantes',
+  'banco_desembolso',
+  'agencia_desembolso',
+  'conta_desembolso',
+  'tipo_credito',
+]
+
+const hasMargensData = (record) => countFilled(record, MARGENS_FIELDS) > 0
+const hasPropostaData = (record) => countFilled(record, PROPOSTA_FIELDS) > 0
+
 const formatBlankValue = (value) => (value == null || value === '' ? '' : String(value))
 
 const formatDateBlank = (value) => {
@@ -813,6 +860,33 @@ export default function ClienteArgus() {
     return clientes[safeIndex]
   }, [clienteIndex, clientes])
 
+  const margensIndexList = useMemo(
+    () => clientes
+      .map((item, index) => ({
+        index,
+        score: countFilled(item, MARGENS_FIELDS),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((item) => item.index),
+    [clientes],
+  )
+  const propostaIndexList = useMemo(
+    () => clientes
+      .map((item, index) => ({
+        index,
+        score: countFilled(item, PROPOSTA_FIELDS),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .map((item) => item.index),
+    [clientes],
+  )
+  const activeIndexList = activeTab === 'proposta' ? propostaIndexList : margensIndexList
+  const activePageIndex = activeIndexList.indexOf(clienteIndex)
+  const activeTotal = activeIndexList.length
+  const lastActiveListRef = useRef('')
+
   const bumpIn100Request = () => {
     in100RequestRef.current += 1
     return in100RequestRef.current
@@ -1060,8 +1134,7 @@ export default function ClienteArgus() {
     if (margem == null) return null
     return margem / 0.02801
   })()
-  const totalPropostas = clientes.length
-  const paginaLabel = totalPropostas ? `${clienteIndex + 1} de ${totalPropostas}` : '-'
+  const paginaLabel = activeTotal && activePageIndex >= 0 ? `${activePageIndex + 1} de ${activeTotal}` : '-'
   const in100BancoNome = formatBlankValue(
     in100?.nome_banco ?? in100?.banco_nome ?? in100?.bancoNome ?? in100?.banco_desembolso_nome,
   ) || formatBlankValue(in100BancoInfo?.name)
@@ -1106,6 +1179,16 @@ export default function ClienteArgus() {
     return rows
   }, [clientes])
 
+  useEffect(() => {
+    if (activeTab !== 'margens' && activeTab !== 'proposta') return
+    const key = `${activeTab}|${activeIndexList.join(',')}`
+    if (lastActiveListRef.current === key) return
+    lastActiveListRef.current = key
+    if (activeIndexList.length) {
+      setClienteIndex(activeIndexList[0])
+    }
+  }, [activeIndexList, activeTab])
+
   const beneficiosList = useMemo(() => {
     const seen = new Set()
     return clientes
@@ -1120,16 +1203,20 @@ export default function ClienteArgus() {
   }, [clientes])
   const handlePrevProposta = () => {
     setClienteIndex((current) => {
-      const total = clientes.length
-      if (total <= 1) return current
-      return Math.max(current - 1, 0)
+      const list = activeIndexList
+      if (list.length <= 1) return current
+      const pos = list.indexOf(current)
+      if (pos === -1) return list[0]
+      return list[Math.max(pos - 1, 0)]
     })
   }
   const handleNextProposta = () => {
     setClienteIndex((current) => {
-      const total = clientes.length
-      if (total <= 1) return current
-      return Math.min(current + 1, total - 1)
+      const list = activeIndexList
+      if (list.length <= 1) return current
+      const pos = list.indexOf(current)
+      if (pos === -1) return list[0]
+      return list[Math.min(pos + 1, list.length - 1)]
     })
   }
   const handleOpenIn100Confirm = () => {
@@ -1435,7 +1522,7 @@ export default function ClienteArgus() {
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
                     onClick={handlePrevProposta}
-                    disabled={totalPropostas <= 1 || clienteIndex === 0}
+                    disabled={activeTotal <= 1 || activePageIndex <= 0}
                     title="Proposta anterior"
                     aria-label="Proposta anterior"
                   >
@@ -1446,7 +1533,7 @@ export default function ClienteArgus() {
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
                     onClick={handleNextProposta}
-                    disabled={totalPropostas <= 1 || clienteIndex >= totalPropostas - 1}
+                    disabled={activeTotal <= 1 || activePageIndex >= activeTotal - 1}
                     title="Próxima proposta"
                     aria-label="Próxima proposta"
                   >
@@ -1577,7 +1664,7 @@ export default function ClienteArgus() {
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
                     onClick={handlePrevProposta}
-                    disabled={totalPropostas <= 1 || clienteIndex === 0}
+                    disabled={activeTotal <= 1 || activePageIndex <= 0}
                     title="Proposta anterior"
                     aria-label="Proposta anterior"
                   >
@@ -1588,7 +1675,7 @@ export default function ClienteArgus() {
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
                     onClick={handleNextProposta}
-                    disabled={totalPropostas <= 1 || clienteIndex >= totalPropostas - 1}
+                    disabled={activeTotal <= 1 || activePageIndex >= activeTotal - 1}
                     title="Próxima proposta"
                     aria-label="Próxima proposta"
                   >
