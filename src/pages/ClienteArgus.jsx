@@ -762,7 +762,9 @@ const normalizeClientePayload = (payload) => {
         selected.margem_rcc_disponivel ??
         selected.margemRccDisponivel ??
         selected.MARGEM_RCC ??
+        selected.Margem_RCC ??
         selected['MARGEM_RCC'] ??
+        selected['Margem_RCC'] ??
         selected['Margem RCC'],
       valor_liberador_rmc: selected.valor_liberador_rmc ??
         selected.valor_liberador_RMC ??
@@ -1795,7 +1797,7 @@ export default function ClienteArgus() {
                       <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
                         <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Contatos</h6>
                         {!!contatosDataLemitLabel && (
-                          <div className="small text-info fw-semibold">Última atualização: {contatosDataLemitLabel}</div>
+                          <div className="small text-info fw-semibold">Atualização Lemitti: {contatosDataLemitLabel}</div>
                         )}
                       </div>
                         <div className="kv-list p-3 p-md-4">
