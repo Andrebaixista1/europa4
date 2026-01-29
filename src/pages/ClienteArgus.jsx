@@ -1262,6 +1262,7 @@ export default function ClienteArgus() {
     const formatted = formatDate(cliente.data_lemit)
     return formatted === '-' ? '' : formatted
   })()
+  const hasContatosLemit = Boolean(contatosDataLemitLabel)
   const margemRmcValue = cliente?.margem_rmc
   const margemDisponivelValue = cliente?.margem_disponivel ?? cliente?.saldo_total_disponivel
   const margemRccValue = cliente?.margem_rcc
@@ -1796,14 +1797,16 @@ export default function ClienteArgus() {
                       <div className="neo-card p-0">
                       <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
                         <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Contatos</h6>
-                        {!!contatosDataLemitLabel && (
+                        {hasContatosLemit && (
                           <div className="small text-info fw-semibold">Atualização Lemitti: {contatosDataLemitLabel}</div>
                         )}
                       </div>
                         <div className="kv-list p-3 p-md-4">
                           <div className="kv-line">
                             <div className="kv-label kv-label-phone">
-                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              {hasContatosLemit && (
+                                <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              )}
                               Celular 1:
                             </div>
                             <div className="kv-value value-with-action">
@@ -1823,7 +1826,9 @@ export default function ClienteArgus() {
                           </div>
                           <div className="kv-line">
                             <div className="kv-label kv-label-phone">
-                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              {hasContatosLemit && (
+                                <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              )}
                               Celular 2:
                             </div>
                             <div className="kv-value value-with-action">
@@ -1843,7 +1848,9 @@ export default function ClienteArgus() {
                           </div>
                           <div className="kv-line">
                             <div className="kv-label kv-label-phone">
-                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              {hasContatosLemit && (
+                                <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              )}
                               Celular 3:
                             </div>
                             <div className="kv-value value-with-action">
@@ -1863,7 +1870,9 @@ export default function ClienteArgus() {
                           </div>
                           <div className="kv-line">
                             <div className="kv-label kv-label-phone">
-                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              {hasContatosLemit && (
+                                <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              )}
                               Celular 4:
                             </div>
                             <div className="kv-value value-with-action">
