@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { FiArrowLeft, FiCalendar, FiChevronLeft, FiChevronRight, FiCopy, FiDollarSign, FiHash, FiInfo, FiRefreshCw, FiUser } from 'react-icons/fi'
+import { FiAlertTriangle, FiArrowLeft, FiCalendar, FiChevronLeft, FiChevronRight, FiCopy, FiDollarSign, FiHash, FiInfo, FiRefreshCw, FiUser } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
@@ -123,6 +123,9 @@ const idadeFrom = (iso) => {
 }
 
 const brCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value ?? 0))
+const formatPercent = (value) => (
+  value == null ? '-' : new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+)
 
 const toTitleCase = (value) => String(value)
   .toLowerCase()
@@ -325,6 +328,46 @@ const toNumber = (value) => {
   }
   const num = Number(normalized)
   return Number.isNaN(num) ? null : num
+}
+
+const calcMonthlyRate = (principalValue, paymentValue, parcelasValue) => {
+  const principal = toNumber(principalValue)
+  const payment = toNumber(paymentValue)
+  const parcelas = toNumber(parcelasValue)
+  if (!principal || !payment || !parcelas || parcelas <= 0) return null
+  const months = Math.round(parcelas)
+  if (months <= 0) return null
+  const total = payment * months
+  if (total < principal) return -1
+  if (Math.abs(total - principal) < 1e-6) return 0
+
+  const f = (rate) => {
+    if (rate === 0) return payment * months - principal
+    return payment * (1 - (1 + rate) ** (-months)) / rate - principal
+  }
+
+  let low = 0
+  let high = 1
+  let fHigh = f(high)
+  let guard = 0
+  while (fHigh > 0 && high < 10 && guard < 20) {
+    high *= 2
+    fHigh = f(high)
+    guard += 1
+  }
+  if (fHigh > 0) return null
+
+  for (let i = 0; i < 60; i += 1) {
+    const mid = (low + high) / 2
+    const fMid = f(mid)
+    if (Math.abs(fMid) < 1e-10) return mid
+    if (fMid > 0) {
+      low = mid
+    } else {
+      high = mid
+    }
+  }
+  return (low + high) / 2
 }
 
 const formatMoneyValue = (value) => {
@@ -1303,6 +1346,14 @@ export default function ClienteArgus() {
     pagas: formatMetaValue(contrato?.pagas),
     restantes: formatMetaValue(contrato?.restantes),
   }
+  const taxaJurosValue = calcMonthlyRate(
+    contrato?.valor_emprestimo,
+    contrato?.valor_parcela,
+    contrato?.quant_parcelas,
+  )
+  const taxaJurosRounded = taxaJurosValue != null && taxaJurosValue < 0
+  const taxaJurosFinal = taxaJurosRounded ? 0.015 : taxaJurosValue
+  const taxaJurosLabel = formatPercent(taxaJurosFinal)
   const propostaLabel = contrato?.data_update
     ? formatDate(contrato.data_update)
     : (contrato?.data_retorno_consulta ? formatDate(contrato.data_retorno_consulta) : '-')
@@ -2065,6 +2116,17 @@ export default function ClienteArgus() {
                         <div className="kv-line">
                           <div className="kv-label">Tipo de crédito:</div>
                           <div className="kv-value">{contrato?.tipo_credito ? stripZeroCents(mapTipoCredito(contrato.tipo_credito)) : '-'}</div>
+                          <div className="kv-label">Taxa (a.m.):</div>
+                          <div className="kv-value d-inline-flex align-items-center gap-2">
+                            <span>{taxaJurosLabel}</span>
+                            {taxaJurosRounded && (
+                              <FiAlertTriangle
+                                className="text-warning"
+                                title="Taxa arredondada, por favor refazer o cálculo com o extrato atualizado."
+                                aria-label="Taxa arredondada"
+                              />
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
