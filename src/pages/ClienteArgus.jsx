@@ -523,6 +523,34 @@ const normalizeIn100Payload = (payload) => {
   return normalized
 }
 
+const mapIn100ToCliente = (list) => {
+  if (!Array.isArray(list)) return []
+  return list.map((item) => ({
+    numero_beneficio: item?.numero_beneficio,
+    numero_documento: item?.numero_documento,
+    nome: item?.nome,
+    data_nascimento: normalizeDateInput(item?.data_nascimento),
+    idade: item?.idade,
+    estado: item?.estado,
+    data_retorno_consulta: item?.data_retorno_consulta,
+    situacao_beneficio: item?.situacao_beneficio,
+    data_concessao: normalizeDateInput(item?.data_concessao),
+    data_despacho_beneficio: normalizeDateInput(item?.data_despacho_beneficio),
+    nome_representante_legal: item?.nome_representante_legal,
+    numero_portabilidades: item?.numero_portabilidades,
+    saldo_cartao_beneficio: item?.saldo_cartao_beneficio,
+    saldo_cartao_consignado: item?.saldo_cartao_consignado,
+    saldo_total_disponivel: item?.saldo_total_disponivel,
+    banco_desembolso: item?.banco_desembolso,
+    banco_nome: item?.banco_nome,
+    agencia_desembolso: item?.agencia_desembolso,
+    conta_desembolso: item?.conta_desembolso,
+    digito_desembolso: item?.digito_desembolso,
+    tipo_credito: item?.tipo_credito,
+    especie: item?.especie,
+  }))
+}
+
 const pickNestedValue = (source, keys) => {
   if (!source || typeof source !== 'object') return undefined
   const candidates = [
@@ -1010,6 +1038,23 @@ export default function ClienteArgus() {
     setIn100Index(0)
   }
 
+  const fetchClienteArgusList = async (cpfDigits, nbDigits) => {
+    if (!cpfDigits || !nbDigits) return []
+    try {
+      const url = new URL('https://n8n.apivieiracred.store/webhook/api/cliente-argus/')
+      url.searchParams.set('CPF', cpfDigits)
+      url.searchParams.set('NB', nbDigits)
+      const res = await fetch(url.toString(), { method: 'GET' })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) return []
+      const normalized = normalizeClientePayload(payload)
+      return normalized && normalized.length > 0 ? normalized : []
+    } catch (_) {
+      // Mantem os campos vazios se falhar.
+    }
+    return []
+  }
+
   const fetchContratosListSingle = async (cpfDigits, nbDigits) => {
     if (!cpfDigits || !nbDigits) return []
     try {
@@ -1021,6 +1066,31 @@ export default function ClienteArgus() {
       if (!res.ok) return []
       const normalized = normalizeClientePayload(payload)
       return normalized && normalized.length > 0 ? normalized : []
+    } catch (_) {
+      // Mantem os campos vazios se falhar.
+    }
+    return []
+  }
+
+  const fetchClienteMacicaList = async (cpfDigits, nbDigits) => (
+    fetchContratosListSingle(cpfDigits, nbDigits)
+  )
+
+  const fetchClienteRespostaMacicaList = async (cpfDigits, nbDigits) => {
+    if (!cpfDigits || !nbDigits) return []
+    try {
+      const url = new URL('https://n8n.apivieiracred.store/webhook/resposta-macica')
+      url.searchParams.set('cpf', cpfDigits)
+      url.searchParams.set('nb', nbDigits)
+      const res = await fetch(url.toString(), { method: 'GET' })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) return []
+      const normalized = normalizeClientePayload(payload)
+      if (normalized && normalized.length > 0) return normalized
+      const in100Normalized = normalizeIn100Payload(payload)
+      if (in100Normalized && in100Normalized.length > 0) {
+        return mapIn100ToCliente(in100Normalized)
+      }
     } catch (_) {
       // Mantem os campos vazios se falhar.
     }
@@ -1104,25 +1174,19 @@ export default function ClienteArgus() {
     setActiveTab('margens')
 
     try {
-      const url = new URL('https://n8n.apivieiracred.store/webhook/api/cliente-argus/')
-      url.searchParams.set('CPF', cpfDigits)
-      url.searchParams.set('NB', nbDigits)
+      const [clienteArgusList, macicaList, respostaList] = await Promise.all([
+        fetchClienteArgusList(cpfDigits, nbDigits),
+        fetchClienteMacicaList(cpfDigits, nbDigits),
+        fetchClienteRespostaMacicaList(cpfDigits, nbDigits),
+      ])
+      const normalized = (clienteArgusList && clienteArgusList.length > 0)
+        ? clienteArgusList
+        : (macicaList && macicaList.length > 0)
+          ? macicaList
+          : respostaList
 
-      const res = await fetch(url.toString(), { method: 'GET' })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) {
-        const msg = extractErrorMessage(payload) || 'Erro ao consultar Maciça.'
-        throw new Error(msg)
-      }
-
-      const normalized = normalizeClientePayload(payload)
       if (!normalized || normalized.length === 0) {
-        const msg = extractErrorMessage(payload)
-        if (msg) {
-          notify.error(msg)
-        } else {
-          notify.warn('Nenhum dado encontrado para CPF/NB informados.')
-        }
+        notify.warn('Nenhum dado encontrado para CPF/NB informados.')
         if (resetOnFail) {
           setCpf('')
           setBeneficio('')
@@ -1132,8 +1196,7 @@ export default function ClienteArgus() {
 
       setClientes(normalized)
       setClienteIndex(0)
-      const contratosList = await fetchContratosList(cpfDigits, nbDigits)
-      setContratos(contratosList)
+      setContratos(macicaList || [])
       setContratoIndex(0)
       setActiveTab('margens')
     } catch (error) {
@@ -1677,7 +1740,12 @@ export default function ClienteArgus() {
                 aria-selected={activeTab === 'margens'}
                 aria-controls="tab-panel-margens"
                 className={`btn btn-sm tab-btn ${activeTab === 'margens' ? 'is-active' : ''}`}
-                onClick={() => setActiveTab('margens')}
+                onClick={() => {
+                  setActiveTab('margens')
+                  if (margensIndexList.length) {
+                    setClienteIndex(margensIndexList[0])
+                  }
+                }}
               >
                 Margens Disponiveis
               </button>
@@ -1688,7 +1756,12 @@ export default function ClienteArgus() {
                 aria-selected={activeTab === 'proposta'}
                 aria-controls="tab-panel-proposta"
                 className={`btn btn-sm tab-btn ${activeTab === 'proposta' ? 'is-active' : ''}`}
-                onClick={() => setActiveTab('proposta')}
+                onClick={() => {
+                  setActiveTab('proposta')
+                  if (propostaIndexList.length) {
+                    setContratoIndex(propostaIndexList[0])
+                  }
+                }}
               >
                 Contratos
               </button>
@@ -1699,7 +1772,10 @@ export default function ClienteArgus() {
                 aria-selected={activeTab === 'in100'}
                 aria-controls="tab-panel-in100"
                 className={`btn btn-sm tab-btn ${activeTab === 'in100' ? 'is-active' : ''}`}
-                onClick={() => setActiveTab('in100')}
+                onClick={() => {
+                  setActiveTab('in100')
+                  setIn100Index(0)
+                }}
               >
                 IN100
               </button>
