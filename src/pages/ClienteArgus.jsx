@@ -905,6 +905,7 @@ export default function ClienteArgus() {
   const [in100BeneficioSelecionado, setIn100BeneficioSelecionado] = useState('')
   const [activeTab, setActiveTab] = useState('margens')
   const lastQueryRef = useRef('')
+  const lastIn100AutoRef = useRef('')
   const in100RequestRef = useRef(0)
 
   const urlParams = useMemo(
@@ -995,12 +996,10 @@ export default function ClienteArgus() {
 
   const fetchIn100List = async (cpfDigits, nbDigits) => {
     const nbList = Array.isArray(nbDigits) ? nbDigits : [nbDigits]
-    const uniqueNbs = [...new Set(nbList.map((item) => digitsOnly(item)).filter(Boolean))]
-    if (!cpfDigits || uniqueNbs.length === 0) return []
-    const lists = await Promise.all(
-      uniqueNbs.map((nb) => fetchIn100ListSingle(cpfDigits, nb)),
-    )
-    return mergeIn100Lists(lists)
+    const firstNb = nbList.map((item) => digitsOnly(item)).find(Boolean)
+    if (!cpfDigits || !firstNb) return []
+    const list = await fetchIn100ListSingle(cpfDigits, firstNb)
+    return mergeIn100Lists([list])
   }
 
   const fetchIn100 = async (cpfDigits, nbDigits, requestId = bumpIn100Request()) => {
@@ -1030,12 +1029,10 @@ export default function ClienteArgus() {
 
   const fetchContratosList = async (cpfDigits, nbDigits) => {
     const nbList = Array.isArray(nbDigits) ? nbDigits : [nbDigits]
-    const uniqueNbs = [...new Set(nbList.map((item) => digitsOnly(item)).filter(Boolean))]
-    if (!cpfDigits || uniqueNbs.length === 0) return []
-    const lists = await Promise.all(
-      uniqueNbs.map((nb) => fetchContratosListSingle(cpfDigits, nb)),
-    )
-    return lists.flat().filter(Boolean).flat()
+    const firstNb = nbList.map((item) => digitsOnly(item)).find(Boolean)
+    if (!cpfDigits || !firstNb) return []
+    const list = await fetchContratosListSingle(cpfDigits, firstNb)
+    return list && list.length ? list : []
   }
 
   const buildSaldoPayload = () => {
@@ -1103,6 +1100,7 @@ export default function ClienteArgus() {
     setIn100Index(0)
     setIn100Loading(false)
     setIn100BancoInfo(null)
+    lastIn100AutoRef.current = ''
     setActiveTab('margens')
 
     try {
@@ -1134,12 +1132,7 @@ export default function ClienteArgus() {
 
       setClientes(normalized)
       setClienteIndex(0)
-      const macicaNbs = [...new Set(
-        normalized
-          .map((item) => digitsOnly(item?.numero_beneficio))
-          .filter(Boolean),
-      )]
-      const contratosList = await fetchContratosList(cpfDigits, macicaNbs.length ? macicaNbs : nbDigits)
+      const contratosList = await fetchContratosList(cpfDigits, nbDigits)
       setContratos(contratosList)
       setContratoIndex(0)
       setActiveTab('margens')
@@ -1369,10 +1362,14 @@ export default function ClienteArgus() {
     if (!beneficiosOptions.length) return
     const cpfDigits = digitsOnly(cpf) || digitsOnly(cliente?.numero_documento)
     if (!cpfDigits) return
-    const nbList = beneficiosOptions.map((option) => option.digits)
+    const nbDigits = digitsOnly(in100BeneficioSelecionado) || beneficiosOptions[0]?.digits
+    if (!nbDigits) return
+    const key = `${cpfDigits}|${nbDigits}`
+    if (lastIn100AutoRef.current === key) return
+    lastIn100AutoRef.current = key
     const in100RequestId = bumpIn100Request()
-    void fetchIn100(cpfDigits, nbList, in100RequestId)
-  }, [beneficiosOptions, cpf, cliente?.numero_documento])
+    void fetchIn100(cpfDigits, nbDigits, in100RequestId)
+  }, [beneficiosOptions, cpf, cliente?.numero_documento, in100BeneficioSelecionado])
   const handlePrevMargens = () => {
     setClienteIndex((current) => {
       const list = margensIndexList
