@@ -78,6 +78,38 @@ const formatTimeOffset = (iso, offsetHours = 0) => {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' })
 }
 
+const addDaysToDate = (value, days) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  if (/^\d{8}$/.test(raw)) {
+    if (/^0+$/.test(raw)) return null
+    const year = Number(raw.slice(0, 4))
+    const month = Number(raw.slice(4, 6))
+    const day = Number(raw.slice(6, 8))
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null
+    const base = new Date(Date.UTC(year, month - 1, day))
+    if (Number.isNaN(base.getTime())) return null
+    base.setUTCDate(base.getUTCDate() + days)
+    return base
+  }
+  const normalized = normalizeDateInput(raw)
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) {
+    const year = Number(match[1])
+    const month = Number(match[2])
+    const day = Number(match[3])
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null
+    const base = new Date(Date.UTC(year, month - 1, day))
+    if (Number.isNaN(base.getTime())) return null
+    base.setUTCDate(base.getUTCDate() + days)
+    return base
+  }
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return null
+  d.setDate(d.getDate() + days)
+  return d
+}
+
 const idadeFrom = (iso) => {
   if (!iso) return '-'
   const m = String(iso).match(/(\d{4})-(\d{2})-(\d{2})/)
@@ -169,6 +201,8 @@ const formatPhoneDisplay = (value) => {
   return raw
 }
 
+const PHONE_ICON_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQds_EhUGRInDmW09mpWVlSFuLoCAlO76SAJQ&s'
+
 const copyToClipboard = async (text, successMsg = 'Copiado!') => {
   const payload = String(text ?? '').trim()
   if (!payload) return
@@ -225,9 +259,13 @@ const MARGENS_FIELDS = [
   'saldo_total_disponivel',
   'margem_rmc',
   'margem_rcc',
+  'valor_liberador_rmc',
+  'valor_liberador_rcc',
+  'data_lemit',
   'celular1',
   'celular2',
   'celular3',
+  'celular4',
 ]
 const PROPOSTA_FIELDS = [
   'contrato_empres',
@@ -649,6 +687,16 @@ const normalizeClientePayload = (payload) => {
         'telefone3', 'telefone_3', 'TELEFONE3', 'TELEFONE_3', 'TELEFONE 3',
         'fone3', 'FONE3',
       ]),
+      celular4: pickNestedValue(selected, [
+        'celular4', 'celular_4', 'CELULAR4', 'CELULAR_4', 'CELULAR 4',
+        'telefone4', 'telefone_4', 'TELEFONE4', 'TELEFONE_4', 'TELEFONE 4',
+        'fone4', 'FONE4',
+      ]),
+      data_lemit: selected.data_lemit ??
+        selected.dataLemit ??
+        selected.Data_Lemit ??
+        selected.DATA_LEMIT ??
+        selected['Data_Lemit'],
       nome_representante_legal: selected.nome_representante_legal ??
         selected.representante_legal ??
         selected.nomeRepresentanteLegal ??
@@ -716,6 +764,16 @@ const normalizeClientePayload = (payload) => {
         selected.MARGEM_RCC ??
         selected['MARGEM_RCC'] ??
         selected['Margem RCC'],
+      valor_liberador_rmc: selected.valor_liberador_rmc ??
+        selected.valor_liberador_RMC ??
+        selected.valorLiberadorRmc ??
+        selected.VALOR_LIBERADOR_RMC ??
+        selected['VALOR_LIBERADOR_RMC'],
+      valor_liberador_rcc: selected.valor_liberador_rcc ??
+        selected.valor_liberador_RCC ??
+        selected.valorLiberadorRcc ??
+        selected.VALOR_LIBERADOR_RCC ??
+        selected['VALOR_LIBERADOR_RCC'],
       total_valor_liberado: selected.total_valor_liberado ??
         selected.totalValorLiberado ??
         selected.valor_total_liberado ??
@@ -832,7 +890,9 @@ export default function ClienteArgus() {
   const [cpf, setCpf] = useState('')
   const [beneficio, setBeneficio] = useState('')
   const [clientes, setClientes] = useState([])
+  const [contratos, setContratos] = useState([])
   const [clienteIndex, setClienteIndex] = useState(0)
+  const [contratoIndex, setContratoIndex] = useState(0)
   const [bancoInfo, setBancoInfo] = useState(null)
   const [in100List, setIn100List] = useState([])
   const [in100Index, setIn100Index] = useState(0)
@@ -840,6 +900,7 @@ export default function ClienteArgus() {
   const [in100BancoInfo, setIn100BancoInfo] = useState(null)
   const [metrics, setMetrics] = useState({ totalCarregado: 0, disponivel: 0, realizadas: 0 })
   const [showIn100Confirm, setShowIn100Confirm] = useState(false)
+  const [in100BeneficioSelecionado, setIn100BeneficioSelecionado] = useState('')
   const [activeTab, setActiveTab] = useState('margens')
   const lastQueryRef = useRef('')
   const in100RequestRef = useRef(0)
@@ -860,6 +921,12 @@ export default function ClienteArgus() {
     return clientes[safeIndex]
   }, [clienteIndex, clientes])
 
+  const contrato = useMemo(() => {
+    if (!contratos.length) return null
+    const safeIndex = Math.min(contratoIndex, contratos.length - 1)
+    return contratos[safeIndex]
+  }, [contratoIndex, contratos])
+
   const margensIndexList = useMemo(
     () => clientes
       .map((item, index) => ({
@@ -872,7 +939,7 @@ export default function ClienteArgus() {
     [clientes],
   )
   const propostaIndexList = useMemo(
-    () => clientes
+    () => contratos
       .map((item, index) => ({
         index,
         score: countFilled(item, PROPOSTA_FIELDS),
@@ -880,27 +947,27 @@ export default function ClienteArgus() {
       .filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score || a.index - b.index)
       .map((item) => item.index),
-    [clientes],
+    [contratos],
   )
-  const activeIndexList = activeTab === 'proposta' ? propostaIndexList : margensIndexList
-  const activePageIndex = activeIndexList.indexOf(clienteIndex)
-  const activeTotal = activeIndexList.length
-  const lastActiveListRef = useRef('')
+  const margensPageIndex = margensIndexList.indexOf(clienteIndex)
+  const margensTotal = margensIndexList.length
+  const propostaPageIndex = propostaIndexList.indexOf(contratoIndex)
+  const propostaTotal = propostaIndexList.length
 
   const bumpIn100Request = () => {
     in100RequestRef.current += 1
     return in100RequestRef.current
   }
 
-  const fetchIn100List = async (cpfDigits, nbDigits) => {
-    if (!cpfDigits || !nbDigits) return
+  const fetchIn100ListSingle = async (cpfDigits, nbDigits) => {
+    if (!cpfDigits || !nbDigits) return []
     try {
       const url = new URL('https://n8n.apivieiracred.store/webhook/resposta-macica')
       url.searchParams.set('cpf', cpfDigits)
       url.searchParams.set('nb', nbDigits)
       const res = await fetch(url.toString(), { method: 'GET' })
       const payload = await res.json().catch(() => null)
-      if (!res.ok) return
+      if (!res.ok) return []
       const normalized = normalizeIn100Payload(payload)
       if (!normalized || normalized.length === 0) return []
       return normalized.slice(0, 5)
@@ -910,12 +977,63 @@ export default function ClienteArgus() {
     return []
   }
 
+  const mergeIn100Lists = (lists) => {
+    const merged = lists.flat().filter(Boolean).flat()
+    if (!merged.length) return []
+    merged.sort((a, b) => {
+      const timeA = parseDateValue(a?.data_retorno_consulta)
+      const timeB = parseDateValue(b?.data_retorno_consulta)
+      if (timeA == null && timeB == null) return 0
+      if (timeA == null) return 1
+      if (timeB == null) return -1
+      return timeB - timeA
+    })
+    return merged
+  }
+
+  const fetchIn100List = async (cpfDigits, nbDigits) => {
+    const nbList = Array.isArray(nbDigits) ? nbDigits : [nbDigits]
+    const uniqueNbs = [...new Set(nbList.map((item) => digitsOnly(item)).filter(Boolean))]
+    if (!cpfDigits || uniqueNbs.length === 0) return []
+    const lists = await Promise.all(
+      uniqueNbs.map((nb) => fetchIn100ListSingle(cpfDigits, nb)),
+    )
+    return mergeIn100Lists(lists)
+  }
+
   const fetchIn100 = async (cpfDigits, nbDigits, requestId = bumpIn100Request()) => {
     const list = await fetchIn100List(cpfDigits, nbDigits)
     if (requestId !== in100RequestRef.current) return
     if (!list || list.length === 0) return
     setIn100List(list)
     setIn100Index(0)
+  }
+
+  const fetchContratosListSingle = async (cpfDigits, nbDigits) => {
+    if (!cpfDigits || !nbDigits) return []
+    try {
+      const url = new URL('https://n8n.apivieiracred.store/webhook/api/cliente-argus/macica')
+      url.searchParams.set('cpf', cpfDigits)
+      url.searchParams.set('nb', nbDigits)
+      const res = await fetch(url.toString(), { method: 'GET' })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) return []
+      const normalized = normalizeClientePayload(payload)
+      return normalized && normalized.length > 0 ? normalized : []
+    } catch (_) {
+      // Mantem os campos vazios se falhar.
+    }
+    return []
+  }
+
+  const fetchContratosList = async (cpfDigits, nbDigits) => {
+    const nbList = Array.isArray(nbDigits) ? nbDigits : [nbDigits]
+    const uniqueNbs = [...new Set(nbList.map((item) => digitsOnly(item)).filter(Boolean))]
+    if (!cpfDigits || uniqueNbs.length === 0) return []
+    const lists = await Promise.all(
+      uniqueNbs.map((nb) => fetchContratosListSingle(cpfDigits, nb)),
+    )
+    return lists.flat().filter(Boolean).flat()
   }
 
   const buildSaldoPayload = () => {
@@ -975,16 +1093,15 @@ export default function ClienteArgus() {
     if (!cpfDigits || !nbDigits) return
     loader.begin()
     setClientes([])
+    setContratos([])
     setClienteIndex(0)
+    setContratoIndex(0)
     setBancoInfo(null)
     setIn100List([])
     setIn100Index(0)
     setIn100Loading(false)
     setIn100BancoInfo(null)
     setActiveTab('margens')
-
-    const in100RequestId = bumpIn100Request()
-    void fetchIn100(cpfDigits, nbDigits, in100RequestId)
 
     try {
       const url = new URL('https://n8n.apivieiracred.store/webhook/api/cliente-argus/')
@@ -1015,6 +1132,14 @@ export default function ClienteArgus() {
 
       setClientes(normalized)
       setClienteIndex(0)
+      const macicaNbs = [...new Set(
+        normalized
+          .map((item) => digitsOnly(item?.numero_beneficio))
+          .filter(Boolean),
+      )]
+      const contratosList = await fetchContratosList(cpfDigits, macicaNbs.length ? macicaNbs : nbDigits)
+      setContratos(contratosList)
+      setContratoIndex(0)
       setActiveTab('margens')
     } catch (error) {
       notify.error(error?.message || 'Erro ao consultar Maciça.')
@@ -1038,7 +1163,9 @@ export default function ClienteArgus() {
 
     if (!cpfDigits || !nbDigits) {
       setClientes([])
+      setContratos([])
       setClienteIndex(0)
+      setContratoIndex(0)
       setBancoInfo(null)
       setIn100List([])
       setIn100Index(0)
@@ -1059,18 +1186,18 @@ export default function ClienteArgus() {
   }, [user])
 
   useEffect(() => {
-    if (!cliente?.banco_desembolso) {
+    if (!contrato?.banco_desembolso) {
       setBancoInfo(null)
       return
     }
     let active = true
-    fetchBanco(cliente.banco_desembolso).then((info) => {
+    fetchBanco(contrato.banco_desembolso).then((info) => {
       if (active) setBancoInfo(info)
     })
     return () => {
       active = false
     }
-  }, [cliente?.banco_desembolso])
+  }, [contrato?.banco_desembolso])
 
   const in100 = useMemo(() => {
     if (!in100List.length) return null
@@ -1114,19 +1241,30 @@ export default function ClienteArgus() {
   const idadeLabel = formatAgeLabel(cliente?.idade, cliente?.data_nascimento)
   const dataNascimentoLabel = formatDate(cliente?.data_nascimento)
   const parcelaMeta = {
-    parcelas: formatMetaValue(cliente?.quant_parcelas),
-    pagas: formatMetaValue(cliente?.pagas),
-    restantes: formatMetaValue(cliente?.restantes),
+    parcelas: formatMetaValue(contrato?.quant_parcelas),
+    pagas: formatMetaValue(contrato?.pagas),
+    restantes: formatMetaValue(contrato?.restantes),
   }
-  const propostaLabel = cliente?.data_update
-    ? formatDate(cliente.data_update)
-    : (cliente?.data_retorno_consulta ? formatDate(cliente.data_retorno_consulta) : '-')
-  const propostaIdLabel = cliente?.contrato_empres != null && String(cliente.contrato_empres).trim() !== ''
-    ? String(cliente.contrato_empres)
+  const propostaLabel = contrato?.data_update
+    ? formatDate(contrato.data_update)
+    : (contrato?.data_retorno_consulta ? formatDate(contrato.data_retorno_consulta) : '-')
+  const propostaIdLabel = contrato?.contrato_empres != null && String(contrato.contrato_empres).trim() !== ''
+    ? String(contrato.contrato_empres)
     : '-'
+  const dataPrevistaDesbloqueioDate = addDaysToDate(cliente?.data_despacho_beneficio, 90)
+  const dataPrevistaDesbloqueioLabel = dataPrevistaDesbloqueioDate
+    ? dataPrevistaDesbloqueioDate.toLocaleDateString('pt-BR', { timeZone: 'UTC' })
+    : '-'
+  const contatosDataLemitLabel = (() => {
+    if (!cliente?.data_lemit) return ''
+    const formatted = formatDate(cliente.data_lemit)
+    return formatted === '-' ? '' : formatted
+  })()
   const margemRmcValue = cliente?.margem_rmc
   const margemDisponivelValue = cliente?.margem_disponivel ?? cliente?.saldo_total_disponivel
   const margemRccValue = cliente?.margem_rcc
+  const valorLiberadorRmcValue = cliente?.valor_liberador_rmc
+  const valorLiberadorRccValue = cliente?.valor_liberador_rcc
   const totalValorLiberadoValue = (() => {
     const base = toNumber(cliente?.total_valor_liberado)
     if (base != null) return base
@@ -1134,7 +1272,8 @@ export default function ClienteArgus() {
     if (margem == null) return null
     return margem / 0.02801
   })()
-  const paginaLabel = activeTotal && activePageIndex >= 0 ? `${activePageIndex + 1} de ${activeTotal}` : '-'
+  const margensPageLabel = margensTotal && margensPageIndex >= 0 ? `${margensPageIndex + 1} de ${margensTotal}` : '-'
+  const propostaPageLabel = propostaTotal && propostaPageIndex >= 0 ? `${propostaPageIndex + 1} de ${propostaTotal}` : '-'
   const in100BancoNome = formatBlankValue(
     in100?.nome_banco ?? in100?.banco_nome ?? in100?.bancoNome ?? in100?.banco_desembolso_nome,
   ) || formatBlankValue(in100BancoInfo?.name)
@@ -1180,16 +1319,22 @@ export default function ClienteArgus() {
   }, [clientes])
 
   useEffect(() => {
-    if (activeTab !== 'margens' && activeTab !== 'proposta') return
-    const key = `${activeTab}|${activeIndexList.join(',')}`
-    if (lastActiveListRef.current === key) return
-    lastActiveListRef.current = key
-    if (activeIndexList.length) {
-      setClienteIndex(activeIndexList[0])
+    if (activeTab !== 'margens') return
+    if (!margensIndexList.length) return
+    if (!margensIndexList.includes(clienteIndex)) {
+      setClienteIndex(margensIndexList[0])
     }
-  }, [activeIndexList, activeTab])
+  }, [activeTab, clienteIndex, margensIndexList])
 
-  const beneficiosList = useMemo(() => {
+  useEffect(() => {
+    if (activeTab !== 'proposta') return
+    if (!propostaIndexList.length) return
+    if (!propostaIndexList.includes(contratoIndex)) {
+      setContratoIndex(propostaIndexList[0])
+    }
+  }, [activeTab, contratoIndex, propostaIndexList])
+
+  const beneficiosOptions = useMemo(() => {
     const seen = new Set()
     return clientes
       .map((item) => digitsOnly(item?.numero_beneficio))
@@ -1199,20 +1344,62 @@ export default function ClienteArgus() {
         seen.add(digits)
         return true
       })
-      .map((digits) => formatBeneficioDisplay(digits))
+      .map((digits) => ({
+        digits,
+        label: formatBeneficioDisplay(digits) || digits,
+      }))
   }, [clientes])
-  const handlePrevProposta = () => {
+  const hasMultipleBeneficios = beneficiosOptions.length > 1
+  useEffect(() => {
+    if (!beneficiosOptions.length) {
+      setIn100BeneficioSelecionado('')
+      return
+    }
+    const currentDigits = digitsOnly(beneficio) || digitsOnly(cliente?.numero_beneficio)
+    const fallback = beneficiosOptions.find((option) => option.digits === currentDigits) || beneficiosOptions[0]
+    setIn100BeneficioSelecionado((prev) => {
+      if (prev && beneficiosOptions.some((option) => option.digits === prev)) return prev
+      return fallback?.digits || ''
+    })
+  }, [beneficiosOptions, beneficio, cliente?.numero_beneficio])
+  useEffect(() => {
+    if (!beneficiosOptions.length) return
+    const cpfDigits = digitsOnly(cpf) || digitsOnly(cliente?.numero_documento)
+    if (!cpfDigits) return
+    const nbList = beneficiosOptions.map((option) => option.digits)
+    const in100RequestId = bumpIn100Request()
+    void fetchIn100(cpfDigits, nbList, in100RequestId)
+  }, [beneficiosOptions, cpf, cliente?.numero_documento])
+  const handlePrevMargens = () => {
     setClienteIndex((current) => {
-      const list = activeIndexList
+      const list = margensIndexList
       if (list.length <= 1) return current
       const pos = list.indexOf(current)
       if (pos === -1) return list[0]
       return list[Math.max(pos - 1, 0)]
     })
   }
-  const handleNextProposta = () => {
+  const handleNextMargens = () => {
     setClienteIndex((current) => {
-      const list = activeIndexList
+      const list = margensIndexList
+      if (list.length <= 1) return current
+      const pos = list.indexOf(current)
+      if (pos === -1) return list[0]
+      return list[Math.min(pos + 1, list.length - 1)]
+    })
+  }
+  const handlePrevContratos = () => {
+    setContratoIndex((current) => {
+      const list = propostaIndexList
+      if (list.length <= 1) return current
+      const pos = list.indexOf(current)
+      if (pos === -1) return list[0]
+      return list[Math.max(pos - 1, 0)]
+    })
+  }
+  const handleNextContratos = () => {
+    setContratoIndex((current) => {
+      const list = propostaIndexList
       if (list.length <= 1) return current
       const pos = list.indexOf(current)
       if (pos === -1) return list[0]
@@ -1221,16 +1408,23 @@ export default function ClienteArgus() {
   }
   const handleOpenIn100Confirm = () => {
     if (in100Loading) return
+    if (!in100BeneficioSelecionado && beneficiosOptions.length > 0) {
+      setIn100BeneficioSelecionado(beneficiosOptions[0].digits)
+    }
     setShowIn100Confirm(true)
   }
   const handleConfirmIn100 = () => {
+    if (hasMultipleBeneficios && !in100BeneficioSelecionado) {
+      notify.warn('Selecione um beneficio para continuar.')
+      return
+    }
     setShowIn100Confirm(false)
-    void handleConsultarIn100()
+    void handleConsultarIn100(in100BeneficioSelecionado || undefined)
   }
-  const handleConsultarIn100 = async () => {
+  const handleConsultarIn100 = async (nbOverride) => {
     if (in100Loading) return
     const cpfDigits = digitsOnly(cpf) || digitsOnly(cliente?.numero_documento)
-    const nbDigits = digitsOnly(beneficio) || digitsOnly(cliente?.numero_beneficio)
+    const nbDigits = digitsOnly(nbOverride) || digitsOnly(beneficio) || digitsOnly(cliente?.numero_beneficio)
     if (!cpfDigits || !nbDigits) {
       notify.warn('Informe CPF e NB para consultar IN100.')
       return
@@ -1411,15 +1605,15 @@ export default function ClienteArgus() {
                 <div className="col-12 col-lg-3">
                   <div className="label">Benefícios (NB)</div>
                   <div className="value d-flex flex-column gap-1">
-                    {beneficiosList.length > 0 ? (
-                      beneficiosList.map((nb) => (
-                        <div key={nb} className="value-with-action">
-                          <span className="value-text">{nb}</span>
-                          {!!digitsOnly(nb) && (
+                    {beneficiosOptions.length > 0 ? (
+                      beneficiosOptions.map((option) => (
+                        <div key={option.digits} className="value-with-action">
+                          <span className="value-text">{option.label}</span>
+                          {!!option.digits && (
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm btn-icon"
-                              onClick={() => copyToClipboard(digitsOnly(nb), 'NB copiado!')}
+                              onClick={() => copyToClipboard(option.digits, 'NB copiado!')}
                               title="Copiar NB"
                               aria-label="Copiar NB"
                             >
@@ -1521,19 +1715,19 @@ export default function ClienteArgus() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
-                    onClick={handlePrevProposta}
-                    disabled={activeTotal <= 1 || activePageIndex <= 0}
+                    onClick={handlePrevMargens}
+                    disabled={margensTotal <= 1 || margensPageIndex <= 0}
                     title="Proposta anterior"
                     aria-label="Proposta anterior"
                   >
                     <FiChevronLeft />
                   </button>
-                  <div className="small opacity-75">{paginaLabel}</div>
+                  <div className="small opacity-75">{margensPageLabel}</div>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
-                    onClick={handleNextProposta}
-                    disabled={activeTotal <= 1 || activePageIndex >= activeTotal - 1}
+                    onClick={handleNextMargens}
+                    disabled={margensTotal <= 1 || margensPageIndex >= margensTotal - 1}
                     title="Próxima proposta"
                     aria-label="Próxima proposta"
                   >
@@ -1552,6 +1746,10 @@ export default function ClienteArgus() {
                         <div className="kv-line">
                           <div className="kv-label">DDB:</div>
                           <div className="kv-value">{cliente?.data_despacho_beneficio ? formatDate(cliente.data_despacho_beneficio) : '-'}</div>
+                        </div>
+                        <div className="kv-line">
+                          <div className="kv-label">Data Prevista Desbloqueio:</div>
+                          <div className="kv-value">{dataPrevistaDesbloqueioLabel}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Espécie:</div>
@@ -1582,18 +1780,30 @@ export default function ClienteArgus() {
                             <div className="kv-value">{formatMoneyValue(margemRccValue)}</div>
                           </div>
                           <div className="kv-line">
+                            <div className="kv-label">Valor Liberador RMC:</div>
+                            <div className="kv-value">{formatMoneyValue(valorLiberadorRmcValue)}</div>
+                            <div className="kv-label">Valor Liberador RCC:</div>
+                            <div className="kv-value">{formatMoneyValue(valorLiberadorRccValue)}</div>
+                          </div>
+                          <div className="kv-line">
                             <div className="kv-label">Margem disponível:</div>
                             <div className="kv-value">{formatMoneyValue(margemDisponivelValue)}</div>
                           </div>
                         </div>
                       </div>
                       <div className="neo-card p-0">
-                        <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
-                          <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Contatos</h6>
-                        </div>
+                      <div className="section-bar px-4 py-3 d-flex align-items-center justify-content-between">
+                        <h6 className="mb-0 d-flex align-items-center gap-2"><FiInfo /> Contatos</h6>
+                        {!!contatosDataLemitLabel && (
+                          <div className="small text-info fw-semibold">Última atualização: {contatosDataLemitLabel}</div>
+                        )}
+                      </div>
                         <div className="kv-list p-3 p-md-4">
                           <div className="kv-line">
-                            <div className="kv-label">Celular 1:</div>
+                            <div className="kv-label kv-label-phone">
+                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              Celular 1:
+                            </div>
                             <div className="kv-value value-with-action">
                               <span className="value-text">{formatPhoneDisplay(cliente?.celular1)}</span>
                               {!!digitsOnly(cliente?.celular1) && (
@@ -1610,7 +1820,10 @@ export default function ClienteArgus() {
                             </div>
                           </div>
                           <div className="kv-line">
-                            <div className="kv-label">Celular 2:</div>
+                            <div className="kv-label kv-label-phone">
+                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              Celular 2:
+                            </div>
                             <div className="kv-value value-with-action">
                               <span className="value-text">{formatPhoneDisplay(cliente?.celular2)}</span>
                               {!!digitsOnly(cliente?.celular2) && (
@@ -1627,7 +1840,10 @@ export default function ClienteArgus() {
                             </div>
                           </div>
                           <div className="kv-line">
-                            <div className="kv-label">Celular 3:</div>
+                            <div className="kv-label kv-label-phone">
+                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              Celular 3:
+                            </div>
                             <div className="kv-value value-with-action">
                               <span className="value-text">{formatPhoneDisplay(cliente?.celular3)}</span>
                               {!!digitsOnly(cliente?.celular3) && (
@@ -1637,6 +1853,26 @@ export default function ClienteArgus() {
                                   onClick={() => copyToClipboard(digitsOnly(cliente?.celular3), 'Celular 3 copiado!')}
                                   title="Copiar Celular 3"
                                   aria-label="Copiar Celular 3"
+                                >
+                                  <FiCopy />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="kv-line">
+                            <div className="kv-label kv-label-phone">
+                              <img className="phone-icon" src={PHONE_ICON_URL} alt="" aria-hidden="true" />
+                              Celular 4:
+                            </div>
+                            <div className="kv-value value-with-action">
+                              <span className="value-text">{formatPhoneDisplay(cliente?.celular4)}</span>
+                              {!!digitsOnly(cliente?.celular4) && (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon"
+                                  onClick={() => copyToClipboard(digitsOnly(cliente?.celular4), 'Celular 4 copiado!')}
+                                  title="Copiar Celular 4"
+                                  aria-label="Copiar Celular 4"
                                 >
                                   <FiCopy />
                                 </button>
@@ -1663,19 +1899,19 @@ export default function ClienteArgus() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
-                    onClick={handlePrevProposta}
-                    disabled={activeTotal <= 1 || activePageIndex <= 0}
+                    onClick={handlePrevContratos}
+                    disabled={propostaTotal <= 1 || propostaPageIndex <= 0}
                     title="Proposta anterior"
                     aria-label="Proposta anterior"
                   >
                     <FiChevronLeft />
                   </button>
-                  <div className="small opacity-75">{paginaLabel}</div>
+                  <div className="small opacity-75">{propostaPageLabel}</div>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm d-inline-flex align-items-center justify-content-center"
-                    onClick={handleNextProposta}
-                    disabled={activeTotal <= 1 || activePageIndex >= activeTotal - 1}
+                    onClick={handleNextContratos}
+                    disabled={propostaTotal <= 1 || propostaPageIndex >= propostaTotal - 1}
                     title="Próxima proposta"
                     aria-label="Próxima proposta"
                   >
@@ -1683,7 +1919,7 @@ export default function ClienteArgus() {
                   </button>
                 </div>
               </div>
-              <div className="p-3 p-md-4 fade-swap" key={clienteIndex}>
+              <div className="p-3 p-md-4 fade-swap" key={`proposta-${contratoIndex}`}>
                 <div className="row g-3 mb-3">
                   <div className="col-12 col-lg-7">
                     <div className="neo-card p-0 h-100">
@@ -1693,33 +1929,33 @@ export default function ClienteArgus() {
                       <div className="kv-list p-3 p-md-4">
                         <div className="kv-line">
                           <div className="kv-label">NB:</div>
-                          <div className="kv-value">{cliente?.numero_beneficio ? formatBeneficioDisplay(cliente.numero_beneficio) : '-'}</div>
+                          <div className="kv-value">{contrato?.numero_beneficio ? formatBeneficioDisplay(contrato.numero_beneficio) : '-'}</div>
                           <div className="kv-label">Espécie:</div>
-                          <div className="kv-value">{cliente?.especie || '-'}</div>
+                          <div className="kv-value">{contrato?.especie || '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Situação:</div>
-                          <div className="kv-value">{mapSituacaoEmpres(cliente?.situacao_empres)}</div>
+                          <div className="kv-value">{mapSituacaoEmpres(contrato?.situacao_empres)}</div>
                           <div className="kv-label">Data de concessão:</div>
-                          <div className="kv-value">{cliente?.data_concessao ? formatDate(cliente.data_concessao) : '-'}</div>
+                          <div className="kv-value">{contrato?.data_concessao ? formatDate(contrato.data_concessao) : '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">UF:</div>
-                          <div className="kv-value">{cliente?.estado || '-'}</div>
+                          <div className="kv-value">{contrato?.estado || '-'}</div>
                           <div className="kv-label">Data do despacho do benefício:</div>
-                          <div className="kv-value">{cliente?.data_despacho_beneficio ? formatDate(cliente.data_despacho_beneficio) : '-'}</div>
+                          <div className="kv-value">{contrato?.data_despacho_beneficio ? formatDate(contrato.data_despacho_beneficio) : '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Comp. ini. desconto:</div>
-                          <div className="kv-value">{formatCompetencia(cliente?.comp_ini_desconto)}</div>
+                          <div className="kv-value">{formatCompetencia(contrato?.comp_ini_desconto)}</div>
                           <div className="kv-label">Comp. fim desconto:</div>
-                          <div className="kv-value">{formatCompetencia(cliente?.comp_fim_desconto)}</div>
+                          <div className="kv-value">{formatCompetencia(contrato?.comp_fim_desconto)}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">QTDE. Portabilidades:</div>
-                          <div className="kv-value">{cliente?.numero_portabilidades != null ? String(cliente.numero_portabilidades) : '-'}</div>
+                          <div className="kv-value">{contrato?.numero_portabilidades != null ? String(contrato.numero_portabilidades) : '-'}</div>
                           <div className="kv-label">Data Averbação Consig.:</div>
-                          <div className="kv-value">{cliente?.dt_averbacao_consig ? formatDate(cliente.dt_averbacao_consig) : '-'}</div>
+                          <div className="kv-value">{contrato?.dt_averbacao_consig ? formatDate(contrato.dt_averbacao_consig) : '-'}</div>
                         </div>
                       </div>
                     </div>
@@ -1732,19 +1968,19 @@ export default function ClienteArgus() {
                       <div className="kv-list p-3 p-md-4">
                         <div className="kv-line">
                           <div className="kv-label">Banco:</div>
-                          <div className="kv-value">{cliente?.banco_desembolso ? stripZeroCents(cliente.banco_desembolso) : '-'}</div>
+                          <div className="kv-value">{contrato?.banco_desembolso ? stripZeroCents(contrato.banco_desembolso) : '-'}</div>
                           <div className="kv-label">Nome do Banco:</div>
                           <div className="kv-value">{bancoInfo?.name || '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Agência:</div>
-                          <div className="kv-value">{cliente?.agencia_desembolso ? stripZeroCents(cliente.agencia_desembolso) : '-'}</div>
+                          <div className="kv-value">{contrato?.agencia_desembolso ? stripZeroCents(contrato.agencia_desembolso) : '-'}</div>
                           <div className="kv-label">Conta:</div>
-                          <div className="kv-value">{cliente?.conta_desembolso ? stripZeroCents(cliente.conta_desembolso) : '-'}</div>
+                          <div className="kv-value">{contrato?.conta_desembolso ? stripZeroCents(contrato.conta_desembolso) : '-'}</div>
                         </div>
                         <div className="kv-line">
                           <div className="kv-label">Tipo de crédito:</div>
-                          <div className="kv-value">{cliente?.tipo_credito ? stripZeroCents(mapTipoCredito(cliente.tipo_credito)) : '-'}</div>
+                          <div className="kv-value">{contrato?.tipo_credito ? stripZeroCents(mapTipoCredito(contrato.tipo_credito)) : '-'}</div>
                         </div>
                       </div>
                     </div>
@@ -1756,7 +1992,7 @@ export default function ClienteArgus() {
                     <div className="neo-card stat-card h-100">
                       <div className="p-4">
                         <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Valor Benefício:</div>
-                        <div className="stat-value">{cliente?.valor_beneficio != null ? brCurrency(cliente.valor_beneficio) : '-'}</div>
+                        <div className="stat-value">{contrato?.valor_beneficio != null ? brCurrency(contrato.valor_beneficio) : '-'}</div>
                       </div>
                     </div>
                   </div>
@@ -1764,7 +2000,7 @@ export default function ClienteArgus() {
                     <div className="neo-card stat-card h-100">
                       <div className="p-4">
                         <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Valor Parcela:</div>
-                        <div className="stat-value">{cliente?.valor_parcela != null ? brCurrency(cliente.valor_parcela) : '-'}</div>
+                        <div className="stat-value">{contrato?.valor_parcela != null ? brCurrency(contrato.valor_parcela) : '-'}</div>
                       </div>
                       <div className="stat-footer small px-4 pb-3 pt-2 d-flex flex-wrap gap-3">
                         <span>Parcelas: {parcelaMeta.parcelas}</span>
@@ -1777,7 +2013,7 @@ export default function ClienteArgus() {
                     <div className="neo-card stat-card h-100">
                       <div className="p-4">
                         <div className="stat-title d-flex align-items-center gap-2"><FiDollarSign /> Valor Empréstimo:</div>
-                        <div className="stat-value">{cliente?.valor_emprestimo != null ? brCurrency(cliente.valor_emprestimo) : '-'}</div>
+                        <div className="stat-value">{contrato?.valor_emprestimo != null ? brCurrency(contrato.valor_emprestimo) : '-'}</div>
                       </div>
                     </div>
                   </div>
@@ -1956,6 +2192,20 @@ export default function ClienteArgus() {
                   <p className="mb-3">
                     Esta consulta irá consumir 1 crédito do seu saldo disponível. Deseja continuar?
                   </p>
+                  {hasMultipleBeneficios && (
+                    <div className="mb-3">
+                      <label className="form-label">Selecione o beneficio</label>
+                      <select
+                        className="form-select"
+                        value={in100BeneficioSelecionado}
+                        onChange={(event) => setIn100BeneficioSelecionado(event.target.value)}
+                      >
+                        {beneficiosOptions.map((option) => (
+                          <option key={option.digits} value={option.digits}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="row g-3">
                     <div className="col-12 col-md-4">
                       <div className="neo-card p-3 h-100">

@@ -685,6 +685,18 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
   flex: 1 1 auto;
   word-break: break-word;
 }
+.kv-label-phone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.kv-label-phone .phone-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  opacity: 0.8;
+  flex: 0 0 auto;
+}
 .value-with-action .btn-icon { flex: 0 0 auto; }
 .kv-list.kv-single .kv-line {
   grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
