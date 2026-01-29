@@ -1783,9 +1783,9 @@ export default function ClienteArgus() {
                             <div className="kv-value">{formatMoneyValue(margemRccValue)}</div>
                           </div>
                           <div className="kv-line">
-                            <div className="kv-label">Valor Liberador RMC:</div>
+                            <div className="kv-label">Valor Liberado RMC:</div>
                             <div className="kv-value">{formatMoneyValue(valorLiberadorRmcValue)}</div>
-                            <div className="kv-label">Valor Liberador RCC:</div>
+                            <div className="kv-label">Valor Liberado RCC:</div>
                             <div className="kv-value">{formatMoneyValue(valorLiberadorRccValue)}</div>
                           </div>
                           <div className="kv-line">

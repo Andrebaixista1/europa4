@@ -5,6 +5,13 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '29/01/2026',
+    titulo: 'Atualização Lemitti e desbloqueio previsto',
+    descricao:
+      'Os telefones Lemitti agora exibem a Atualização Lemitti com a data da última atualização. Além disso, o front mostra a data prevista de desbloqueio do cliente (DDB + 90 dias).',
+    image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1600&q=80',
+  },
+  {
     data: '27/01/2026',
     titulo: 'Abas na Consulta Macica',
     descricao:
