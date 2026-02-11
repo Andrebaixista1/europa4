@@ -46,6 +46,7 @@ export default function Usuarios() {
   const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [transferUser, setTransferUser] = useState(null)
   const [transferNewEquipeId, setTransferNewEquipeId] = useState('')
+  const [scrollTarget, setScrollTarget] = useState(null)
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
     const num = Number(value)
@@ -687,6 +688,16 @@ export default function Usuarios() {
       setTogglingId(null)
     }
   }
+  useEffect(() => {
+    if (!scrollTarget) return
+    const el = scrollTarget
+    const rect = el.getBoundingClientRect()
+    const top = rect.top + window.scrollY - 12
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+    })
+  }, [scrollTarget])
+
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column">
       <TopNav />
@@ -779,7 +790,12 @@ export default function Usuarios() {
             </div>
           </div>
           <div className="col-12 col-lg-7">
-            <div className="neo-card neo-lg p-4 h-100">
+            <div
+              className="neo-card neo-lg p-4 h-100"
+              ref={(el) => {
+                if (el) setScrollTarget(el)
+              }}
+            >
               {!selected ? (
                 <div className="opacity-75">Selecione um Usuário para ver os detalhes.</div>
               ) : (

@@ -5,6 +5,7 @@ import { FiArrowLeft, FiDownload, FiEye, FiPrinter, FiUser, FiHash, FiCalendar, 
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles } from '../utils/roles.js'
+import { notify } from '../utils/notify.js'
 import '../styles/historico.css'
 
 const LOG_TIME_OFFSET_HOURS = 3
@@ -214,6 +215,25 @@ export default function HistoricoConsultas() {
   const [detailError, setDetailError] = useState('')
   const [detailBanco, setDetailBanco] = useState(null)
   const pageSize = 50
+  const copyToClipboard = async (text, successMsg = 'Copiado!') => {
+    try {
+      await navigator.clipboard.writeText(String(text ?? ''))
+      notify.success(successMsg, { autoClose: 2000 })
+    } catch (_) {
+      try {
+        const el = document.createElement('textarea')
+        el.value = String(text ?? '')
+        el.setAttribute('readonly', '')
+        el.style.position = 'absolute'
+        el.style.left = '-9999px'
+        document.body.appendChild(el)
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+        notify.success(successMsg, { autoClose: 2000 })
+      } catch { /* ignore */ }
+    }
+  }
 
   useEffect(() => {
     if (!user?.id) return
@@ -438,6 +458,8 @@ export default function HistoricoConsultas() {
     }
     return merged
   }, [selectedRow, detailData])
+  const detailCpf = String(detail?.numero_documento ?? '').replace(/\D/g, '')
+  const detailNb = String(detail?.numero_beneficio ?? '').replace(/\D/g, '')
   const detailUpdatedAt = detail?.data_retorno_consulta || detail?.data_consulta || detail?.data_hora_registro || null
   const detailUpdatedLabel = detailUpdatedAt ? `${formatDate(detailUpdatedAt)} as ${formatTime(detailUpdatedAt)}` : null
   const isBmgDetail = (detail?.nome_arquivo || selectedRow?.nome_arquivo) === 'consulta_europa_individual_bmg'
@@ -652,6 +674,8 @@ export default function HistoricoConsultas() {
                     // Remove trailing commas and whitespace
                     nome = nome.replace(/[, ]+$/, '')
                     if (!nome) nome = '-'
+                    const cpfDigits = String(r?.numero_documento ?? '').replace(/\D/g, '')
+                    const nbDigits = String(r?.numero_beneficio ?? '').replace(/\D/g, '')
                     return (
                       <tr key={(r?.id_usuario ?? idx) + '-' + (r?.numero_beneficio ?? '') + '-' + idx}>
                         <td style={{ whiteSpace: 'nowrap' }}>{fmtDateTime(r?.data_hora_registro)}</td>
@@ -667,8 +691,34 @@ export default function HistoricoConsultas() {
                         </td>
                         <td>{r?.resposta_api || ''}</td>
                         <td className="text-nowrap">{nome || '-'}</td>
-                        <td>{fmtCPF(r?.numero_documento)}</td>
-                        <td>{fmtNB(r?.numero_beneficio)}</td>
+                        <td>
+                          {cpfDigits ? (
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 text-reset"
+                              onClick={() => copyToClipboard(cpfDigits, 'CPF copiado!')}
+                              title="Copiar CPF"
+                            >
+                              {fmtCPF(cpfDigits)}
+                            </button>
+                          ) : (
+                            fmtCPF(r?.numero_documento)
+                          )}
+                        </td>
+                        <td>
+                          {nbDigits ? (
+                            <button
+                              type="button"
+                              className="btn btn-link p-0 text-reset"
+                              onClick={() => copyToClipboard(nbDigits, 'NB copiado!')}
+                              title="Copiar NB"
+                            >
+                              {fmtNB(nbDigits)}
+                            </button>
+                          ) : (
+                            fmtNB(r?.numero_beneficio)
+                          )}
+                        </td>
                         <td>{fmtDate(r?.data_nascimento)}</td>
                         <td>{r?.estado || '-'}</td>
                         <td className="text-nowrap">{login}</td>
@@ -747,7 +797,20 @@ export default function HistoricoConsultas() {
                         </div>
                         <div className="col-6 col-lg-3">
                           <div className="small opacity-75">CPF</div>
-                          <div className="fw-semibold">{detail?.numero_documento ? formatCpf(detail.numero_documento) : '-'}</div>
+                          <div className="fw-semibold">
+                            {detailCpf ? (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-reset"
+                                onClick={() => copyToClipboard(detailCpf, 'CPF copiado!')}
+                                title="Copiar CPF"
+                              >
+                                {formatCpf(detailCpf)}
+                              </button>
+                            ) : (
+                              '-'
+                            )}
+                          </div>
                         </div>
                         <div className="col-6 col-lg-2">
                           <div className="small opacity-75">Idade</div>
@@ -767,7 +830,20 @@ export default function HistoricoConsultas() {
                       <div className="kv-list p-3">
                         <div className="kv-line">
                           <div className="kv-label">NB:</div>
-                          <div className="kv-value">{detail?.numero_beneficio ? formatBeneficio(detail.numero_beneficio) : '-'}</div>
+                          <div className="kv-value">
+                            {detailNb ? (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-reset"
+                                onClick={() => copyToClipboard(detailNb, 'NB copiado!')}
+                                title="Copiar NB"
+                              >
+                                {formatBeneficio(detailNb)}
+                              </button>
+                            ) : (
+                              '-'
+                            )}
+                          </div>
                           <div className="kv-label">Especie:</div>
                           <div className="kv-value">-</div>
                         </div>
@@ -863,7 +939,18 @@ export default function HistoricoConsultas() {
                         <div className="col-6 col-lg-2">
                           <div className="label d-flex align-items-center gap-1"><FiHash /> CPF</div>
                           <div className="value d-flex align-items-center gap-2">
-                            <span>{bmgCpf ? formatCpf(bmgCpf) : '-'}</span>
+                            {bmgCpf ? (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-reset"
+                                onClick={() => copyToClipboard(bmgCpf, 'CPF copiado!')}
+                                title="Copiar CPF"
+                              >
+                                {formatCpf(bmgCpf)}
+                              </button>
+                            ) : (
+                              <span>-</span>
+                            )}
                           </div>
                         </div>
                         <div className="col-6 col-lg-3">
@@ -887,7 +974,20 @@ export default function HistoricoConsultas() {
                       <div className="kv-list p-3 p-md-4">
                         <div className="kv-line">
                           <div className="kv-label">NB:</div>
-                          <div className="kv-value">{bmgNumeroBeneficio ? formatBeneficio(bmgNumeroBeneficio) : '-'}</div>
+                          <div className="kv-value">
+                            {bmgNumeroBeneficio ? (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-reset"
+                                onClick={() => copyToClipboard(bmgNumeroBeneficio, 'NB copiado!')}
+                                title="Copiar NB"
+                              >
+                                {formatBeneficio(bmgNumeroBeneficio)}
+                              </button>
+                            ) : (
+                              '-'
+                            )}
+                          </div>
                           <div className="kv-label">Espécie:</div>
                           <div className="kv-value">{bmgEspecie || '-'}</div>
                         </div>
