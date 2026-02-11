@@ -52,6 +52,21 @@ export default function Usuarios() {
     const num = Number(value)
     return Number.isNaN(num) ? null : num
   }
+  const smoothScrollTo = (targetY, duration = 450) => {
+    if (typeof window === 'undefined') return
+    const startY = window.scrollY || window.pageYOffset || 0
+    const diff = targetY - startY
+    if (Math.abs(diff) < 1) return
+    const start = performance.now()
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+    const step = (now) => {
+      const elapsed = Math.min(1, (now - start) / duration)
+      const eased = easeOutCubic(elapsed)
+      window.scrollTo(0, startY + diff * eased)
+      if (elapsed < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
   useEffect(() => {
     let aborted = false
     async function load() {
@@ -694,8 +709,8 @@ export default function Usuarios() {
     if (!el) return
     window.requestAnimationFrame(() => {
       const rect = el.getBoundingClientRect()
-      const top = rect.top + window.scrollY - 12
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+      const top = Math.max(0, rect.top + window.scrollY - 12)
+      smoothScrollTo(top)
     })
   }, [selectedId, selected])
 
