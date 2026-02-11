@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -46,7 +46,7 @@ export default function Usuarios() {
   const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [transferUser, setTransferUser] = useState(null)
   const [transferNewEquipeId, setTransferNewEquipeId] = useState('')
-  const [scrollTarget, setScrollTarget] = useState(null)
+  const detailAnchorRef = useRef(null)
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
     const num = Number(value)
@@ -689,14 +689,15 @@ export default function Usuarios() {
     }
   }
   useEffect(() => {
-    if (!scrollTarget) return
-    const el = scrollTarget
-    const rect = el.getBoundingClientRect()
-    const top = rect.top + window.scrollY - 12
+    if (!selected) return
+    const el = detailAnchorRef.current
+    if (!el) return
     window.requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect()
+      const top = rect.top + window.scrollY - 12
       window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
     })
-  }, [scrollTarget])
+  }, [selectedId, selected])
 
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column">
@@ -792,9 +793,7 @@ export default function Usuarios() {
           <div className="col-12 col-lg-7">
             <div
               className="neo-card neo-lg p-4 h-100"
-              ref={(el) => {
-                if (el) setScrollTarget(el)
-              }}
+              ref={detailAnchorRef}
             >
               {!selected ? (
                 <div className="opacity-75">Selecione um Usuário para ver os detalhes.</div>
