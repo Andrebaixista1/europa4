@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -209,8 +209,8 @@ export default function Dashboard() {
           <section className="news-carousel">
             <div className="d-flex align-items-center justify-content-between mb-2">
               <div>
-                <div className="small opacity-75 text-uppercase">Últimas novidades</div>
-                <h5 className="mb-0">O que mudou na plataforma</h5>
+                <div className="small opacity-75 text-uppercase">Ultimas novidades</div>
+                <h5 className="mb-0">O que temos de mais novo na Europa</h5>
               </div>
               <div className="d-flex gap-2">
                 <button
@@ -219,15 +219,15 @@ export default function Dashboard() {
                   onClick={() => setCurrent((i) => (i - 1 + news.length) % news.length)}
                   aria-label="Anterior"
                 >
-                  ‹
+                  â€¹
                 </button>
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={() => setCurrent((i) => (i + 1) % news.length)}
-                  aria-label="Próximo"
+                  aria-label="PrÃ³ximo"
                 >
-                  ›
+                  â€º
                 </button>
               </div>
             </div>
@@ -256,12 +256,12 @@ export default function Dashboard() {
         <section className="row g-3 mt-4 align-items-start">
           <div className="col-12 col-lg-4">
             <div className="neo-card neo-lg p-4">
-              <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuário)</div>
+              <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuÃ¡rio)</div>
               <div className="d-flex align-items-center gap-2">
                 <div className="display-5 fw-bold mb-0">{Number(saldo.disponivel ?? 0)}</div>
                 {loadingSaldo && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
               </div>
-              <div className="small opacity-75">Disponível para consultas IN100.</div>
+              <div className="small opacity-75">DisponÃ­vel para consultas IN100.</div>
               <div className="mt-2 d-flex gap-3 flex-wrap">
                 <div>
                   <div className="small text-uppercase opacity-75">Realizadas</div>
@@ -278,8 +278,8 @@ export default function Dashboard() {
             <div className="neo-card neo-lg p-4 h-100">
               <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                 <div>
-                  <div className="small text-uppercase opacity-75">Últimas consultas IN100</div>
-                  <div className="fw-semibold">Exibindo até 10 mais recentes</div>
+                  <div className="small text-uppercase opacity-75">Ãšltimas consultas IN100</div>
+                  <div className="fw-semibold">Exibindo atÃ© 10 mais recentes</div>
                 </div>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={fetchLogs} disabled={loadingLogs}>
                   {loadingLogs ? 'Atualizando...' : 'Atualizar lista'}
@@ -364,3 +364,4 @@ export default function Dashboard() {
     </div>
   )
 }
+

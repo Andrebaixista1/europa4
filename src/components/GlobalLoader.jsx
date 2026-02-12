@@ -12,7 +12,7 @@ export default function GlobalLoader() {
           <img src="/neo-logo.svg" alt="Carregando..." className="splash-logo" />
         </div>
         <div className="splash-pulse" style={{ width: 96, margin: '12px auto 0' }} />
-        <div style={{ marginTop: 12, color: 'rgba(255,255,255,0.82)', letterSpacing: 0.2, fontWeight: 600, textAlign: 'center' }}>
+        <div className="splash-step-text text-center mt-3">
           {step}
         </div>
       </div>

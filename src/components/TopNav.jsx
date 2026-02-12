@@ -6,6 +6,7 @@ import NovidadesModal, { novidadesList } from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
 import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiActivity } from 'react-icons/fi'
 import { useSidebar } from '../context/SidebarContext.jsx'
+import ThemeToggle from './ThemeToggle.jsx'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -242,6 +243,7 @@ export default function TopNav() {
                   >
                     <FiKey />
                   </button>
+                  <ThemeToggle />
                   <button
                     className="btn btn-outline-light btn-sm"
                     onClick={() => {

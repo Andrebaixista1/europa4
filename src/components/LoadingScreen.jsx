@@ -10,7 +10,7 @@ export default function LoadingScreen() {
           <img src="/neo-logo.svg" alt="Nova Europa" className="splash-logo" />
         </div>
         <div className="splash-pulse mx-auto" />
-        <div style={{ marginTop: 12, color: 'rgba(255,255,255,0.82)', letterSpacing: 0.2, fontWeight: 600 }}>
+        <div className="splash-step-text mt-3">
           {step}
         </div>
       </div>

@@ -749,7 +749,7 @@ export default function Usuarios() {
                 </button>
               </div>
               <div style={{ overflow: 'hidden', transition: 'max-height 300ms ease', maxHeight: isFilterOpen ? 500 : 0 }}>
-                <div className="border rounded-3 p-3 mb-3" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <div className="border rounded-3 p-3 mb-3 user-filter-surface">
                   <div className="row g-2 align-items-end">
                     <div className="col-12 col-md-3">
                       <label className="form-label small opacity-75">Tipo</label>
@@ -839,7 +839,7 @@ export default function Usuarios() {
                   </div>
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      <div className="p-3 rounded-3 h-100 user-detail-surface">
                         <div className="small text-uppercase opacity-75 mb-2">Perfil</div>
                         <div className="mb-1"><span className="opacity-75">Nome: </span>{selected.nome}</div>
                         <div className="mb-1"><span className="opacity-75">Login: </span>{selected.login}</div>
@@ -847,7 +847,7 @@ export default function Usuarios() {
                       </div>
                     </div>
                     <div className="col-md-6">
-                      <div className="p-3 rounded-3 h-100" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      <div className="p-3 rounded-3 h-100 user-detail-surface">
                         <div className="small text-uppercase opacity-75 mb-2">SEGURANÇA</div>
                         <div className="mb-2"><span className="opacity-75">Status: </span>{selected.ativo ? 'Ativo' : 'Inativo'}</div>
                         <div className="d-flex gap-2">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -57,23 +57,31 @@ export default function Login() {
     } catch {}
   }, [])
 
-  // Build pool of descriptions from NovidadesModal once
-  const pool = useMemo(
-    () => (novidadesList || []).map(x => x?.descricao).filter(Boolean),
-    []
-  )
-  // Pick up to 3 descriptions in a random order once
   const novidades = useMemo(() => {
-    if (pool.length > 0) {
-      const shuffled = [...pool].sort(() => Math.random() - 0.5)
-      return shuffled.slice(0, Math.min(3, shuffled.length))
+    const hiddenInLoginPattern = /(campanhas?\s*zap|zapresponder|business manager|abrir campanhas? do zap|zap)/i
+    const latest = (novidadesList || [])
+      .filter((item) => {
+        const text = `${item?.titulo || ''} ${item?.descricao || ''}`
+        return !hiddenInLoginPattern.test(text)
+      })
+      .slice(0, 4)
+      .map((item) => {
+        const title = String(item?.titulo || '').trim()
+        const description = String(item?.descricao || '').trim()
+        return title && description ? `${title}: ${description}` : description
+      })
+      .filter(Boolean)
+
+    if (latest.length > 0) {
+      return latest
     }
+
     return [
       'Estabilidade e performance melhoradas.',
-      'Aprimoramentos no fluxo de autenticação.',
-      'Atualizações visuais e de usabilidade.',
+      'Aprimoramentos no fluxo de autenticacao.',
+      'Atualizacoes visuais e de usabilidade.',
     ]
-  }, [pool])
+  }, [])
 
   // Typewriter state machine (one item at a time)
   const [twIndex, setTwIndex] = useState(0)
@@ -140,4 +148,3 @@ export default function Login() {
     </div>
   )
 }
-

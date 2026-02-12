@@ -11,7 +11,8 @@ export default function ThemeToggle() {
       onClick={toggleTheme}
       className="theme-icon-btn"
       aria-label={dark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
-      title={dark ? 'Tema escuro' : 'Tema claro'}
+      title={dark ? 'Alternar para tema claro' : 'Alternar para tema escuro'}
+      aria-pressed={dark}
     >
       <Icon className="theme-icon-only" />
     </button>
