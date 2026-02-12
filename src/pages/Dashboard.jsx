@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -219,15 +220,15 @@ export default function Dashboard() {
                   onClick={() => setCurrent((i) => (i - 1 + news.length) % news.length)}
                   aria-label="Anterior"
                 >
-                  â€¹
+                  <FiChevronLeft />
                 </button>
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={() => setCurrent((i) => (i + 1) % news.length)}
-                  aria-label="PrÃ³ximo"
+                  aria-label="Proximo"
                 >
-                  â€º
+                  <FiChevronRight />
                 </button>
               </div>
             </div>
@@ -364,4 +365,5 @@ export default function Dashboard() {
     </div>
   )
 }
+
 
