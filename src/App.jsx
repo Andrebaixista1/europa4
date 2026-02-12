@@ -17,12 +17,23 @@ import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 import FilaMilvus from './pages/FilaMilvus.jsx'
 import Status from './pages/Status.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
+import ConsultasV8 from './pages/ConsultasV8.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
 import CampanhasZap from './pages/CampanhasZap.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 import { SidebarProvider } from './context/SidebarContext.jsx'
+import { useAuth } from './context/AuthContext.jsx'
+import { canAccessConsultasV8 } from './utils/access.js'
+
+function ConsultasV8Route() {
+  const { user } = useAuth()
+  if (!canAccessConsultasV8(user)) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <ConsultasV8 />
+}
 
 function App() {
   const location = useLocation()
@@ -170,6 +181,14 @@ function App() {
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
               <HistoricoConsultas />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/consultas/v8"
+          element={
+            <ProtectedRoute>
+              <ConsultasV8Route />
             </ProtectedRoute>
           }
         />

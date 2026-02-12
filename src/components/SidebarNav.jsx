@@ -4,6 +4,7 @@ import * as Fi from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles } from '../utils/roles.js'
 import { useSidebar } from '../context/SidebarContext.jsx'
+import { canAccessConsultasV8 } from '../utils/access.js'
 
 function Icon({ name, size = 20 }) {
   const Comp = Fi[name] || Fi.FiSquare
@@ -28,6 +29,7 @@ export default function SidebarNav() {
   const { isOpen: mobileOpen, close: closeSidebar } = useSidebar()
   const role = user?.role
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
+  const allowConsultasV8 = canAccessConsultasV8(user)
   const prevPath = useRef(location.pathname)
 
   const menu = useMemo(() => {
@@ -45,7 +47,8 @@ export default function SidebarNav() {
       children: [
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
         { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
-        { label: 'Histórico de Consultas', to: '/consultas/historico' }
+        { label: 'Histórico de Consultas', to: '/consultas/historico' },
+        ...(allowConsultasV8 ? [{ label: 'Consultas V8', to: '/consultas/v8' }] : [])
       ]
     })
 
@@ -73,7 +76,7 @@ export default function SidebarNav() {
     }
 
     return items
-  }, [role, level])
+  }, [role, level, allowConsultasV8])
 
   const isActive = (path) => {
     if (!path) return false
@@ -86,15 +89,18 @@ export default function SidebarNav() {
   const handleEnter = () => {
     if (!mobileOpen) setCollapsed(false)
   }
+
   const handleLeave = () => {
     if (!mobileOpen) {
       setCollapsed(true)
       setOpenMenu(null)
     }
   }
+
   const handleNavClick = () => {
     if (mobileOpen) closeSidebar()
   }
+
   const handleToggle = () => {
     if (mobileOpen) {
       closeSidebar()
