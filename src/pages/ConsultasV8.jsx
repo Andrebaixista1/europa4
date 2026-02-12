@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiDownload, FiEye, FiRefreshCw } from 'react-icons/fi'
+import { FiArrowLeft, FiChevronDown, FiDownload, FiEye, FiRefreshCw } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
 
 const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8'
@@ -139,6 +139,13 @@ const statusClassName = (status) => {
   return 'text-bg-secondary'
 }
 
+const normalizeDescricao = (value) => {
+  const txt = String(value ?? '').trim()
+  return txt || 'Sem descricao'
+}
+
+const descricaoKey = (value) => normalizeDescricao(value).toLowerCase()
+
 export default function ConsultasV8() {
   const { user } = useAuth()
   const [rows, setRows] = useState([])
@@ -153,6 +160,7 @@ export default function ConsultasV8() {
   const [ageMax, setAgeMax] = useState('')
   const [updatedFrom, setUpdatedFrom] = useState('')
   const [updatedTo, setUpdatedTo] = useState('')
+  const [descriptionFilters, setDescriptionFilters] = useState([])
   const [statusFilters, setStatusFilters] = useState([])
   const [valorMin, setValorMin] = useState('')
   const [valorMax, setValorMax] = useState('')
@@ -236,12 +244,22 @@ export default function ConsultasV8() {
     setStatusFilters((prev) => prev.filter((v) => v.toLowerCase() !== key))
   }, [])
 
+  const toggleDescriptionFilter = useCallback((key) => {
+    const normalized = String(key ?? '').trim().toLowerCase()
+    if (!normalized) return
+    setDescriptionFilters((prev) => {
+      if (prev.includes(normalized)) return prev.filter((item) => item !== normalized)
+      return [...prev, normalized]
+    })
+  }, [])
+
   const clearFilters = useCallback(() => {
     setSearchTerm('')
     setAgeMin('')
     setAgeMax('')
     setUpdatedFrom('')
     setUpdatedTo('')
+    setDescriptionFilters([])
     setStatusFilters([])
     setValorMin('')
     setValorMax('')
@@ -254,6 +272,7 @@ export default function ConsultasV8() {
     ageMax.trim() ||
     updatedFrom.trim() ||
     updatedTo.trim() ||
+    descriptionFilters.length ||
     statusFilters.length ||
     valorMin.trim() ||
     valorMax.trim()
@@ -261,13 +280,17 @@ export default function ConsultasV8() {
 
   useEffect(() => {
     setPage(1)
-  }, [searchTerm, ageMin, ageMax, updatedFrom, updatedTo, statusFilters, valorMin, valorMax])
+  }, [searchTerm, ageMin, ageMax, updatedFrom, updatedTo, descriptionFilters, statusFilters, valorMin, valorMax])
 
   const selectedStatusSet = useMemo(() => {
     return new Set(statusFilters.map((s) => String(s ?? '').trim().toLowerCase()).filter(Boolean))
   }, [statusFilters])
 
-  const preStatusFilteredRows = useMemo(() => {
+  const selectedDescriptionSet = useMemo(() => {
+    return new Set(descriptionFilters.map((s) => String(s ?? '').trim().toLowerCase()).filter(Boolean))
+  }, [descriptionFilters])
+
+  const baseFilteredRows = useMemo(() => {
     const q = String(searchTerm ?? '').trim().toLowerCase()
     const qDigits = onlyDigits(q)
 
@@ -315,6 +338,35 @@ export default function ConsultasV8() {
       return true
     })
   }, [sortedRows, searchTerm, ageMin, ageMax, updatedFrom, updatedTo, valorMin, valorMax])
+
+  const descriptionOptions = useMemo(() => {
+    const map = new Map()
+    for (const row of baseFilteredRows) {
+      const label = normalizeDescricao(row?.descricao)
+      const key = label.toLowerCase()
+      const prev = map.get(key)
+      if (prev) prev.count += 1
+      else map.set(key, { key, label, count: 1 })
+    }
+    return Array.from(map.values()).sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label, 'pt-BR'))
+  }, [baseFilteredRows])
+
+  const descriptionLabelByKey = useMemo(() => {
+    const map = new Map()
+    for (const item of descriptionOptions) map.set(item.key, item.label)
+    return map
+  }, [descriptionOptions])
+
+  const descriptionButtonLabel = useMemo(() => {
+    if (descriptionFilters.length === 0) return 'Todas descricoes'
+    if (descriptionFilters.length === 1) return descriptionLabelByKey.get(descriptionFilters[0]) || '1 descricao'
+    return `${descriptionFilters.length} descricoes`
+  }, [descriptionFilters, descriptionLabelByKey])
+
+  const preStatusFilteredRows = useMemo(() => {
+    if (selectedDescriptionSet.size === 0) return baseFilteredRows
+    return baseFilteredRows.filter((row) => selectedDescriptionSet.has(descricaoKey(row?.descricao)))
+  }, [baseFilteredRows, selectedDescriptionSet])
 
   const filteredRows = useMemo(() => {
     if (selectedStatusSet.size === 0) return preStatusFilteredRows
@@ -420,108 +472,147 @@ export default function ConsultasV8() {
         <section className="mb-3">
           <div className="row g-3">
             <div className="col-12">
-              <div className="neo-card neo-lg p-3 p-md-4 h-100">
+              <div className="neo-card neo-lg p-3 p-md-4 h-100" style={{ overflow: 'visible', position: 'relative', zIndex: 20 }}>
                 <div className="opacity-75 small mb-2 text-uppercase">Filtros</div>
-                <div className="d-flex flex-wrap gap-2 align-items-end">
-                  <div style={{ flex: '2 1 360px', minWidth: 240 }}>
-                    <label className="form-label small opacity-75 mb-1" htmlFor="v8-search">Buscar</label>
-                    <input
-                      id="v8-search"
-                      className="form-control form-control-sm"
-                      placeholder="Nome ou CPF"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-
-                  <div style={{ flex: '1 1 240px', minWidth: 200 }}>
-                    <label className="form-label small opacity-75 mb-1">Idade</label>
-                    <div className="d-flex gap-2">
+                <div style={{ overflow: 'visible' }}>
+                  <div className="d-flex flex-nowrap gap-2 align-items-end">
+                    <div style={{ flex: '0 0 210px' }}>
+                      <label className="form-label small opacity-75 mb-1" htmlFor="v8-search">Buscar</label>
                       <input
-                        type="number"
-                        min="0"
+                        id="v8-search"
                         className="form-control form-control-sm"
-                        placeholder="Min"
-                        value={ageMin}
-                        onChange={(e) => setAgeMin(e.target.value)}
-                        style={{ minWidth: 0 }}
-                      />
-                      <input
-                        type="number"
-                        min="0"
-                        className="form-control form-control-sm"
-                        placeholder="Max"
-                        value={ageMax}
-                        onChange={(e) => setAgeMax(e.target.value)}
-                        style={{ minWidth: 0 }}
+                        placeholder="Nome ou CPF"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                       />
                     </div>
-                  </div>
 
-                  <div style={{ flex: '2 1 360px', minWidth: 260 }}>
-                    <label className="form-label small opacity-75 mb-1">Ultima atualizacao</label>
-                    <div className="d-flex gap-2">
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        value={updatedFrom}
-                        onChange={(e) => setUpdatedFrom(e.target.value)}
-                        style={{ minWidth: 0 }}
-                      />
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        value={updatedTo}
-                        onChange={(e) => setUpdatedTo(e.target.value)}
-                        style={{ minWidth: 0 }}
-                      />
+                    <div style={{ flex: '0 0 280px' }}>
+                      <label className="form-label small opacity-75 mb-1">Descricoes</label>
+                      <div className="dropdown w-100" style={{ position: 'relative', zIndex: 30 }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline-light btn-sm w-100 d-flex align-items-center justify-content-between gap-2"
+                          data-bs-toggle="dropdown"
+                          data-bs-auto-close="outside"
+                          title={descriptionButtonLabel}
+                        >
+                          <span className="text-truncate">{descriptionButtonLabel}</span>
+                          <FiChevronDown size={14} />
+                        </button>
+                        <div className="dropdown-menu dropdown-menu-dark w-100 p-2" style={{ maxHeight: 280, overflowY: 'auto', zIndex: 3000 }}>
+                          {descriptionOptions.length === 0 ? (
+                            <div className="small opacity-75 px-2 py-1">Nenhuma descricao</div>
+                          ) : (
+                            descriptionOptions.map((item) => {
+                              const checked = selectedDescriptionSet.has(item.key)
+                              return (
+                                <label key={item.key} className="d-flex align-items-center gap-2 px-2 py-1 rounded" style={{ cursor: 'pointer' }}>
+                                  <input
+                                    type="checkbox"
+                                    className="form-check-input mt-0"
+                                    checked={checked}
+                                    onChange={() => toggleDescriptionFilter(item.key)}
+                                  />
+                                  <span className="small text-wrap flex-grow-1">{item.label}</span>
+                                  <span className="badge text-bg-secondary">{item.count}</span>
+                                </label>
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={{ flex: '1 1 280px', minWidth: 220 }}>
-                    <label className="form-label small opacity-75 mb-1">Valor liberado</label>
-                    <div className="d-flex gap-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="form-control form-control-sm"
-                        placeholder="Min"
-                        value={valorMin}
-                        onChange={(e) => setValorMin(e.target.value)}
-                        style={{ minWidth: 0 }}
-                      />
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="form-control form-control-sm"
-                        placeholder="Max"
-                        value={valorMax}
-                        onChange={(e) => setValorMax(e.target.value)}
-                        style={{ minWidth: 0 }}
-                      />
+                    <div style={{ flex: '0 0 220px' }}>
+                      <label className="form-label small opacity-75 mb-1">Idade</label>
+                      <div className="d-flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control form-control-sm"
+                          placeholder="Min"
+                          value={ageMin}
+                          onChange={(e) => setAgeMin(e.target.value)}
+                          style={{ minWidth: 0 }}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control form-control-sm"
+                          placeholder="Max"
+                          value={ageMax}
+                          onChange={(e) => setAgeMax(e.target.value)}
+                          style={{ minWidth: 0 }}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={{ flex: '0 1 280px', minWidth: 240, marginLeft: 'auto' }}>
-                    <div className="d-flex flex-column flex-sm-row gap-2 w-100 justify-content-end">
-                      <button
-                        type="button"
-                        className="btn btn-outline-light btn-sm flex-fill"
-                        onClick={clearFilters}
-                        disabled={!hasFilters}
-                      >
-                        Limpar filtros
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-outline-light btn-sm flex-fill d-inline-flex align-items-center justify-content-center gap-2"
-                        onClick={exportCSV}
-                        disabled={loading || Boolean(error) || filteredRows.length === 0}
-                        title="Baixar CSV (;)"
-                      >
-                        <FiDownload size={16} />
-                        <span>CSV</span>
-                      </button>
+                    <div style={{ flex: '0 0 320px' }}>
+                      <label className="form-label small opacity-75 mb-1">Ultima atualizacao</label>
+                      <div className="d-flex gap-2">
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          value={updatedFrom}
+                          onChange={(e) => setUpdatedFrom(e.target.value)}
+                          style={{ minWidth: 0 }}
+                        />
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          value={updatedTo}
+                          onChange={(e) => setUpdatedTo(e.target.value)}
+                          style={{ minWidth: 0 }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ flex: '0 0 240px' }}>
+                      <label className="form-label small opacity-75 mb-1">Valor liberado</label>
+                      <div className="d-flex gap-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-control form-control-sm"
+                          placeholder="Min"
+                          value={valorMin}
+                          onChange={(e) => setValorMin(e.target.value)}
+                          style={{ minWidth: 0 }}
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="form-control form-control-sm"
+                          placeholder="Max"
+                          value={valorMax}
+                          onChange={(e) => setValorMax(e.target.value)}
+                          style={{ minWidth: 0 }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ flex: '0 0 250px' }}>
+                      <div className="d-flex gap-2 w-100">
+                        <button
+                          type="button"
+                          className="btn btn-outline-light btn-sm flex-fill"
+                          onClick={clearFilters}
+                          disabled={!hasFilters}
+                        >
+                          Limpar filtros
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-light btn-sm flex-fill d-inline-flex align-items-center justify-content-center gap-2"
+                          onClick={exportCSV}
+                          disabled={loading || Boolean(error) || filteredRows.length === 0}
+                          title="Baixar CSV (;)"
+                        >
+                          <FiDownload size={16} />
+                          <span>CSV</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -599,7 +690,7 @@ export default function ConsultasV8() {
                 )}
 
                 {!loading && !error && (
-                  <div className="small opacity-75 mt-3">Total (sem status): {preStatusFilteredRows.length}</div>
+                  <div className="small opacity-75 mt-3">Total de Clientes: {preStatusFilteredRows.length}</div>
                 )}
               </div>
             </div>
