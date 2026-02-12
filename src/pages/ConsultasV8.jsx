@@ -141,7 +141,7 @@ const statusClassName = (status) => {
 
 const normalizeDescricao = (value) => {
   const txt = String(value ?? '').trim()
-  return txt || 'Sem descricao'
+  return txt || 'Sem descrição'
 }
 
 const descricaoKey = (value) => normalizeDescricao(value).toLowerCase()
@@ -358,9 +358,9 @@ export default function ConsultasV8() {
   }, [descriptionOptions])
 
   const descriptionButtonLabel = useMemo(() => {
-    if (descriptionFilters.length === 0) return 'Todas descricoes'
-    if (descriptionFilters.length === 1) return descriptionLabelByKey.get(descriptionFilters[0]) || '1 descricao'
-    return `${descriptionFilters.length} descricoes`
+    if (descriptionFilters.length === 0) return 'Todas descrições'
+    if (descriptionFilters.length === 1) return descriptionLabelByKey.get(descriptionFilters[0]) || '1 descrição'
+    return `${descriptionFilters.length} descrições`
   }, [descriptionFilters, descriptionLabelByKey])
 
   const preStatusFilteredRows = useMemo(() => {
@@ -409,10 +409,10 @@ export default function ConsultasV8() {
       'Nascimento',
       'Nome',
       'Telefone',
-      'Ultima atualizacao',
+      'Última atualização',
       'Status Consulta V8',
       'Valor Liberado',
-      'Descricao'
+      'Descrição'
     ]
     const out = filteredRows.map((r) => ([
       r?.id ?? '',
@@ -452,9 +452,18 @@ export default function ConsultasV8() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Consultas V8</h2>
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <img
+                  src="https://v8-white-label-logos.s3.us-east-1.amazonaws.com/v8-rebrand/v8-logo-auth0.svg"
+                  alt="V8"
+                  width="58"
+                  height="22"
+                  style={{ objectFit: 'contain' }}
+                />
+                <h2 className="fw-bold mb-0">Consulta V8</h2>
+              </div>
               <div className="small opacity-75">
-                {lastSyncAt ? `Ultima atualizacao: ${formatDate(lastSyncAt)}` : 'Carregando dados...'}
+                {lastSyncAt ? `Última atualização: ${formatDate(lastSyncAt)}` : 'Carregando dados...'}
               </div>
             </div>
           </div>
@@ -488,7 +497,7 @@ export default function ConsultasV8() {
                     </div>
 
                     <div style={{ flex: '0 0 280px' }}>
-                      <label className="form-label small opacity-75 mb-1">Descricoes</label>
+                      <label className="form-label small opacity-75 mb-1">Descrições</label>
                       <div className="dropdown w-100" style={{ position: 'relative', zIndex: 30 }}>
                         <button
                           type="button"
@@ -502,7 +511,7 @@ export default function ConsultasV8() {
                         </button>
                         <div className="dropdown-menu dropdown-menu-dark w-100 p-2" style={{ maxHeight: 280, overflowY: 'auto', zIndex: 3000 }}>
                           {descriptionOptions.length === 0 ? (
-                            <div className="small opacity-75 px-2 py-1">Nenhuma descricao</div>
+                            <div className="small opacity-75 px-2 py-1">Nenhuma descrição</div>
                           ) : (
                             descriptionOptions.map((item) => {
                               const checked = selectedDescriptionSet.has(item.key)
@@ -549,7 +558,7 @@ export default function ConsultasV8() {
                     </div>
 
                     <div style={{ flex: '0 0 320px' }}>
-                      <label className="form-label small opacity-75 mb-1">Ultima atualizacao</label>
+                      <label className="form-label small opacity-75 mb-1">Última atualização</label>
                       <div className="d-flex gap-2">
                         <input
                           type="date"
@@ -761,10 +770,10 @@ export default function ConsultasV8() {
                   <th>Nascimento</th>
                   <th>Nome</th>
                   <th>Telefone</th>
-                  <th>Ultima atualizacao</th>
+                  <th>Última atualização</th>
                   <th>Status Consulta V8</th>
                   <th>Valor Liberado</th>
-                  <th className="text-center">Descricao</th>
+                  <th className="text-center">Descrição</th>
                 </tr>
               </thead>
               <tbody>
@@ -883,7 +892,7 @@ export default function ConsultasV8() {
                     <div className="fw-semibold text-break">{selectedRow?.email || '-'}</div>
                   </div>
                   <div className="col-6 col-lg-3">
-                    <div className="small opacity-75">Ultima atualizacao</div>
+                    <div className="small opacity-75">Última atualização</div>
                     <div className="fw-semibold">{formatDate(selectedRow?.created_at)}</div>
                   </div>
                   <div className="col-6 col-lg-3">
@@ -902,7 +911,7 @@ export default function ConsultasV8() {
                 </div>
 
                 <div className="neo-card p-3 mt-3">
-                  <div className="small opacity-75 mb-1">Descricao</div>
+                  <div className="small opacity-75 mb-1">Descrição</div>
                   <div className="fw-semibold text-break">{selectedRow?.descricao || '-'}</div>
                 </div>
               </div>
