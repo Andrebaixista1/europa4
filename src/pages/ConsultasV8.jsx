@@ -3,8 +3,21 @@ import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiDownload, FiEye, FiRefreshCw } from 'react-icons/fi'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8'
+const LIMITED_USER_ID = 3347
+
+const toNumberOrNull = (value) => {
+  if (value === undefined || value === null || value === '') return null
+  const parsed = Number(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+const canUser3347SeeRow = (row) => {
+  const token = String(row?.token_usado ?? '').trim().toLowerCase()
+  return token === '*' || token === 'vision' || token === 'a vision'
+}
 
 const normalizeRows = (payload) => {
   if (Array.isArray(payload)) return payload
@@ -127,6 +140,7 @@ const statusClassName = (status) => {
 }
 
 export default function ConsultasV8() {
+  const { user } = useAuth()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -175,14 +189,20 @@ export default function ConsultasV8() {
     return () => controller.abort()
   }, [fetchConsultas])
 
+  const visibleRows = useMemo(() => {
+    const userId = toNumberOrNull(user?.id)
+    if (userId !== LIMITED_USER_ID) return rows
+    return (Array.isArray(rows) ? rows : []).filter(canUser3347SeeRow)
+  }, [rows, user?.id])
+
   const sortedRows = useMemo(() => {
-    const list = Array.isArray(rows) ? [...rows] : []
+    const list = Array.isArray(visibleRows) ? [...visibleRows] : []
     return list.sort((a, b) => {
       const ta = new Date(a?.created_at || 0).getTime()
       const tb = new Date(b?.created_at || 0).getTime()
       return tb - ta
     })
-  }, [rows])
+  }, [visibleRows])
 
   const statusOptions = useMemo(() => {
     const set = new Set()
