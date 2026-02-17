@@ -5,6 +5,82 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
+
+const MENU_PERMISSION_TREE = [
+  {
+    menu: { code: 'menu:dashboard', label: 'Visão Geral' },
+    children: [],
+  },
+  {
+    menu: { code: 'menu:consultas', label: 'Consultas' },
+    children: [
+      { code: 'menu:in100', label: 'Consulta Individual (IN100)' },
+      { code: 'menu:argus', label: 'Cliente Argus' },
+      { code: 'menu:historico', label: 'Histórico de Consultas' },
+      { code: 'menu:v8', label: 'Consultas V8' },
+    ],
+  },
+  {
+    menu: { code: 'menu:gestao', label: 'Gestão' },
+    children: [
+      { code: 'menu:recargas', label: 'Gestão de Recargas' },
+      { code: 'menu:controle-planejamento', label: 'Controle Planejamento' },
+      { code: 'menu:relatorios', label: 'Relatórios' },
+    ],
+  },
+  {
+    menu: { code: 'menu:configuracoes', label: 'Configurações' },
+    children: [
+      { code: 'menu:usuarios', label: 'Usuários' },
+      { code: 'menu:equipes', label: 'Equipes' },
+    ],
+  },
+]
+
+const BUTTON_PERMISSION_ITEMS = [
+  { code: 'btn:usuario:editar', label: 'Editar usuário' },
+  { code: 'btn:usuario:transferir', label: 'Transferir usuário' },
+  { code: 'btn:usuario:excluir', label: 'Excluir usuário' },
+  { code: 'btn:usuario:senha', label: 'Alterar senha' },
+  { code: 'btn:usuario:status', label: 'Ativar/Desativar usuário' },
+  { code: 'btn:usuario:criar', label: 'Adicionar usuário' },
+]
+
+const MENU_PERMISSION_CODES = MENU_PERMISSION_TREE.flatMap((section) => [
+  section.menu.code,
+  ...section.children.map((item) => item.code),
+])
+const BUTTON_PERMISSION_CODES = BUTTON_PERMISSION_ITEMS.map((item) => item.code)
+const ALL_PERMISSION_CODES = [...MENU_PERMISSION_CODES, ...BUTTON_PERMISSION_CODES]
+
+const makeState = (enabledCodes) => ALL_PERMISSION_CODES.reduce((acc, code) => {
+  acc[code] = enabledCodes.includes(code)
+  return acc
+}, {})
+
+const MENU_ALL_CONSULTAS = ['menu:consultas', 'menu:in100', 'menu:argus', 'menu:historico', 'menu:v8']
+const MENU_GESTAO_CONTROLE = ['menu:gestao', 'menu:controle-planejamento']
+const MENU_CONFIGURACOES_ALL = ['menu:configuracoes', 'menu:usuarios', 'menu:equipes']
+
+const buildPermissionPresetByRole = (role) => {
+  const roleName = String(role || '').trim().toLowerCase()
+  let allowedMenus = []
+
+  if (roleName === 'master') {
+    allowedMenus = [...MENU_PERMISSION_CODES]
+  } else if (roleName === 'administrador') {
+    allowedMenus = ['menu:dashboard', ...MENU_ALL_CONSULTAS, ...MENU_GESTAO_CONTROLE, ...MENU_CONFIGURACOES_ALL]
+  } else if (roleName === 'supervisor') {
+    allowedMenus = ['menu:dashboard', ...MENU_ALL_CONSULTAS, ...MENU_CONFIGURACOES_ALL]
+  } else {
+    // Operador (padrão)
+    allowedMenus = ['menu:dashboard', ...MENU_ALL_CONSULTAS]
+  }
+
+  // Nesta etapa os botões continuam todos ligados no mock de frontend.
+  return makeState([...allowedMenus, ...BUTTON_PERMISSION_CODES])
+}
+
 export default function Usuarios() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -46,6 +122,7 @@ export default function Usuarios() {
   const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [transferUser, setTransferUser] = useState(null)
   const [transferNewEquipeId, setTransferNewEquipeId] = useState('')
+  const [userPermissionDrafts, setUserPermissionDrafts] = useState({})
   const detailAnchorRef = useRef(null)
   const normalizeId = (value) => {
     if (value === null || value === undefined || value === '') return null
@@ -193,6 +270,7 @@ export default function Usuarios() {
     if (!filtered.some(u => u.id === selectedId)) setSelectedId(filtered[0]?.id ?? null)
   }, [filtered, selectedId])
   const isSuperUser = (user?.role === 'Master') || ((user?.equipe_nome || '').toLowerCase() === 'master')
+  const canEditPermissionCheckboxes = Number(user?.id) === 1
   const isSupervisor = user?.role === 'Supervisor'
   const isAdminRole = (user?.role || '').toLowerCase() === 'administrador'
   const isScopedManager = isSupervisor || isAdminRole
@@ -214,6 +292,31 @@ export default function Usuarios() {
   const teamNameById = (id) => {
     const found = (equipesLista || []).find(e => e.id === id)
     return found ? found.nome : (id != null ? `Equipe ${id}` : '-')
+  }
+  const selectedUserPermissions = useMemo(() => {
+    const preset = buildPermissionPresetByRole(selected?.role)
+    const selectedUserId = normalizeId(selected?.id)
+    if (selectedUserId == null) return preset
+    return userPermissionDrafts[selectedUserId] || preset
+  }, [selected?.id, selected?.role, userPermissionDrafts])
+  const handleTogglePermissionCheckbox = (permissionCode) => {
+    if (!canEditPermissionCheckboxes) return
+    const selectedUserId = normalizeId(selected?.id)
+    if (selectedUserId == null) return
+
+    setUserPermissionDrafts((prev) => {
+      const current = prev[selectedUserId] || buildPermissionPresetByRole(selected?.role)
+      return {
+        ...prev,
+        [selectedUserId]: {
+          ...current,
+          [permissionCode]: !Boolean(current[permissionCode]),
+        },
+      }
+    })
+  }
+  const handleSavePermissionDraft = () => {
+    notify.info('Frontend apenas: sem integração com API no momento.')
   }
   function toLoginFromName(nome) {
     const s = (nome || '')
@@ -863,6 +966,63 @@ export default function Usuarios() {
                               <Fi.FiLock />
                             )}
                           </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 p-3 rounded-3 user-detail-surface">
+                    <div className="d-flex align-items-center justify-content-between gap-3 mb-2">
+                      <div>
+                        <div className="small text-uppercase opacity-75">Permissões de acesso</div>
+                        <div className="small opacity-75">
+                          Controle visual via checkbox (frontend). Somente usuário ID 1 pode alterar.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={handleSavePermissionDraft}
+                        disabled={!canEditPermissionCheckboxes || !selected}
+                      >
+                        Salvar (mock)
+                      </button>
+                    </div>
+                    <div className="row g-3">
+                      <div className="col-12 col-md-7">
+                        <div className="p-3 rounded-3 border h-100">
+                          <div className="fw-semibold mb-2">Menus</div>
+                          <div className="d-flex flex-column gap-3">
+                            {MENU_PERMISSION_TREE.map((section) => (
+                              <div key={section.menu.code} className="d-flex flex-column gap-2">
+                                <label className="form-check d-flex align-items-center gap-2 m-0">
+                                  <input
+                                    type="checkbox"
+                                    className="form-check-input mt-0"
+                                    checked={Boolean(selectedUserPermissions[section.menu.code])}
+                                    onChange={() => handleTogglePermissionCheckbox(section.menu.code)}
+                                    disabled={!canEditPermissionCheckboxes || !selected}
+                                  />
+                                  <span className="form-check-label fw-semibold">{section.menu.label}</span>
+                                </label>
+                                {section.children.length > 0 && (
+                                  <div className="ps-4 d-flex flex-column gap-2">
+                                    {section.children.map((item) => (
+                                      <label key={item.code} className="form-check d-flex align-items-center gap-2 m-0">
+                                        <input
+                                          type="checkbox"
+                                          className="form-check-input mt-0"
+                                          checked={Boolean(selectedUserPermissions[item.code])}
+                                          onChange={() => handleTogglePermissionCheckbox(item.code)}
+                                          disabled={!canEditPermissionCheckboxes || !selected}
+                                        />
+                                        <span className="form-check-label">{item.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
