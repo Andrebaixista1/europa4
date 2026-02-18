@@ -8,6 +8,7 @@ import { notify } from '../utils/notify.js'
 
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const HIST_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-historico/'
+const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
 const PROCESS_URL = '/api/presenca/api/process/individual'
 const PENDING_UPLOAD_URL = '/api/presenca/pending'
 
@@ -716,35 +717,99 @@ export default function ConsultaPresenca() {
     setBatchJobs((prev) => prev.filter((j) => j.id !== jobId))
   }, [])
 
-  const downloadBatchJobCsv = useCallback((job) => {
-    if (!job?.validRows?.length) {
-      notify.info('Nenhuma linha válida para baixar.', { autoClose: 2000 })
+  const downloadBatchJobCsv = useCallback(async (job) => {
+    if (!user?.id) {
+      notify.error('Usuário sem ID.', { autoClose: 2000 })
+      return
+    }
+    if (!currentSummary?.loginP || currentSummary.loginP === '-') {
+      notify.error('Selecione um login válido no card Resumo.', { autoClose: 2000 })
+      return
+    }
+    if (!job?.fileName) {
+      notify.error('Nome do arquivo não encontrado.', { autoClose: 2000 })
       return
     }
 
-    const header = ['cpf', 'nome', 'telefone']
-    const lines = [header.join(';')]
-    for (const r of job.validRows) {
-      lines.push([toCsvCell(r.cpf), toCsvCell(r.nome), toCsvCell(r.telefone)].join(';'))
+    try {
+      const url = `${LOTE_API_URL}?loginP=${encodeURIComponent(currentSummary.loginP)}&id_user=${encodeURIComponent(user.id)}&nomeArquivo=${encodeURIComponent(job.fileName)}`
+      const res = await fetch(url, { method: 'GET' })
+      const rawText = await res.text()
+      if (!res.ok) throw new Error(rawText || `HTTP ${res.status}`)
+
+      let payload = []
+      try { payload = rawText ? JSON.parse(rawText) : [] } catch { payload = [] }
+      const list = normalizeRows(payload)
+
+      if (!list.length) {
+        notify.info('Nenhum registro retornado para esse lote.', { autoClose: 2000 })
+        return
+      }
+
+      // Agrupa por tipoConsulta + created_at (mesmo lote).
+      const groups = new Map()
+      for (const r of list) {
+        const tipo = String(pick(r, ['tipoConsulta'], '') || '').trim()
+        const created = String(pick(r, ['created_at', 'createdAt'], '') || '').trim()
+        const key = `${tipo}__${created}`
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key).push(r)
+      }
+
+      // Seleciona o grupo mais recente (maior created_at).
+      let chosenKey = null
+      let chosenTs = -Infinity
+      for (const key of groups.keys()) {
+        const created = key.split('__').slice(-1)[0]
+        const t = new Date(created).getTime()
+        const ts = Number.isFinite(t) ? t : -Infinity
+        if (ts > chosenTs) {
+          chosenTs = ts
+          chosenKey = key
+        }
+      }
+
+      const rowsToExport = chosenKey ? (groups.get(chosenKey) || []) : list
+      if (!rowsToExport.length) {
+        notify.info('Nenhum registro retornado para exportação.', { autoClose: 2000 })
+        return
+      }
+
+      const header = ['cpf', 'nome', 'telefone', 'loginP', 'created_at', 'updated_at', 'status', 'tipoConsulta']
+      const lines = [header.join(';')]
+
+      for (const r of rowsToExport) {
+        lines.push([
+          toCsvCell(pick(r, ['cpf'], '')),
+          toCsvCell(pick(r, ['nome'], '')),
+          toCsvCell(pick(r, ['telefone'], '')),
+          toCsvCell(pick(r, ['loginP'], currentSummary.loginP)),
+          toCsvCell(pick(r, ['created_at'], '')),
+          toCsvCell(pick(r, ['updated_at'], '')),
+          toCsvCell(pick(r, ['status'], '')),
+          toCsvCell(pick(r, ['tipoConsulta'], job.fileName))
+        ].join(';'))
+      }
+
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      const safeBase = String(job.fileName || 'lote').replace(/[^\w.\-]+/g, '_')
+      const fileName = `lote_${safeBase}_${stamp}.csv`
+
+      const content = `\ufeff${lines.join('\r\n')}\r\n`
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+      const blobUrl = URL.createObjectURL(blob)
+
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(blobUrl)
+    } catch (err) {
+      notify.error(err?.message || 'Falha ao baixar lote.', { autoClose: 2500 })
     }
-
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-    const safeBase = String(job.fileName || 'lote').replace(/[^\w.\-]+/g, '_')
-    const fileName = `lote_${safeBase}_${stamp}.csv`
-
-    const content = `\ufeff${lines.join('\r\n')}\r\n`
-    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-
-    URL.revokeObjectURL(url)
-  }, [])
+  }, [user?.id, currentSummary?.loginP])
 
   const startBatchJob = useCallback(async (jobId) => {
     setConsultaMsg('')
