@@ -9,6 +9,7 @@ import { notify } from '../utils/notify.js'
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const HIST_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-historico/'
 const PROCESS_URL = '/api/presenca/api/process/individual'
+const PENDING_UPLOAD_URL = '/api/presenca/pending'
 
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '')
 
@@ -700,6 +701,8 @@ export default function ConsultaPresenca() {
         progress: 0,
         okCount: 0,
         errCount: 0,
+        pendingUploaded: false,
+        pendingInsertedRows: 0,
         finishedAt: null
       }
 
@@ -762,6 +765,36 @@ export default function ConsultaPresenca() {
       return
     }
 
+    // 1) Primeiro envia todas as linhas para a tabela (status = Pendente).
+    if (!job.pendingUploaded) {
+      try {
+        setConsultaMsg('Enviando lote para o banco (Pendente)...')
+        const response = await fetch(PENDING_UPLOAD_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            loginP: currentSummary.loginP,
+            tipoConsulta: job.fileName,
+            rows: job.validRows.map((r) => ({ cpf: r.cpf, nome: r.nome, telefone: r.telefone }))
+          })
+        })
+        const raw = await response.text()
+        let parsed = {}
+        try { parsed = raw ? JSON.parse(raw) : {} } catch { parsed = { error: raw } }
+        if (!response.ok) {
+          throw new Error(parsed?.error || raw || `HTTP ${response.status}`)
+        }
+        const inserted = Number(parsed?.insertedRows ?? parsed?.inserted ?? 0) || 0
+        setBatchJobs((prev) => prev.map((j) => (
+          j.id === jobId ? { ...j, pendingUploaded: true, pendingInsertedRows: inserted, status: 'Pendente' } : j
+        )))
+      } catch (err) {
+        setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Erro' } : j)))
+        setConsultaMsg(err?.message || 'Falha ao enviar lote para o banco.')
+        return
+      }
+    }
+
     setConsultando(true)
     setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Processando', progress: 0, okCount: 0, errCount: 0, finishedAt: null } : j)))
 
@@ -781,7 +814,9 @@ export default function ConsultaPresenca() {
           autoAcceptHeadless: true,
           stepDelayMs: 2000,
           login: currentSummary.loginP,
-          senha: currentSummary.senhaP
+          senha: currentSummary.senhaP,
+          // Ajuda o backend a identificar o lote na tabela.
+          tipoConsulta: job.fileName
         }
 
         const response = await fetch(PROCESS_URL, {
@@ -1195,6 +1230,8 @@ export default function ConsultaPresenca() {
                       const statusTxt = String(job.status || 'Pronto')
                       const cls = statusTxt === 'Processando'
                         ? 'text-bg-info'
+                        : statusTxt === 'Pendente'
+                          ? 'text-bg-warning'
                         : statusTxt === 'Concluído'
                           ? 'text-bg-success'
                           : statusTxt === 'Concluído com erros'
