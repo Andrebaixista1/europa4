@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiRefreshCw, FiSearch } from 'react-icons/fi'
+import { FiArrowLeft, FiDownload, FiRefreshCw, FiSearch } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -37,6 +37,12 @@ const dateMinuteKey = (value) => {
   if (Number.isNaN(d.getTime())) return String(value).trim()
   const pad2 = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+const toCsvCell = (value) => {
+  const s = String(value ?? '')
+  if (/[\";\r\n]/.test(s)) return `"${s.replace(/\"/g, '""')}"`
+  return s
 }
 
 const formatDateOnly = (value) => {
@@ -173,7 +179,8 @@ export default function ConsultaPresenca() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
+  const [dateFrom, setDateFrom] = useState('') // yyyy-mm-dd
+  const [dateTo, setDateTo] = useState('') // yyyy-mm-dd
   const [page, setPage] = useState(1)
   const [lastSyncAt, setLastSyncAt] = useState(null)
   const [summaryRows, setSummaryRows] = useState([])
@@ -287,8 +294,15 @@ export default function ConsultaPresenca() {
 
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase()
+    const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null
+    const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null
     const base = rows.filter((row) => {
-      if (status && row.status !== status) return false
+      if (fromTs !== null || toTs !== null) {
+        const t = new Date(row?.data || '').getTime()
+        if (!Number.isFinite(t)) return false
+        if (fromTs !== null && t < fromTs) return false
+        if (toTs !== null && t > toTs) return false
+      }
       if (!term) return true
       return (
         String(row.nome ?? '').toLowerCase().includes(term) ||
@@ -316,7 +330,7 @@ export default function ConsultaPresenca() {
       seenComposite.add(key)
       return true
     })
-  }, [rows, search, status])
+  }, [rows, search, dateFrom, dateTo])
 
   const currentSummary = summaryRows[selectedLoginIndex] || { loginP: '-', senhaP: '', total: '-', usado: '-', restantes: '-' }
   const pageSize = 50
@@ -354,11 +368,48 @@ export default function ConsultaPresenca() {
 
   useEffect(() => {
     setPage(1)
-  }, [search, status, rows, selectedLoginIndex])
+  }, [search, dateFrom, dateTo, rows, selectedLoginIndex])
 
   const refresh = () => {
     fetchSummary()
   }
+
+  const downloadFilteredCsv = useCallback(() => {
+    if (!filteredRows.length) {
+      notify.info('Nenhum registro para baixar.', { autoClose: 2000 })
+      return
+    }
+
+    const header = ['CPF', 'Nome', 'Data de atualização', 'Elegível', 'Data de nascimento']
+    const lines = [header.join(';')]
+
+    for (const row of filteredRows) {
+      lines.push([
+        toCsvCell(formatCpf(row.cpf)),
+        toCsvCell(row.nome || ''),
+        toCsvCell(formatDate(row.data)),
+        toCsvCell(row.elegivel ? 'Sim' : 'Não'),
+        toCsvCell(formatDateOnly(row.dataNascimento))
+      ].join(';'))
+    }
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    const fileName = `consulta-presenca_${stamp}.csv`
+
+    // BOM para Excel manter acentuação em UTF-8.
+    const content = `\ufeff${lines.join('\r\n')}\r\n`
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    URL.revokeObjectURL(url)
+  }, [filteredRows])
 
   const openConsultaResultModalFromSource = useCallback((source, phoneOriginFallback = 'Registro do histórico') => {
     const payload = source && typeof source === 'object' ? source : {}
@@ -602,16 +653,36 @@ export default function ConsultaPresenca() {
                       />
                     </div>
                   </div>
-                  <div style={{ minWidth: 200 }}>
-                    <label className="form-label small opacity-75 mb-1">Status</label>
-                    <select className="form-select form-select-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
-                      <option value="">Todos</option>
-                      <option value="Presente">Presente</option>
-                      <option value="Ausente">Ausente</option>
-                    </select>
+                  <div style={{ minWidth: 160 }}>
+                    <label className="form-label small opacity-75 mb-1">De</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ minWidth: 160 }}>
+                    <label className="form-label small opacity-75 mb-1">Até</label>
+                    <input
+                      type="date"
+                      className="form-control form-control-sm"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
                   </div>
                   <div className="ms-auto d-flex gap-2">
-                    <button type="button" className="btn btn-outline-light btn-sm" onClick={() => { setSearch(''); setStatus('') }}>
+                    <button
+                      type="button"
+                      className="btn btn-outline-info btn-sm d-flex align-items-center gap-2"
+                      onClick={downloadFilteredCsv}
+                      disabled={loading || filteredRows.length === 0}
+                      title="Baixar CSV do que estiver filtrado"
+                    >
+                      <FiDownload size={14} />
+                      <span>CSV</span>
+                    </button>
+                    <button type="button" className="btn btn-outline-light btn-sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }}>
                       Limpar filtros
                     </button>
                   </div>
