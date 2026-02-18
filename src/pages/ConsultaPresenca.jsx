@@ -106,13 +106,19 @@ const normalizeBatchRow = (obj, index1Based) => {
 
   let telefone = telefoneRaw
   let phoneOrigin = 'Arquivo'
-  if (!telefone) {
-    telefone = generateRandomPhone()
-    phoneOrigin = 'Gerado automaticamente'
+
+  // Se telefone vier em branco ou inválido, padroniza gerando automaticamente.
+  const isValidPhone = (t) => {
+    if (!t) return false
+    if (t.length !== 11) return false
+    if (t[2] !== '9') return false
+    return true
   }
 
-  if (telefone.length < 10 || telefone.length > 11) return { ok: false, idx: index1Based, error: 'Telefone inválido (use 10 ou 11 dígitos).' }
-  if (telefone[2] !== '9') return { ok: false, idx: index1Based, error: 'O 3º dígito do telefone precisa ser 9.' }
+  if (!isValidPhone(telefone)) {
+    telefone = generateRandomPhoneBatch()
+    phoneOrigin = 'Gerado automaticamente'
+  }
 
   return { ok: true, idx: index1Based, cpf, nome, telefone, phoneOrigin }
 }
@@ -156,6 +162,13 @@ const generateRandomPhone = () => {
   // Keeps number in the 119XXXXXXXX range and guarantees 3rd digit = 9.
   const suffix = String(Math.floor(Math.random() * 100000000)).padStart(8, '0')
   return `119${suffix}`
+}
+
+const generateRandomPhoneBatch = () => {
+  // 11 digits between 11111111111 and 99999999999, with 3rd digit fixed as 9.
+  const ddd = String(11 + Math.floor(Math.random() * 89)).padStart(2, '0') // 11..99
+  const suffix = String(Math.floor(Math.random() * 100000000)).padStart(8, '0')
+  return `${ddd}9${suffix}`
 }
 
 const maskLogin = (value) => {
@@ -674,10 +687,11 @@ export default function ConsultaPresenca() {
       }
 
       const cols = new Set(Object.keys(rawRows[0] || {}).map((k) => String(k ?? '').trim().toLowerCase()))
+      // As colunas precisam existir (telefone pode estar vazio/ inválido, será padronizado).
       const required = ['cpf', 'nome', 'telefone']
       const missing = required.filter((k) => !cols.has(k))
       if (missing.length > 0) {
-        setConsultaMsg(`Colunas obrigatórias não encontradas: ${missing.join(', ')}. Use exatamente: cpf, nome, telefone.`)
+        setConsultaMsg(`Colunas obrigatórias não encontradas: ${missing.join(', ')}. Use exatamente: CPF, NOME, TELEFONE.`)
         return
       }
 
