@@ -45,6 +45,76 @@ const toCsvCell = (value) => {
   return s
 }
 
+const parseDelimited = (text, delimiter = ';') => {
+  const src = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const lines = src.split('\n').filter((l) => l.trim() !== '')
+  if (lines.length === 0) return []
+
+  const parseLine = (line) => {
+    const out = []
+    let cur = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i]
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"'
+          i += 1
+        } else {
+          inQuotes = !inQuotes
+        }
+        continue
+      }
+      if (!inQuotes && ch === delimiter) {
+        out.push(cur)
+        cur = ''
+        continue
+      }
+      cur += ch
+    }
+    out.push(cur)
+    return out.map((v) => String(v ?? '').trim())
+  }
+
+  const headerLine = lines[0].replace(/^\uFEFF/, '')
+  const headers = parseLine(headerLine).map((h) => String(h ?? '').trim().toLowerCase())
+  const rows = []
+
+  for (let i = 1; i < lines.length; i += 1) {
+    const cols = parseLine(lines[i])
+    if (cols.every((c) => String(c ?? '').trim() === '')) continue
+    const obj = {}
+    for (let c = 0; c < headers.length; c += 1) {
+      const key = headers[c]
+      if (!key) continue
+      obj[key] = cols[c] ?? ''
+    }
+    rows.push(obj)
+  }
+  return rows
+}
+
+const normalizeBatchRow = (obj, index1Based) => {
+  const cpf = onlyDigits(obj?.cpf ?? obj?.CPF ?? obj?.Cpf ?? '')
+  const nome = String(obj?.nome ?? obj?.Nome ?? obj?.NOME ?? '').trim()
+  const telefoneRaw = onlyDigits(obj?.telefone ?? obj?.Telefone ?? obj?.TELEFONE ?? '')
+
+  if (cpf.length !== 11) return { ok: false, idx: index1Based, error: 'CPF inválido (precisa ter 11 dígitos).' }
+  if (!nome) return { ok: false, idx: index1Based, error: 'Nome obrigatório.' }
+
+  let telefone = telefoneRaw
+  let phoneOrigin = 'Arquivo'
+  if (!telefone) {
+    telefone = generateRandomPhone()
+    phoneOrigin = 'Gerado automaticamente'
+  }
+
+  if (telefone.length < 10 || telefone.length > 11) return { ok: false, idx: index1Based, error: 'Telefone inválido (use 10 ou 11 dígitos).' }
+  if (telefone[2] !== '9') return { ok: false, idx: index1Based, error: 'O 3º dígito do telefone precisa ser 9.' }
+
+  return { ok: true, idx: index1Based, cpf, nome, telefone, phoneOrigin }
+}
+
 const formatDateOnly = (value) => {
   if (!value) return '-'
   const date = new Date(value)
@@ -188,6 +258,10 @@ export default function ConsultaPresenca() {
   const [cpfConsulta, setCpfConsulta] = useState('')
   const [telefoneConsulta, setTelefoneConsulta] = useState('')
   const [nomeConsulta, setNomeConsulta] = useState('')
+  const [consultaTab, setConsultaTab] = useState('individual') // individual | lote
+  const [batchFileName, setBatchFileName] = useState('')
+  const [batchValidRows, setBatchValidRows] = useState([])
+  const [batchInvalidRows, setBatchInvalidRows] = useState([])
   const [consultaMsg, setConsultaMsg] = useState('')
   const [consultando, setConsultando] = useState(false)
   const [consultaResultModal, setConsultaResultModal] = useState(null)
@@ -561,6 +635,118 @@ export default function ConsultaPresenca() {
     }
   }, [cpfConsulta, telefoneConsulta, nomeConsulta, currentSummary, fetchSummary, openConsultaResultModalFromSource])
 
+  const handleBatchFileChange = useCallback(async (event) => {
+    const file = event?.target?.files?.[0] ?? null
+    setConsultaMsg('')
+    setBatchInvalidRows([])
+    setBatchValidRows([])
+    setBatchFileName(file?.name || '')
+
+    if (!file) return
+
+    try {
+      const name = String(file.name || '').toLowerCase()
+      let rawRows = []
+
+      if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+        const buffer = await file.arrayBuffer()
+        const xlsx = await import('xlsx')
+        const wb = xlsx.read(buffer, { type: 'array' })
+        const sheetName = wb.SheetNames?.[0]
+        const sheet = sheetName ? wb.Sheets[sheetName] : null
+        rawRows = sheet ? xlsx.utils.sheet_to_json(sheet, { defval: '' }) : []
+      } else {
+        const text = await file.text()
+        const firstLine = String(text ?? '').split(/\r\n|\n|\r/)[0] || ''
+        const delimiter = firstLine.includes(';') ? ';' : (firstLine.includes(',') ? ',' : ';')
+        rawRows = parseDelimited(text, delimiter)
+      }
+
+      if (!Array.isArray(rawRows) || rawRows.length === 0) {
+        setConsultaMsg('Arquivo vazio ou inválido.')
+        return
+      }
+
+      const cols = new Set(Object.keys(rawRows[0] || {}).map((k) => String(k ?? '').trim().toLowerCase()))
+      const required = ['cpf', 'nome', 'telefone']
+      const missing = required.filter((k) => !cols.has(k))
+      if (missing.length > 0) {
+        setConsultaMsg(`Colunas obrigatórias não encontradas: ${missing.join(', ')}. Use exatamente: cpf, nome, telefone.`)
+        return
+      }
+
+      const valid = []
+      const invalid = []
+      rawRows.forEach((obj, i) => {
+        const norm = normalizeBatchRow(obj, i + 1)
+        if (norm.ok) valid.push(norm)
+        else invalid.push(norm)
+      })
+
+      setBatchValidRows(valid)
+      setBatchInvalidRows(invalid)
+      setConsultaMsg(`Arquivo carregado: ${valid.length} válido(s), ${invalid.length} inválido(s).`)
+    } catch (err) {
+      setConsultaMsg(err?.message || 'Falha ao ler arquivo.')
+    }
+  }, [])
+
+  const handleConsultarLote = useCallback(async () => {
+    setConsultaMsg('')
+
+    if (!currentSummary?.loginP || currentSummary.loginP === '-') {
+      setConsultaMsg('Selecione um login válido no card Resumo.')
+      return
+    }
+    if (!currentSummary?.senhaP) {
+      setConsultaMsg('Senha do login não encontrada na API de credenciais.')
+      return
+    }
+    if (!batchValidRows.length) {
+      setConsultaMsg('Nenhuma linha válida para consultar.')
+      return
+    }
+
+    let okCount = 0
+    let errCount = 0
+
+    setConsultando(true)
+    try {
+      for (let i = 0; i < batchValidRows.length; i += 1) {
+        const row = batchValidRows[i]
+        setConsultaMsg(`Processando ${i + 1}/${batchValidRows.length}...`)
+
+        const payload = {
+          cpf: row.cpf,
+          nome: row.nome,
+          telefone: row.telefone,
+          produtoId: 28,
+          autoAcceptHeadless: true,
+          stepDelayMs: 2000,
+          login: currentSummary.loginP,
+          senha: currentSummary.senhaP
+        }
+
+        const response = await fetch(PROCESS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        if (response.ok) okCount += 1
+        else errCount += 1
+        // Consume body to keep connection healthy (ignore payload here).
+        await response.text().catch(() => '')
+      }
+
+      setConsultaMsg(`Lote finalizado: ${okCount} sucesso(s), ${errCount} erro(s).`)
+      await fetchSummary()
+    } catch (err) {
+      setConsultaMsg(err?.message || 'Falha ao chamar API de consulta em lote.')
+    } finally {
+      setConsultando(false)
+    }
+  }, [batchValidRows, currentSummary, fetchSummary])
+
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column text-light">
       <TopNav />
@@ -689,45 +875,159 @@ export default function ConsultaPresenca() {
                 </div>
               </div>
               <div className="neo-card neo-lg p-3 p-md-4 mt-3">
-                <div className="opacity-75 small mb-2 text-uppercase">Consulta Individual</div>
-                <form onSubmit={handleConsultarIndividual}>
-                  <div className="row g-2 align-items-end">
-                    <div className="col-12 col-md-3">
-                      <label className="form-label small opacity-75 mb-1">CPF</label>
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="Somente números"
-                        value={cpfConsulta}
-                        onChange={(e) => setCpfConsulta(onlyDigits(e.target.value))}
-                        maxLength={11}
-                      />
-                    </div>
-                    <div className="col-12 col-md-3">
-                      <label className="form-label small opacity-75 mb-1">Telefone</label>
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="Opcional (gera automático)"
-                        value={telefoneConsulta}
-                        onChange={(e) => setTelefoneConsulta(onlyDigits(e.target.value))}
-                        maxLength={11}
-                      />
-                    </div>
-                    <div className="col-12 col-md-4">
-                      <label className="form-label small opacity-75 mb-1">Nome</label>
-                      <input
-                        className="form-control form-control-sm"
-                        placeholder="Nome completo"
-                        value={nomeConsulta}
-                        onChange={(e) => setNomeConsulta(e.target.value)}
-                      />
-                    </div>
-                    <div className="col-12 col-md-2 d-grid">
-                      <button type="submit" className="btn btn-primary btn-sm" disabled={consultando}>
-                        {consultando ? 'Consultando...' : 'Consultar'}
-                      </button>
-                    </div>
+                <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                  <div className="opacity-75 small text-uppercase">Consulta</div>
+                  <div className="btn-group btn-group-sm" role="group" aria-label="Tipo de consulta">
+                    <button
+                      type="button"
+                      className={`btn ${consultaTab === 'individual' ? 'btn-primary' : 'btn-outline-light'}`}
+                      onClick={() => setConsultaTab('individual')}
+                      disabled={consultando}
+                    >
+                      Individual
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${consultaTab === 'lote' ? 'btn-primary' : 'btn-outline-light'}`}
+                      onClick={() => setConsultaTab('lote')}
+                      disabled={consultando}
+                    >
+                      Em lote
+                    </button>
                   </div>
-                </form>
+                </div>
+
+                {consultaTab === 'individual' ? (
+                  <form onSubmit={handleConsultarIndividual}>
+                    <div className="row g-2 align-items-end">
+                      <div className="col-12 col-md-3">
+                        <label className="form-label small opacity-75 mb-1">CPF</label>
+                        <input
+                          className="form-control form-control-sm"
+                          placeholder="Somente números"
+                          value={cpfConsulta}
+                          onChange={(e) => setCpfConsulta(onlyDigits(e.target.value))}
+                          maxLength={11}
+                        />
+                      </div>
+                      <div className="col-12 col-md-3">
+                        <label className="form-label small opacity-75 mb-1">Telefone</label>
+                        <input
+                          className="form-control form-control-sm"
+                          placeholder="Opcional (gera automático)"
+                          value={telefoneConsulta}
+                          onChange={(e) => setTelefoneConsulta(onlyDigits(e.target.value))}
+                          maxLength={11}
+                        />
+                      </div>
+                      <div className="col-12 col-md-4">
+                        <label className="form-label small opacity-75 mb-1">Nome</label>
+                        <input
+                          className="form-control form-control-sm"
+                          placeholder="Nome completo"
+                          value={nomeConsulta}
+                          onChange={(e) => setNomeConsulta(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-12 col-md-2 d-grid">
+                        <button type="submit" className="btn btn-primary btn-sm" disabled={consultando}>
+                          {consultando ? 'Consultando...' : 'Consultar'}
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : (
+                  <div>
+                    <div className="row g-2 align-items-end">
+                      <div className="col-12 col-md-6">
+                        <label className="form-label small opacity-75 mb-1">Arquivo (CSV ou XLSX)</label>
+                        <input
+                          type="file"
+                          className="form-control form-control-sm"
+                          accept=".csv,.xlsx,.xls"
+                          onChange={handleBatchFileChange}
+                          disabled={consultando}
+                        />
+                        <div className="small opacity-75 mt-1">
+                          Colunas obrigatórias: <span className="fw-semibold">cpf</span>, <span className="fw-semibold">nome</span>, <span className="fw-semibold">telefone</span>.
+                          Se <span className="fw-semibold">telefone</span> estiver vazio, será gerado automaticamente.
+                        </div>
+                        {batchFileName && (
+                          <div className="small opacity-75 mt-1">Arquivo: <span className="fw-semibold">{batchFileName}</span></div>
+                        )}
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="small opacity-75">Válidas</div>
+                        <div className="h5 fw-bold mb-0">{batchValidRows.length}</div>
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="small opacity-75">Inválidas</div>
+                        <div className="h5 fw-bold mb-0">{batchInvalidRows.length}</div>
+                      </div>
+                      <div className="col-12 col-md-2 d-grid">
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handleConsultarLote}
+                          disabled={consultando || batchValidRows.length === 0}
+                        >
+                          {consultando ? 'Consultando...' : 'Consultar lote'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {batchInvalidRows.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="small opacity-75" style={{ cursor: 'pointer' }}>
+                          Ver linhas inválidas
+                        </summary>
+                        <div className="small mt-2">
+                          {batchInvalidRows.slice(0, 25).map((r) => (
+                            <div key={`inv-${r.idx}`} className="text-danger">
+                              Linha {r.idx}: {r.error}
+                            </div>
+                          ))}
+                          {batchInvalidRows.length > 25 && (
+                            <div className="opacity-75">+ {batchInvalidRows.length - 25} linha(s)</div>
+                          )}
+                        </div>
+                      </details>
+                    )}
+
+                    {batchValidRows.length > 0 && (
+                      <div className="table-responsive mt-3">
+                        <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
+                          <thead>
+                            <tr>
+                              <th>CPF</th>
+                              <th>Nome</th>
+                              <th>Telefone</th>
+                              <th>Origem</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {batchValidRows.slice(0, 8).map((r) => (
+                              <tr key={`ok-${r.idx}`}>
+                                <td>{formatCpf(r.cpf)}</td>
+                                <td className="text-wrap">{r.nome}</td>
+                                <td>{formatPhone(r.telefone)}</td>
+                                <td className="small opacity-75">{r.phoneOrigin}</td>
+                              </tr>
+                            ))}
+                            {batchValidRows.length > 8 && (
+                              <tr>
+                                <td colSpan={4} className="text-center py-2 opacity-75">
+                                  + {batchValidRows.length - 8} linha(s)
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {consultaMsg && (
                   <div className="small mt-2 opacity-75">{consultaMsg}</div>
                 )}
