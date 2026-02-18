@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiDownload, FiRefreshCw, FiSearch } from 'react-icons/fi'
+import { FiArrowLeft, FiDownload, FiPlay, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -113,6 +113,15 @@ const normalizeBatchRow = (obj, index1Based) => {
   if (telefone[2] !== '9') return { ok: false, idx: index1Based, error: 'O 3º dígito do telefone precisa ser 9.' }
 
   return { ok: true, idx: index1Based, cpf, nome, telefone, phoneOrigin }
+}
+
+const makeJobId = () => {
+  try {
+    // eslint-disable-next-line no-undef
+    return crypto.randomUUID()
+  } catch {
+    return `job_${Date.now()}_${Math.floor(Math.random() * 1e9)}`
+  }
 }
 
 const formatDateOnly = (value) => {
@@ -259,9 +268,7 @@ export default function ConsultaPresenca() {
   const [telefoneConsulta, setTelefoneConsulta] = useState('')
   const [nomeConsulta, setNomeConsulta] = useState('')
   const [consultaTab, setConsultaTab] = useState('individual') // individual | lote
-  const [batchFileName, setBatchFileName] = useState('')
-  const [batchValidRows, setBatchValidRows] = useState([])
-  const [batchInvalidRows, setBatchInvalidRows] = useState([])
+  const [batchJobs, setBatchJobs] = useState([])
   const [consultaMsg, setConsultaMsg] = useState('')
   const [consultando, setConsultando] = useState(false)
   const [consultaResultModal, setConsultaResultModal] = useState(null)
@@ -638,9 +645,6 @@ export default function ConsultaPresenca() {
   const handleBatchFileChange = useCallback(async (event) => {
     const file = event?.target?.files?.[0] ?? null
     setConsultaMsg('')
-    setBatchInvalidRows([])
-    setBatchValidRows([])
-    setBatchFileName(file?.name || '')
 
     if (!file) return
 
@@ -683,15 +687,63 @@ export default function ConsultaPresenca() {
         else invalid.push(norm)
       })
 
-      setBatchValidRows(valid)
-      setBatchInvalidRows(invalid)
       setConsultaMsg(`Arquivo carregado: ${valid.length} válido(s), ${invalid.length} inválido(s).`)
+
+      const job = {
+        id: makeJobId(),
+        fileName: file.name,
+        createdAt: new Date().toISOString(),
+        totalRows: rawRows.length,
+        validRows: valid,
+        invalidRows: invalid,
+        status: 'Pronto',
+        progress: 0,
+        okCount: 0,
+        errCount: 0,
+        finishedAt: null
+      }
+
+      setBatchJobs((prev) => [job, ...prev])
     } catch (err) {
       setConsultaMsg(err?.message || 'Falha ao ler arquivo.')
     }
   }, [])
 
-  const handleConsultarLote = useCallback(async () => {
+  const deleteBatchJob = useCallback((jobId) => {
+    setBatchJobs((prev) => prev.filter((j) => j.id !== jobId))
+  }, [])
+
+  const downloadBatchJobCsv = useCallback((job) => {
+    if (!job?.validRows?.length) {
+      notify.info('Nenhuma linha válida para baixar.', { autoClose: 2000 })
+      return
+    }
+
+    const header = ['cpf', 'nome', 'telefone']
+    const lines = [header.join(';')]
+    for (const r of job.validRows) {
+      lines.push([toCsvCell(r.cpf), toCsvCell(r.nome), toCsvCell(r.telefone)].join(';'))
+    }
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    const safeBase = String(job.fileName || 'lote').replace(/[^\w.\-]+/g, '_')
+    const fileName = `lote_${safeBase}_${stamp}.csv`
+
+    const content = `\ufeff${lines.join('\r\n')}\r\n`
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    URL.revokeObjectURL(url)
+  }, [])
+
+  const startBatchJob = useCallback(async (jobId) => {
     setConsultaMsg('')
 
     if (!currentSummary?.loginP || currentSummary.loginP === '-') {
@@ -702,19 +754,24 @@ export default function ConsultaPresenca() {
       setConsultaMsg('Senha do login não encontrada na API de credenciais.')
       return
     }
-    if (!batchValidRows.length) {
+
+    const job = batchJobs.find((j) => j.id === jobId)
+    if (!job) return
+    if (!job.validRows?.length) {
       setConsultaMsg('Nenhuma linha válida para consultar.')
       return
     }
 
+    setConsultando(true)
+    setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Processando', progress: 0, okCount: 0, errCount: 0, finishedAt: null } : j)))
+
     let okCount = 0
     let errCount = 0
 
-    setConsultando(true)
     try {
-      for (let i = 0; i < batchValidRows.length; i += 1) {
-        const row = batchValidRows[i]
-        setConsultaMsg(`Processando ${i + 1}/${batchValidRows.length}...`)
+      for (let i = 0; i < job.validRows.length; i += 1) {
+        const row = job.validRows[i]
+        setConsultaMsg(`Processando ${i + 1}/${job.validRows.length}...`)
 
         const payload = {
           cpf: row.cpf,
@@ -732,20 +789,27 @@ export default function ConsultaPresenca() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         })
+
         if (response.ok) okCount += 1
         else errCount += 1
-        // Consume body to keep connection healthy (ignore payload here).
         await response.text().catch(() => '')
+
+        const progress = Math.round(((i + 1) / job.validRows.length) * 100)
+        setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, progress, okCount, errCount } : j)))
       }
+
+      const finalStatus = errCount > 0 ? 'Concluído com erros' : 'Concluído'
+      setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: finalStatus, progress: 100, okCount, errCount, finishedAt: new Date().toISOString() } : j)))
 
       setConsultaMsg(`Lote finalizado: ${okCount} sucesso(s), ${errCount} erro(s).`)
       await fetchSummary()
     } catch (err) {
+      setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Erro', finishedAt: new Date().toISOString() } : j)))
       setConsultaMsg(err?.message || 'Falha ao chamar API de consulta em lote.')
     } finally {
       setConsultando(false)
     }
-  }, [batchValidRows, currentSummary, fetchSummary])
+  }, [batchJobs, currentSummary, fetchSummary])
 
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column text-light">
@@ -952,79 +1016,11 @@ export default function ConsultaPresenca() {
                           Colunas obrigatórias: <span className="fw-semibold">cpf</span>, <span className="fw-semibold">nome</span>, <span className="fw-semibold">telefone</span>.
                           Se <span className="fw-semibold">telefone</span> estiver vazio, será gerado automaticamente.
                         </div>
-                        {batchFileName && (
-                          <div className="small opacity-75 mt-1">Arquivo: <span className="fw-semibold">{batchFileName}</span></div>
-                        )}
-                      </div>
-                      <div className="col-6 col-md-2">
-                        <div className="small opacity-75">Válidas</div>
-                        <div className="h5 fw-bold mb-0">{batchValidRows.length}</div>
-                      </div>
-                      <div className="col-6 col-md-2">
-                        <div className="small opacity-75">Inválidas</div>
-                        <div className="h5 fw-bold mb-0">{batchInvalidRows.length}</div>
-                      </div>
-                      <div className="col-12 col-md-2 d-grid">
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={handleConsultarLote}
-                          disabled={consultando || batchValidRows.length === 0}
-                        >
-                          {consultando ? 'Consultando...' : 'Consultar lote'}
-                        </button>
+                        <div className="small opacity-75 mt-1">
+                          Ao carregar um arquivo, ele aparece na tabela abaixo para você iniciar (Play), excluir ou baixar o CSV normalizado.
+                        </div>
                       </div>
                     </div>
-
-                    {batchInvalidRows.length > 0 && (
-                      <details className="mt-2">
-                        <summary className="small opacity-75" style={{ cursor: 'pointer' }}>
-                          Ver linhas inválidas
-                        </summary>
-                        <div className="small mt-2">
-                          {batchInvalidRows.slice(0, 25).map((r) => (
-                            <div key={`inv-${r.idx}`} className="text-danger">
-                              Linha {r.idx}: {r.error}
-                            </div>
-                          ))}
-                          {batchInvalidRows.length > 25 && (
-                            <div className="opacity-75">+ {batchInvalidRows.length - 25} linha(s)</div>
-                          )}
-                        </div>
-                      </details>
-                    )}
-
-                    {batchValidRows.length > 0 && (
-                      <div className="table-responsive mt-3">
-                        <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
-                          <thead>
-                            <tr>
-                              <th>CPF</th>
-                              <th>Nome</th>
-                              <th>Telefone</th>
-                              <th>Origem</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {batchValidRows.slice(0, 8).map((r) => (
-                              <tr key={`ok-${r.idx}`}>
-                                <td>{formatCpf(r.cpf)}</td>
-                                <td className="text-wrap">{r.nome}</td>
-                                <td>{formatPhone(r.telefone)}</td>
-                                <td className="small opacity-75">{r.phoneOrigin}</td>
-                              </tr>
-                            ))}
-                            {batchValidRows.length > 8 && (
-                              <tr>
-                                <td colSpan={4} className="text-center py-2 opacity-75">
-                                  + {batchValidRows.length - 8} linha(s)
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -1036,143 +1032,236 @@ export default function ConsultaPresenca() {
           </div>
         </section>
 
-        <section className="neo-card neo-lg p-0">
-          {!loading && !error && filteredRows.length > 0 && (
-            <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
-              <div className="small opacity-75">Exibindo {startIndex}-{endIndex} de {filteredRows.length}</div>
-              <div className="d-flex align-items-center gap-2">
-                <button
-                  type="button"
-                  className="btn btn-outline-light btn-sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  {'\u2039'}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${currentPage === 1 ? 'btn-primary' : 'btn-outline-light'}`}
-                  onClick={() => setPage(1)}
-                >
-                  1
-                </button>
-                {currentPage > 3 && <span className="opacity-50">...</span>}
-                {Array.from({ length: 5 }, (_, i) => currentPage - 2 + i)
-                  .filter((p) => p > 1 && p < pages)
-                  .map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      className={`btn btn-sm ${currentPage === p ? 'btn-primary' : 'btn-outline-light'}`}
-                      onClick={() => setPage(p)}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                {currentPage < pages - 2 && <span className="opacity-50">...</span>}
-                {pages > 1 && (
+        {consultaTab === 'individual' ? (
+          <section className="neo-card neo-lg p-0">
+            {!loading && !error && filteredRows.length > 0 && (
+              <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
+                <div className="small opacity-75">Exibindo {startIndex}-{endIndex} de {filteredRows.length}</div>
+                <div className="d-flex align-items-center gap-2">
                   <button
                     type="button"
-                    className={`btn btn-sm ${currentPage === pages ? 'btn-primary' : 'btn-outline-light'}`}
-                    onClick={() => setPage(pages)}
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
                   >
-                    {pages}
+                    {'\u2039'}
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="btn btn-outline-light btn-sm"
-                  onClick={() => setPage((p) => Math.min(pages, p + 1))}
-                  disabled={currentPage === pages}
-                >
-                  {'\u203A'}
-                </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${currentPage === 1 ? 'btn-primary' : 'btn-outline-light'}`}
+                    onClick={() => setPage(1)}
+                  >
+                    1
+                  </button>
+                  {currentPage > 3 && <span className="opacity-50">...</span>}
+                  {Array.from({ length: 5 }, (_, i) => currentPage - 2 + i)
+                    .filter((p) => p > 1 && p < pages)
+                    .map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`btn btn-sm ${currentPage === p ? 'btn-primary' : 'btn-outline-light'}`}
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  {currentPage < pages - 2 && <span className="opacity-50">...</span>}
+                  {pages > 1 && (
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${currentPage === pages ? 'btn-primary' : 'btn-outline-light'}`}
+                      onClick={() => setPage(pages)}
+                    >
+                      {pages}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                    disabled={currentPage === pages}
+                  >
+                    {'\u203A'}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-          <div className="table-responsive">
-            <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
-              <thead>
-                <tr>
-                  <th>CPF</th>
-                  <th>Nome</th>
-                  <th>Data de atualização</th>
-                  <th>Elegível</th>
-                  <th>Data de nascimento</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
+            )}
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
+                <thead>
                   <tr>
-                    <td colSpan={5} className="text-center py-4">
-                      <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                      Carregando registros...
-                    </td>
+                    <th>CPF</th>
+                    <th>Nome</th>
+                    <th>Data de atualização</th>
+                    <th>Elegível</th>
+                    <th>Data de nascimento</th>
                   </tr>
-                )}
-                {!loading && error && (
-                  <tr>
-                    <td colSpan={5} className="text-center py-4 text-danger">{error}</td>
-                  </tr>
-                )}
-                {!loading && !error && filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="text-center py-4 opacity-75">Nenhum registro encontrado.</td>
-                  </tr>
-                ) : (
-                   !loading && !error && pagedRows.map((row) => (
-                     <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => openConsultaResultModalFromSource(row?.raw || row)}>
-                      <td>
-                        {(() => {
-                          const cpfDigits = onlyDigits(row.cpf)
-                          return cpfDigits ? (
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr>
+                      <td colSpan={5} className="text-center py-4">
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Carregando registros...
+                      </td>
+                    </tr>
+                  )}
+                  {!loading && error && (
+                    <tr>
+                      <td colSpan={5} className="text-center py-4 text-danger">{error}</td>
+                    </tr>
+                  )}
+                  {!loading && !error && filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-4 opacity-75">Nenhum registro encontrado.</td>
+                    </tr>
+                  ) : (
+                    !loading && !error && pagedRows.map((row) => (
+                      <tr key={row.id} style={{ cursor: 'pointer' }} onClick={() => openConsultaResultModalFromSource(row?.raw || row)}>
+                        <td>
+                          {(() => {
+                            const cpfDigits = onlyDigits(row.cpf)
+                            return cpfDigits ? (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-reset"
+                                title="Copiar CPF"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  copyToClipboard(cpfDigits, 'CPF copiado!')
+                                }}
+                              >
+                                {formatCpf(cpfDigits)}
+                              </button>
+                            ) : (
+                              formatCpf(row.cpf)
+                            )
+                          })()}
+                        </td>
+                        <td>
+                          {row?.nome ? (
                             <button
                               type="button"
-                              className="btn btn-link p-0 text-reset"
-                              title="Copiar CPF"
+                              className="btn btn-link p-0 text-reset text-start"
+                              title="Copiar Nome"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                copyToClipboard(cpfDigits, 'CPF copiado!')
+                                copyToClipboard(row.nome, 'Nome copiado!')
                               }}
                             >
-                              {formatCpf(cpfDigits)}
+                              {row.nome}
                             </button>
                           ) : (
-                            formatCpf(row.cpf)
-                          )
-                        })()}
-                      </td>
-                      <td>
-                        {row?.nome ? (
-                          <button
-                            type="button"
-                            className="btn btn-link p-0 text-reset text-start"
-                            title="Copiar Nome"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              copyToClipboard(row.nome, 'Nome copiado!')
-                            }}
-                          >
-                            {row.nome}
-                          </button>
-                        ) : (
-                          '-'
-                        )}
-                      </td>
-                      <td>{formatDate(row.data)}</td>
-                      <td>
-                        <span className={`badge ${row.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
-                          {row.elegivel ? 'Sim' : 'Não'}
-                        </span>
-                      </td>
-                      <td>{formatDateOnly(row.dataNascimento)}</td>
+                            '-'
+                          )}
+                        </td>
+                        <td>{formatDate(row.data)}</td>
+                        <td>
+                          <span className={`badge ${row.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
+                            {row.elegivel ? 'Sim' : 'Não'}
+                          </span>
+                        </td>
+                        <td>{formatDateOnly(row.dataNascimento)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : (
+          <section className="neo-card neo-lg p-0">
+            <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
+              <div className="small opacity-75">Lotes: {batchJobs.length}</div>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
+                <thead>
+                  <tr>
+                    <th>Nome do arquivo</th>
+                    <th>Quantidade de nomes</th>
+                    <th>Status</th>
+                    <th className="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batchJobs.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="text-center py-4 opacity-75">Nenhum lote carregado.</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                  ) : (
+                    batchJobs.map((job) => {
+                      const statusTxt = String(job.status || 'Pronto')
+                      const cls = statusTxt === 'Processando'
+                        ? 'text-bg-info'
+                        : statusTxt === 'Concluído'
+                          ? 'text-bg-success'
+                          : statusTxt === 'Concluído com erros'
+                            ? 'text-bg-warning'
+                            : statusTxt === 'Erro'
+                              ? 'text-bg-danger'
+                              : 'text-bg-secondary'
+
+                      const canRun = !consultando && statusTxt !== 'Processando'
+                      const canDelete = statusTxt !== 'Processando'
+                      const canDownload = (job?.validRows?.length ?? 0) > 0
+                      const qty = Number(job?.totalRows ?? 0)
+
+                      return (
+                        <tr key={job.id}>
+                          <td className="text-wrap">{job.fileName}</td>
+                          <td title={`${job.validRows?.length ?? 0} válido(s), ${job.invalidRows?.length ?? 0} inválido(s)`}>
+                            {qty}
+                          </td>
+                          <td>
+                            <span className={`badge ${cls}`}>
+                              {statusTxt}{statusTxt === 'Processando' ? ` (${job.progress ?? 0}%)` : ''}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <div className="d-inline-flex align-items-center gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-success"
+                                title="Iniciar"
+                                aria-label="Iniciar"
+                                onClick={() => startBatchJob(job.id)}
+                                disabled={!canRun}
+                              >
+                                <FiPlay />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
+                                title="Excluir"
+                                aria-label="Excluir"
+                                onClick={() => deleteBatchJob(job.id)}
+                                disabled={!canDelete}
+                              >
+                                <FiTrash2 />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
+                                title="Baixar"
+                                aria-label="Baixar"
+                                onClick={() => downloadBatchJobCsv(job)}
+                                disabled={!canDownload}
+                              >
+                                <FiDownload />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </main>
 
       {consultaResultModal && (
