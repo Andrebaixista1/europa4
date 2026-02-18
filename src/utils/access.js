@@ -9,3 +9,8 @@ export function canAccessConsultasV8(user) {
   const userId = toNumberOrNull(user?.id)
   return login === 'master' || userId === 1 || userId === 3347
 }
+
+export function canAccessConsultaPresenca(user) {
+  const userId = toNumberOrNull(user?.id)
+  return userId === 1 || userId === 3349
+}

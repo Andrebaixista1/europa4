@@ -33,6 +33,12 @@ export default defineConfig(({ mode }) => {
             },
           }
           : {}),
+        '/api/presenca': {
+          target: 'http://85.31.61.242:3011',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path.replace(/^\/api\/presenca/, ''),
+        },
       },
     },
   }

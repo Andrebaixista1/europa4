@@ -4,7 +4,7 @@ import * as Fi from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles } from '../utils/roles.js'
 import { useSidebar } from '../context/SidebarContext.jsx'
-import { canAccessConsultasV8 } from '../utils/access.js'
+import { canAccessConsultaPresenca, canAccessConsultasV8 } from '../utils/access.js'
 
 function Icon({ name, size = 20 }) {
   const Comp = Fi[name] || Fi.FiSquare
@@ -30,6 +30,7 @@ export default function SidebarNav() {
   const role = user?.role
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
   const allowConsultasV8 = canAccessConsultasV8(user)
+  const allowConsultaPresenca = canAccessConsultaPresenca(user)
   const prevPath = useRef(location.pathname)
 
   const menu = useMemo(() => {
@@ -48,6 +49,7 @@ export default function SidebarNav() {
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
         { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
         { label: 'Histórico de Consultas', to: '/consultas/historico' },
+        ...(allowConsultaPresenca ? [{ label: 'Consulta Presença', to: '/consultas/presenca' }] : []),
         ...(allowConsultasV8 ? [{ label: 'Consultas V8', to: '/consultas/v8' }] : [])
       ]
     })
@@ -76,7 +78,7 @@ export default function SidebarNav() {
     }
 
     return items
-  }, [role, level, allowConsultasV8])
+  }, [role, level, allowConsultasV8, allowConsultaPresenca])
 
   const isActive = (path) => {
     if (!path) return false
