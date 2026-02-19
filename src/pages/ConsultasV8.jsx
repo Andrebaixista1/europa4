@@ -29,6 +29,22 @@ const normalizeRows = (payload) => {
 
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '')
 
+const normalizeCpf11 = (value) => {
+  const digits = onlyDigits(value)
+  if (!digits) return ''
+  const base = digits.length > 11 ? digits.slice(-11) : digits
+  return base.padStart(11, '0')
+}
+
+const normalizeClientName = (value) => {
+  const txt = String(value ?? '').trim().replace(/\s+/g, ' ')
+  if (!txt) return ''
+  return txt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+}
+
 const formatCpf = (value) => {
   const cpf = onlyDigits(value)
   if (cpf.length !== 11) return cpf || '-'
@@ -164,12 +180,25 @@ export default function ConsultasV8() {
   const [statusFilters, setStatusFilters] = useState([])
   const [valorMin, setValorMin] = useState('')
   const [valorMax, setValorMax] = useState('')
+  const [consultaCpf, setConsultaCpf] = useState('')
+  const [consultaNome, setConsultaNome] = useState('')
+  const [consultaError, setConsultaError] = useState('')
 
-  const fetchConsultas = useCallback(async (signal) => {
+  const fetchConsultas = useCallback(async (signal, query = {}) => {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(API_URL, { method: 'GET', signal })
+      const requestUrl = new URL(API_URL)
+      const userId = toNumberOrNull(user?.id)
+      if (userId !== null) {
+        requestUrl.searchParams.set('user_id', String(userId))
+      }
+      const normalizedCpf = normalizeCpf11(query?.cpf)
+      const normalizedNome = normalizeClientName(query?.nome)
+      if (normalizedCpf) requestUrl.searchParams.set('cpf', normalizedCpf)
+      if (normalizedNome) requestUrl.searchParams.set('nome', normalizedNome)
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET', signal })
       const raw = await response.text()
       if (!response.ok) {
         throw new Error(raw || `HTTP ${response.status}`)
@@ -189,13 +218,42 @@ export default function ConsultasV8() {
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     const controller = new AbortController()
     fetchConsultas(controller.signal)
     return () => controller.abort()
   }, [fetchConsultas])
+
+  const handleConsultaSubmit = useCallback((event) => {
+    event.preventDefault()
+    const normalizedCpf = normalizeCpf11(consultaCpf)
+    const normalizedNome = normalizeClientName(consultaNome)
+    setConsultaCpf(normalizedCpf)
+    setConsultaNome(normalizedNome)
+
+    if (!normalizedCpf || !normalizedNome) {
+      setConsultaError('Informe CPF e nome do cliente.')
+      return
+    }
+
+    setConsultaError('')
+    fetchConsultas(undefined, { cpf: normalizedCpf, nome: normalizedNome })
+  }, [consultaCpf, consultaNome, fetchConsultas])
+
+  const handleRefresh = useCallback(() => {
+    const normalizedCpf = normalizeCpf11(consultaCpf)
+    const normalizedNome = normalizeClientName(consultaNome)
+    if (normalizedCpf && normalizedNome) {
+      setConsultaCpf(normalizedCpf)
+      setConsultaNome(normalizedNome)
+      setConsultaError('')
+      fetchConsultas(undefined, { cpf: normalizedCpf, nome: normalizedNome })
+      return
+    }
+    fetchConsultas()
+  }, [consultaCpf, consultaNome, fetchConsultas])
 
   const visibleRows = useMemo(() => {
     const userId = toNumberOrNull(user?.id)
@@ -470,7 +528,7 @@ export default function ConsultasV8() {
           <button
             type="button"
             className="btn btn-outline-info btn-sm d-flex align-items-center gap-2"
-            onClick={() => fetchConsultas()}
+            onClick={handleRefresh}
             disabled={loading}
           >
             <FiRefreshCw size={14} />
@@ -480,11 +538,11 @@ export default function ConsultasV8() {
 
         <section className="mb-3">
           <div className="row g-3">
-            <div className="col-12">
+            <div className="col-12 col-xxl-9">
               <div className="neo-card neo-lg p-3 p-md-4 h-100" style={{ overflow: 'visible', position: 'relative', zIndex: 20 }}>
                 <div className="opacity-75 small mb-2 text-uppercase">Filtros</div>
                 <div style={{ overflow: 'visible' }}>
-                  <div className="d-flex flex-nowrap gap-2 align-items-end">
+                  <div className="d-flex flex-wrap gap-2 align-items-end">
                     <div style={{ flex: '0 0 210px' }}>
                       <label className="form-label small opacity-75 mb-1" htmlFor="v8-search">Buscar</label>
                       <input
@@ -625,6 +683,45 @@ export default function ConsultasV8() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="col-12 col-xxl-3">
+              <div className="neo-card neo-lg p-3 p-md-4 h-100">
+                <div className="opacity-75 small mb-2 text-uppercase">Consulta</div>
+                <form className="d-flex flex-column gap-2" onSubmit={handleConsultaSubmit}>
+                  <div>
+                    <label className="form-label small opacity-75 mb-1" htmlFor="v8-consulta-cpf">CPF</label>
+                    <input
+                      id="v8-consulta-cpf"
+                      className="form-control form-control-sm"
+                      inputMode="numeric"
+                      maxLength={14}
+                      placeholder="00000000000"
+                      value={consultaCpf}
+                      onChange={(e) => setConsultaCpf(onlyDigits(e.target.value).slice(0, 11))}
+                      onBlur={() => setConsultaCpf((prev) => normalizeCpf11(prev))}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="form-label small opacity-75 mb-1" htmlFor="v8-consulta-nome">Nome do cliente</label>
+                    <input
+                      id="v8-consulta-nome"
+                      className="form-control form-control-sm"
+                      placeholder="NOME DO CLIENTE"
+                      value={consultaNome}
+                      onChange={(e) => setConsultaNome(e.target.value)}
+                      onBlur={() => setConsultaNome((prev) => normalizeClientName(prev))}
+                    />
+                  </div>
+
+                  {consultaError && <div className="small text-danger">{consultaError}</div>}
+
+                  <button type="submit" className="btn btn-outline-info btn-sm mt-1" disabled={loading}>
+                    Consultar
+                  </button>
+                </form>
               </div>
             </div>
 

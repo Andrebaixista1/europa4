@@ -502,14 +502,14 @@ const parsePauseStatusPayload = (rawText) => {
 
 const mapTabelaFromFlat = (row) => {
   const src = row || {}
-  const nome = pick(src, ['nomeTipo', 'nome', 'tipo_nome'], '')
-  const prazo = pick(src, ['prazo'], '')
-  const valorLiberado = pick(src, ['valorLiberado'], '')
-  const valorParcela = pick(src, ['valorParcela'], '')
-  const taxaJuros = pick(src, ['taxaJuros'], '')
-  const taxaSeguro = pick(src, ['taxaSeguro'], '')
-  const valorSeguro = pick(src, ['valorSeguro'], '')
-  const id = pick(src, ['idTipo', 'id'], null)
+  const nome = pick(src, ['nomeTipo', 'nome_tipo', 'nome', 'tipo_nome'], '')
+  const prazo = pick(src, ['prazo', 'prazo_meses'], '')
+  const valorLiberado = pick(src, ['valorLiberado', 'valor_liberado', 'valor'], '')
+  const valorParcela = pick(src, ['valorParcela', 'valor_parcela'], '')
+  const taxaJuros = pick(src, ['taxaJuros', 'taxa_juros'], '')
+  const taxaSeguro = pick(src, ['taxaSeguro', 'taxa_seguro'], '')
+  const valorSeguro = pick(src, ['valorSeguro', 'valor_seguro'], '')
+  const id = pick(src, ['idTipo', 'id_tipo', 'id'], null)
 
   if (!nome && !prazo && !valorLiberado && !valorParcela && !taxaJuros && !taxaSeguro && !valorSeguro) return null
   return {
@@ -523,6 +523,21 @@ const mapTabelaFromFlat = (row) => {
     taxaSeguro: toNumberOrNull(taxaSeguro) ?? taxaSeguro,
     valorSeguro: toNumberOrNull(valorSeguro) ?? valorSeguro
   }
+}
+
+const hasTabelaDisponivel = (row) => {
+  const src = row || {}
+  const keys = [
+    pick(src, ['idTipo', 'id_tipo'], ''),
+    pick(src, ['nomeTipo', 'nome_tipo', 'tipo_nome'], ''),
+    pick(src, ['prazo', 'prazo_meses'], ''),
+    pick(src, ['valorLiberado', 'valor_liberado', 'valor'], ''),
+    pick(src, ['valorParcela', 'valor_parcela'], ''),
+    pick(src, ['taxaJuros', 'taxa_juros'], ''),
+    pick(src, ['taxaSeguro', 'taxa_seguro'], ''),
+    pick(src, ['valorSeguro', 'valor_seguro'], '')
+  ]
+  return keys.some((value) => String(value ?? '').trim() !== '')
 }
 
 export default function ConsultaPresenca() {
@@ -553,6 +568,7 @@ export default function ConsultaPresenca() {
   const [selectedBatchUpload, setSelectedBatchUpload] = useState(null)
   const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
   const [deleteLoteModal, setDeleteLoteModal] = useState(null)
+  const [downloadLoteModal, setDownloadLoteModal] = useState(null)
   const [deletingLote, setDeletingLote] = useState(false)
   const [consultaMsg, setConsultaMsg] = useState('')
   const [consultando, setConsultando] = useState(false)
@@ -1521,7 +1537,7 @@ export default function ConsultaPresenca() {
     }
   }, [consultaPaused, fetchLoteGroups, loteAutoPollingEnabled, summaryRows, selectedLoginIndex, uploadingBatchFile, user?.id])
 
-  const downloadBatchJobCsv = useCallback(async (job) => {
+  const downloadBatchJobCsv = useCallback(async (job, mode = 'all') => {
     if (!user?.id) {
       notify.error('Usuário sem ID.', { autoClose: 2000 })
       return
@@ -1583,8 +1599,23 @@ export default function ConsultaPresenca() {
         if (chosenKey) rowsToExport = groups.get(chosenKey) || list
       }
 
+      const nonPendingRows = rowsToExport.filter((row) => {
+        const status = pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')
+        return !isPendingLoteStatus(status)
+      })
+
+      if (!nonPendingRows.length) {
+        notify.info('Nenhum registro concluído para exportação (pendentes foram ignorados).', { autoClose: 2200 })
+        return
+      }
+
+      const onlyWithTabelas = String(mode || 'all') === 'tabelas'
+      rowsToExport = onlyWithTabelas
+        ? nonPendingRows.filter((row) => hasTabelaDisponivel(row))
+        : nonPendingRows
+
       if (!rowsToExport.length) {
-        notify.info('Nenhum registro retornado para exportação.', { autoClose: 2000 })
+        notify.info('Nenhum registro com tabelas disponíveis para exportação.', { autoClose: 2200 })
         return
       }
 
@@ -1618,7 +1649,8 @@ export default function ConsultaPresenca() {
 
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const safeBase = String(job.fileName || 'lote').replace(/[^\w.\-]+/g, '_')
-      const fileName = `lote_${safeBase}_${stamp}.csv`
+      const modeSuffix = onlyWithTabelas ? 'tabelas' : 'all'
+      const fileName = `lote_${safeBase}_${modeSuffix}_${stamp}.csv`
 
       const content = `\ufeff${lines.join('\r\n')}\r\n`
       const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
@@ -1635,6 +1667,25 @@ export default function ConsultaPresenca() {
       notify.error(err?.message || 'Falha ao baixar lote.', { autoClose: 2500 })
     }
   }, [user?.id, currentSummary?.loginP])
+
+  const askDownloadBatchJobCsv = useCallback((job) => {
+    if (!job?.fileName) {
+      notify.error('Nome do arquivo não encontrado.', { autoClose: 2000 })
+      return
+    }
+    setDownloadLoteModal({
+      fileName: String(job.fileName),
+      createdAt: String(job?.createdAt || ''),
+      totalRows: Number(job?.totalRows ?? 0)
+    })
+  }, [])
+
+  const handleConfirmDownloadBatch = useCallback((mode) => {
+    if (!downloadLoteModal) return
+    const job = { fileName: downloadLoteModal.fileName, createdAt: downloadLoteModal.createdAt }
+    setDownloadLoteModal(null)
+    downloadBatchJobCsv(job, mode)
+  }, [downloadLoteModal, downloadBatchJobCsv])
 
   const askDeleteLoteGroup = useCallback((group) => {
     const login = String(group?.loginP || currentSummary?.loginP || '').trim()
@@ -2249,7 +2300,7 @@ export default function ConsultaPresenca() {
                                 className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
                                 title="Baixar"
                                 aria-label="Baixar"
-                                onClick={() => downloadBatchJobCsv(job)}
+                                onClick={() => askDownloadBatchJobCsv({ fileName: job.fileName, createdAt: job.createdAt, totalRows: qty })}
                                 disabled={!canDownload}
                               >
                                 <FiDownload />
@@ -2330,7 +2381,7 @@ export default function ConsultaPresenca() {
                                 className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
                                 title="Baixar"
                                 aria-label="Baixar"
-                                onClick={() => downloadBatchJobCsv({ fileName: group.file, createdAt: group.created })}
+                                onClick={() => askDownloadBatchJobCsv({ fileName: group.file, createdAt: group.created, totalRows: qty })}
                               >
                                 <FiDownload />
                               </button>
@@ -2636,6 +2687,68 @@ export default function ConsultaPresenca() {
                   onClick={deleteLoteGroup}
                 >
                   {deletingLote ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {downloadLoteModal && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1068 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setDownloadLoteModal(null)}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: 'min(92vw, 560px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content modal-dark">
+              <div className="modal-header">
+                <h5 className="modal-title">Download em lote</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Close"
+                  onClick={() => setDownloadLoteModal(null)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="small opacity-75 mb-1">Arquivo</div>
+                <div className="mb-3 text-break">{downloadLoteModal.fileName}</div>
+                {downloadLoteModal.totalRows > 0 && (
+                  <>
+                    <div className="small opacity-75 mb-1">Quantidade de linhas</div>
+                    <div className="mb-3">{downloadLoteModal.totalRows}</div>
+                  </>
+                )}
+                <div className="small opacity-75">Pendentes serão ignorados em ambas as opções.</div>
+              </div>
+              <div className="modal-footer d-flex flex-wrap gap-2 justify-content-end">
+                <button
+                  type="button"
+                  className="btn btn-outline-light"
+                  onClick={() => setDownloadLoteModal(null)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-info"
+                  onClick={() => handleConfirmDownloadBatch('all')}
+                >
+                  Todas as linhas
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() => handleConfirmDownloadBatch('tabelas')}
+                >
+                  Só tabelas disponíveis
                 </button>
               </div>
             </div>
