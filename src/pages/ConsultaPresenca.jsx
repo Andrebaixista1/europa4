@@ -136,20 +136,37 @@ const groupLoteRows = (rows) => {
       created,
       loginP,
       total: 0,
+      totalRows: 0,
       pending: 0,
       success: 0,
       error: 0,
       okByValue: 0,
       noValue: 0,
       durationMsTotal: 0,
-      durationCount: 0
+      durationCount: 0,
+      statusOtherCount: 0,
+      cpfSet: new Set()
     }
     if (!entry.loginP && loginP) entry.loginP = loginP
-    entry.total += 1
+    entry.totalRows += 1
+    const cpfKey = normalizeCpfBatch(row?.cpf ?? row?.CPF ?? row?.Cpf ?? '')
+    if (cpfKey) {
+      if (!entry.cpfSet.has(cpfKey)) {
+        entry.cpfSet.add(cpfKey)
+        entry.total += 1
+      }
+    } else {
+      entry.total += 1
+    }
     const normalized = status.toLowerCase()
-    if (normalized.includes('pendente')) entry.pending += 1
-    else if (normalized.includes('erro') || normalized.includes('falha')) entry.error += 1
-    else entry.success += 1
+    const isPending = normalized.includes('pendente')
+    const isDone = normalized === 'concluído' || normalized === 'concluido' || normalized === 'ok'
+    if (isPending) entry.pending += 1
+    else if (isDone) entry.success += 1
+    else {
+      entry.error += 1
+      entry.statusOtherCount += 1
+    }
 
     const valorLiberado = parseMoneyValue(row?.valorLiberado ?? row?.valor_liberado ?? row?.valor ?? 0)
     if (valorLiberado > 0) entry.okByValue += 1
@@ -164,6 +181,7 @@ const groupLoteRows = (rows) => {
   }
   return Array.from(map.values()).map((entry) => ({
     ...entry,
+    cpfSet: undefined,
     avgDurationMs: entry.durationCount > 0 ? (entry.durationMsTotal / entry.durationCount) : null
   }))
 }
@@ -369,6 +387,11 @@ const batchStatusClassName = (status) => {
 const isDoneLoteStatus = (status) => {
   const s = String(status ?? '').trim().toLowerCase()
   return s === 'concluído' || s === 'concluido' || s === 'ok'
+}
+
+const isPendingLoteStatus = (status) => {
+  const s = String(status ?? '').trim().toLowerCase()
+  return s.includes('pendente')
 }
 
 const isDoneIndividualStatus = (status) => {
@@ -1110,9 +1133,9 @@ export default function ConsultaPresenca() {
         const rows = await fetchLoteRows({ loginP: currentSummary.loginP, nomeArquivo: job.fileName })
         if (!rows.length) return
         const statuses = rows.map((r) => String(r?.status ?? "").toLowerCase())
-        const pendingCount = statuses.filter((s) => s === "pendente").length
-        const successCount = statuses.filter((s) => s === "concluído" || s === "concluido" || s === "ok").length
-        const errorCount = statuses.filter((s) => s === "erro" || s === "falha").length
+        const pendingCount = statuses.filter((s) => isPendingLoteStatus(s)).length
+        const successCount = statuses.filter((s) => isDoneLoteStatus(s)).length
+        const errorCount = statuses.filter((s) => !isPendingLoteStatus(s) && !isDoneLoteStatus(s)).length
         const durationValues = rows
           .map((r) => getRowDurationMs(r))
           .filter((v) => v !== null)
@@ -1417,9 +1440,9 @@ export default function ConsultaPresenca() {
     setDeleteLoteModal({
       loginP: login,
       fileName: String(group?.file || '-'),
-      totalRows: Number(group?.total || 0),
+      totalRows: Number(group?.totalRows ?? group?.total ?? 0),
       eligibleCount: Number(group?.okByValue || 0),
-      notEligibleCount: Number(group?.noValue || 0)
+      notEligibleCount: Number(group?.statusOtherCount ?? group?.error ?? 0)
     })
   }, [currentSummary?.loginP])
 
@@ -2037,10 +2060,10 @@ export default function ConsultaPresenca() {
                               </span>
                               <span
                                 className="badge text-bg-danger"
-                                title={`Não elegível: ${Number(group?.noValue ?? 0)}`}
-                                aria-label={`Não elegível: ${Number(group?.noValue ?? 0)}`}
+                                title={`Fora de Pendente/Concluído: ${Number(group?.statusOtherCount ?? group?.error ?? 0)}`}
+                                aria-label={`Fora de Pendente/Concluído: ${Number(group?.statusOtherCount ?? group?.error ?? 0)}`}
                               >
-                                {Number(group?.noValue ?? 0)}
+                                {Number(group?.statusOtherCount ?? group?.error ?? 0)}
                               </span>
                             </div>
                           </td>
@@ -2270,8 +2293,8 @@ export default function ConsultaPresenca() {
                   </span>
                   <span
                     className="badge text-bg-danger"
-                    title={`Não elegível: ${Number(deleteLoteModal.notEligibleCount || 0)}`}
-                    aria-label={`Não elegível: ${Number(deleteLoteModal.notEligibleCount || 0)}`}
+                    title={`Fora de Pendente/Concluído: ${Number(deleteLoteModal.notEligibleCount || 0)}`}
+                    aria-label={`Fora de Pendente/Concluído: ${Number(deleteLoteModal.notEligibleCount || 0)}`}
                   >
                     {Number(deleteLoteModal.notEligibleCount || 0)}
                   </span>
