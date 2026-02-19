@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiDownload, FiPlay, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi'
+import { FiArrowLeft, FiDownload, FiPause, FiPlay, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -13,6 +13,9 @@ const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-l
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
 const INDIVIDUAL_RESPONSE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual-resposta/'
 const NOVO_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/novo-login'
+const CONSULTA_PAUSE_STATUS_URL = `${PRESENCA_API_BASE}/api/consulta/pause-status`
+const CONSULTA_PAUSE_URL = `${PRESENCA_API_BASE}/api/consulta/pause`
+const CONSULTA_RESUME_URL = `${PRESENCA_API_BASE}/api/consulta/resume`
 const LOTE_CSV_API_URL = `${PRESENCA_API_BASE}/api/presencabank-lotecsv`
 const LOTE_DELETE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote-delete/'
 const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
@@ -446,6 +449,57 @@ const parseBoolean = (value) => {
   return false
 }
 
+const parsePauseStatusPayload = (rawText) => {
+  let payload = {}
+  try { payload = rawText ? JSON.parse(rawText) : {} } catch { payload = {} }
+
+  const nested = (payload && typeof payload === 'object' && payload.data && typeof payload.data === 'object')
+    ? payload.data
+    : {}
+  const reason = pick(payload, ['reason', 'motivo', 'message'], pick(nested, ['reason', 'motivo', 'message'], ''))
+  const pauseKeys = ['paused', 'isPaused', 'pause', 'pausado']
+  const readByKeys = (obj, keys) => {
+    if (!obj || typeof obj !== 'object') return undefined
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key]
+    }
+    return undefined
+  }
+
+  const explicitPauseValue = (() => {
+    const root = readByKeys(payload, pauseKeys)
+    if (root !== undefined) return root
+    return readByKeys(nested, pauseKeys)
+  })()
+
+  if (explicitPauseValue !== undefined && explicitPauseValue !== null && String(explicitPauseValue).trim() !== '') {
+    return {
+      known: true,
+      paused: parseBoolean(explicitPauseValue),
+      reason: String(reason || '')
+    }
+  }
+
+  const statusToken = String(
+    readByKeys(payload, ['status', 'state', 'situacao']) ??
+    readByKeys(nested, ['status', 'state', 'situacao']) ??
+    ''
+  )
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+  if (['paused', 'pausado', 'pausa'].includes(statusToken)) {
+    return { known: true, paused: true, reason: String(reason || '') }
+  }
+  if (['running', 'active', 'ativo', 'resumed', 'retomado'].includes(statusToken)) {
+    return { known: true, paused: false, reason: String(reason || '') }
+  }
+
+  return { known: false, paused: false, reason: String(reason || '') }
+}
+
 const mapTabelaFromFlat = (row) => {
   const src = row || {}
   const nome = pick(src, ['nomeTipo', 'nome', 'tipo_nome'], '')
@@ -507,6 +561,10 @@ export default function ConsultaPresenca() {
   const [novoLogin, setNovoLogin] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [savingNovoLogin, setSavingNovoLogin] = useState(false)
+  const [consultaPaused, setConsultaPaused] = useState(false)
+  const [consultaPauseReason, setConsultaPauseReason] = useState('')
+  const [consultaPauseBusy, setConsultaPauseBusy] = useState(false)
+  const consultaPauseSyncTimerRef = useRef(null)
 
   const fetchHistoricoRows = useCallback(async (loginP, signal) => {
     const userId = user?.id
@@ -748,9 +806,47 @@ export default function ConsultaPresenca() {
     setLotePage(1)
   }, [consultaTab, selectedLoginIndex])
 
+  const fetchConsultaPauseStatus = useCallback(async (signal) => {
+    try {
+      const response = await fetch(CONSULTA_PAUSE_STATUS_URL, { method: 'GET', signal })
+      if (!response.ok) return
+      const rawText = await response.text()
+      const { known, paused, reason } = parsePauseStatusPayload(rawText)
+      if (!known) return
+      setConsultaPaused(paused)
+      setConsultaPauseReason(paused ? reason : '')
+    } catch (err) {
+      if (err?.name === 'AbortError') return
+      /* ignore */
+    }
+  }, [])
+
   const refresh = () => {
     fetchSummary()
+    fetchConsultaPauseStatus()
   }
+
+  useEffect(() => () => {
+    if (consultaPauseSyncTimerRef.current) {
+      clearTimeout(consultaPauseSyncTimerRef.current)
+      consultaPauseSyncTimerRef.current = null
+    }
+  }, [])
+
+  const schedulePauseStatusSync = useCallback((delayMs = 2200) => {
+    if (consultaPauseSyncTimerRef.current) {
+      clearTimeout(consultaPauseSyncTimerRef.current)
+    }
+    consultaPauseSyncTimerRef.current = setTimeout(() => {
+      fetchConsultaPauseStatus()
+    }, delayMs)
+  }, [fetchConsultaPauseStatus])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchConsultaPauseStatus(controller.signal)
+    return () => controller.abort()
+  }, [fetchConsultaPauseStatus])
 
   const openAddLoginModal = () => {
     setNovoLogin('')
@@ -1262,6 +1358,49 @@ export default function ConsultaPresenca() {
     }
   }, [currentSummary?.loginP, fetchLoteRows, loteAutoPollingEnabled, user?.id])
 
+  const toggleConsultaPause = useCallback(async () => {
+    if (consultaPauseBusy) return
+    try {
+      setConsultaPauseBusy(true)
+      if (consultaPaused) {
+        const response = await fetch(CONSULTA_RESUME_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        })
+        const rawText = await response.text()
+        if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+        setConsultaPaused(false)
+        setConsultaPauseReason('')
+        schedulePauseStatusSync()
+        notify.success('Processamento retomado.', { autoClose: 2200 })
+        const activeLogin = String(currentSummary?.loginP || '').trim()
+        if (activeLogin && activeLogin !== '-') {
+          const hasPending = await fetchLoteGroups(undefined, activeLogin)
+          setLoteAutoPollingEnabled(Boolean(hasPending))
+        }
+      } else {
+        const response = await fetch(CONSULTA_PAUSE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: 'Pausa manual via tela de lote.' })
+        })
+        const rawText = await response.text()
+        if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+        const parsed = parsePauseStatusPayload(rawText)
+        setConsultaPaused(true)
+        setConsultaPauseReason(parsed.reason || 'Pausa manual via tela de lote.')
+        schedulePauseStatusSync()
+        setLoteAutoPollingEnabled(false)
+        notify.warn('Processamento pausado.', { autoClose: 2200 })
+      }
+    } catch (err) {
+      notify.error(err?.message || 'Falha ao alterar pausa do processamento.', { autoClose: 2800 })
+    } finally {
+      setConsultaPauseBusy(false)
+    }
+  }, [consultaPauseBusy, consultaPaused, currentSummary?.loginP, fetchLoteGroups, schedulePauseStatusSync])
+
   const uploadBatchFile = useCallback(async () => {
     if (uploadingBatchFile || loteCsvUploadInFlightRef.current) return
     if (!selectedBatchUpload) {
@@ -1361,7 +1500,7 @@ export default function ConsultaPresenca() {
 
   useEffect(() => {
     const login = summaryRows[selectedLoginIndex]?.loginP
-    if (uploadingBatchFile || !loteAutoPollingEnabled || !user?.id || !login || login === '-') return undefined
+    if (uploadingBatchFile || consultaPaused || !loteAutoPollingEnabled || !user?.id || !login || login === '-') return undefined
 
     let cancelled = false
     const tick = async () => {
@@ -1380,7 +1519,7 @@ export default function ConsultaPresenca() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [fetchLoteGroups, loteAutoPollingEnabled, summaryRows, selectedLoginIndex, uploadingBatchFile, user?.id])
+  }, [consultaPaused, fetchLoteGroups, loteAutoPollingEnabled, summaryRows, selectedLoginIndex, uploadingBatchFile, user?.id])
 
   const downloadBatchJobCsv = useCallback(async (job) => {
     if (!user?.id) {
@@ -1983,7 +2122,16 @@ export default function ConsultaPresenca() {
         ) : (
           <section className="neo-card neo-lg p-0">
             <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
-              <div className="small opacity-75">Lotes: {loteSourceRows.length}</div>
+              <div className="d-flex align-items-center gap-2">
+                <div className="small opacity-75">Lotes: {loteSourceRows.length}</div>
+                <span
+                  className={`badge ${consultaPaused ? 'text-bg-warning' : 'text-bg-success'}`}
+                  title={consultaPaused ? (consultaPauseReason || 'Pausa manual') : 'Processamento ativo'}
+                  aria-label={consultaPaused ? (consultaPauseReason || 'Pausa manual') : 'Processamento ativo'}
+                >
+                  {consultaPaused ? 'Pausado' : 'Ativo'}
+                </span>
+              </div>
               {loteSourceRows.length > 0 && (
                 <div className="d-flex align-items-center gap-2">
                   <div className="small opacity-75 d-none d-md-block">Exibindo {loteStartIndex}-{loteEndIndex} de {loteSourceRows.length}</div>
@@ -2068,6 +2216,16 @@ export default function ConsultaPresenca() {
                             <div className="d-inline-flex align-items-center gap-2">
                               <button
                                 type="button"
+                                className={`btn btn-ghost btn-sm btn-icon ${consultaPaused ? 'btn-ghost-success' : 'btn-ghost-info'}`}
+                                title={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
+                                aria-label={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
+                                onClick={toggleConsultaPause}
+                                disabled={consultaPauseBusy}
+                              >
+                                {consultaPaused ? <FiPlay /> : <FiPause />}
+                              </button>
+                              <button
+                                type="button"
                                 className="btn btn-ghost btn-sm btn-icon btn-ghost-success"
                                 title="Iniciar"
                                 aria-label="Iniciar"
@@ -2148,6 +2306,16 @@ export default function ConsultaPresenca() {
                           </td>
                           <td className="text-center">
                             <div className="d-inline-flex align-items-center gap-2">
+                              <button
+                                type="button"
+                                className={`btn btn-ghost btn-sm btn-icon ${consultaPaused ? 'btn-ghost-success' : 'btn-ghost-info'}`}
+                                title={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
+                                aria-label={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
+                                onClick={toggleConsultaPause}
+                                disabled={consultaPauseBusy}
+                              >
+                                {consultaPaused ? <FiPlay /> : <FiPause />}
+                              </button>
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
