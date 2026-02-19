@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiDownload, FiPlay, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
@@ -6,11 +6,15 @@ import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 
+const PRESENCA_API_BASE = import.meta.env.DEV ? '/api/presenca' : 'http://85.31.61.242:3011'
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const HIST_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-historico/'
 const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
-const PROCESS_URL = '/api/presenca/api/process/individual'
-const PENDING_UPLOAD_URL = '/api/presenca/pending'
+const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
+const INDIVIDUAL_RESPONSE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual-resposta/'
+const LOTE_CSV_API_URL = 'https://n8n.apivieiracred.store/webhook-test/api/presencabank-lotecsv/'
+const LOTE_DELETE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote-delete/'
+const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
 
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '')
 
@@ -39,6 +43,129 @@ const dateMinuteKey = (value) => {
   if (Number.isNaN(d.getTime())) return String(value).trim()
   const pad2 = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+const getRowDurationMs = (row) => {
+  const createdRaw = row?.created_at || row?.createdAt || row?.data || ''
+  const updatedRaw = row?.updated_at || row?.updatedAt || ''
+  if (!createdRaw || !updatedRaw) return null
+
+  const created = new Date(createdRaw).getTime()
+  const updated = new Date(updatedRaw).getTime()
+  if (!Number.isFinite(created) || !Number.isFinite(updated)) return null
+
+  const diff = updated - created
+  if (diff < 0) return null
+  return diff
+}
+
+const formatAvgDuration = (ms) => {
+  if (!Number.isFinite(ms) || ms < 0) return '-'
+  const totalSeconds = Math.round(ms / 1000)
+  if (totalSeconds < 60) return `${totalSeconds}s`
+
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (totalMinutes < 60) return `${totalMinutes}m ${String(seconds).padStart(2, '0')}s`
+
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`
+}
+
+const CSV_COMMA_DECIMAL_COLUMNS = new Set([
+  'valormargemdisponivel',
+  'valormargembase',
+  'valortotaldevido',
+  'valorliberado',
+  'valorparcela',
+  'taxaseguro',
+  'valorseguro'
+])
+
+const toCsvCommaDecimalValue = (columnName, value) => {
+  const col = String(columnName ?? '').trim().toLowerCase()
+  if (!CSV_COMMA_DECIMAL_COLUMNS.has(col)) return value
+  if (value === null || value === undefined || value === '') return ''
+
+  // Mantem o conteudo original, apenas troca separador decimal final para virgula.
+  const txt = String(value).trim()
+  if (!txt) return txt
+  if (txt.includes(',')) return txt
+  if (/^-?\d+(\.\d+)?$/.test(txt)) return txt.replace('.', ',')
+  return txt
+}
+
+const parseMoneyValue = (value) => {
+  if (value === null || value === undefined || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+
+  let txt = String(value).trim()
+  if (!txt) return 0
+  txt = txt.replace(/\s+/g, '').replace(/R\$/gi, '')
+
+  if (txt.includes(',') && txt.includes('.')) {
+    if (txt.lastIndexOf(',') > txt.lastIndexOf('.')) {
+      txt = txt.replace(/\./g, '').replace(',', '.')
+    } else {
+      txt = txt.replace(/,/g, '')
+    }
+  } else if (txt.includes(',')) {
+    txt = txt.replace(/\./g, '').replace(',', '.')
+  } else {
+    txt = txt.replace(/,/g, '')
+  }
+
+  txt = txt.replace(/[^0-9.-]/g, '')
+  const num = Number(txt)
+  return Number.isFinite(num) ? num : 0
+}
+
+const groupLoteRows = (rows) => {
+  const map = new Map()
+  for (const row of rows || []) {
+    const file = String(row?.tipoConsulta || row?.name || '').trim()
+    const created = String(row?.created_at || row?.createdAt || '').trim()
+    const loginP = String(row?.loginP || row?.login || '').trim()
+    const createdKey = dateMinuteKey(created)
+    if (!file || !createdKey) continue
+    const key = `${file.toLowerCase()}--${createdKey}`
+    const status = String(row?.status ?? 'Pendente')
+    const entry = map.get(key) || {
+      file,
+      created,
+      loginP,
+      total: 0,
+      pending: 0,
+      success: 0,
+      error: 0,
+      okByValue: 0,
+      noValue: 0,
+      durationMsTotal: 0,
+      durationCount: 0
+    }
+    if (!entry.loginP && loginP) entry.loginP = loginP
+    entry.total += 1
+    const normalized = status.toLowerCase()
+    if (normalized.includes('pendente')) entry.pending += 1
+    else if (normalized.includes('erro') || normalized.includes('falha')) entry.error += 1
+    else entry.success += 1
+
+    const valorLiberado = parseMoneyValue(row?.valorLiberado ?? row?.valor_liberado ?? row?.valor ?? 0)
+    if (valorLiberado > 0) entry.okByValue += 1
+    else entry.noValue += 1
+
+    const durationMs = getRowDurationMs(row)
+    if (durationMs !== null) {
+      entry.durationMsTotal += durationMs
+      entry.durationCount += 1
+    }
+    map.set(key, entry)
+  }
+  return Array.from(map.values()).map((entry) => ({
+    ...entry,
+    avgDurationMs: entry.durationCount > 0 ? (entry.durationMsTotal / entry.durationCount) : null
+  }))
 }
 
 const toCsvCell = (value) => {
@@ -205,6 +332,26 @@ const statusClassName = (status) => {
   return 'text-bg-secondary'
 }
 
+const batchStatusClassName = (status) => {
+  const statusTxt = String(status || 'Pronto')
+  if (statusTxt === 'Processando') return 'text-bg-info'
+  if (statusTxt === 'Pendente') return 'text-bg-warning'
+  if (statusTxt === 'Concluído') return 'text-bg-success'
+  if (statusTxt === 'Concluído com erros') return 'text-bg-warning'
+  if (statusTxt === 'Erro') return 'text-bg-danger'
+  return 'text-bg-secondary'
+}
+
+const isDoneLoteStatus = (status) => {
+  const s = String(status ?? '').trim().toLowerCase()
+  return s === 'concluído' || s === 'concluido' || s === 'ok'
+}
+
+const isDoneIndividualStatus = (status) => {
+  const s = String(status ?? '').trim().toLowerCase()
+  return s === 'concluido' || s === 'concluído'
+}
+
 const normalizeRows = (payload) => {
   if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.data)) return payload.data
@@ -276,6 +423,7 @@ export default function ConsultaPresenca() {
   const [dateFrom, setDateFrom] = useState('') // yyyy-mm-dd
   const [dateTo, setDateTo] = useState('') // yyyy-mm-dd
   const [page, setPage] = useState(1)
+  const [lotePage, setLotePage] = useState(1)
   const [lastSyncAt, setLastSyncAt] = useState(null)
   const [summaryRows, setSummaryRows] = useState([])
   const [selectedLoginIndex, setSelectedLoginIndex] = useState(0)
@@ -284,6 +432,17 @@ export default function ConsultaPresenca() {
   const [nomeConsulta, setNomeConsulta] = useState('')
   const [consultaTab, setConsultaTab] = useState('individual') // individual | lote
   const [batchJobs, setBatchJobs] = useState([])
+  const [loteGroups, setLoteGroups] = useState([])
+  const batchPollers = useRef(new Map())
+  const lotePollInFlightRef = useRef(false)
+  const loteSawPendingRef = useRef(false)
+  const loteCsvUploadInFlightRef = useRef(false)
+  const [loteAutoPollingEnabled, setLoteAutoPollingEnabled] = useState(false)
+  const batchFileInputRef = useRef(null)
+  const [selectedBatchUpload, setSelectedBatchUpload] = useState(null)
+  const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
+  const [deleteLoteModal, setDeleteLoteModal] = useState(null)
+  const [deletingLote, setDeletingLote] = useState(false)
   const [consultaMsg, setConsultaMsg] = useState('')
   const [consultando, setConsultando] = useState(false)
   const [consultaResultModal, setConsultaResultModal] = useState(null)
@@ -322,11 +481,32 @@ export default function ConsultaPresenca() {
     }
   }, [user?.id])
 
+  const fetchLoteRows = useCallback(async ({ loginP, nomeArquivo, signal } = {}) => {
+    const userId = user?.id
+    const login = String(loginP ?? '').trim()
+    if (!userId || !login || login === '-') return []
+
+    const params = new URLSearchParams()
+    params.set('loginP', login)
+    params.set('id_user', String(userId))
+    if (nomeArquivo) params.set('nomeArquivo', String(nomeArquivo))
+
+    const url = `${LOTE_API_URL}?${params.toString()}`
+    const response = await fetch(url, { method: 'GET', signal })
+    if (!response.ok) return []
+
+    const payload = await response.json().catch(() => [])
+    return Array.isArray(payload) ? payload : (Array.isArray(payload?.rows) ? payload.rows : [])
+  }, [user?.id])
+
   const fetchSummary = useCallback(async (signal) => {
     const userId = user?.id
     if (!userId) {
       setRows([])
       setSummaryRows([])
+      setLoteGroups([])
+      loteSawPendingRef.current = false
+      setLoteAutoPollingEnabled(false)
       setSelectedLoginIndex(0)
       setError('Usuário sem ID para consulta.')
       return
@@ -356,6 +536,19 @@ export default function ConsultaPresenca() {
       }))
       setSummaryRows(summaries)
       setSelectedLoginIndex(0)
+      const firstLogin = summaries[0]?.loginP
+      if (firstLogin && firstLogin !== '-' && !uploadingBatchFile) {
+        const loteRows = await fetchLoteRows({ loginP: firstLogin, signal })
+        const grouped = groupLoteRows(loteRows)
+        setLoteGroups(grouped)
+        const hasPending = loteRows.some((row) => !isDoneLoteStatus(row?.status))
+        loteSawPendingRef.current = hasPending
+        setLoteAutoPollingEnabled(hasPending)
+      } else if (!uploadingBatchFile) {
+        setLoteGroups([])
+        loteSawPendingRef.current = false
+        setLoteAutoPollingEnabled(false)
+      }
 
       const updatedCandidates = sourceRows
         .map((row) => pick(row, ['updated_at', 'updatedAt', 'data_update', 'updated'], ''))
@@ -366,10 +559,13 @@ export default function ConsultaPresenca() {
       if (err?.name === 'AbortError') return
       setRows([])
       setSummaryRows([])
+      setLoteGroups([])
+      loteSawPendingRef.current = false
+      setLoteAutoPollingEnabled(false)
       setSelectedLoginIndex(0)
       setError(err?.message || 'Falha ao carregar consulta de presença.')
     }
-  }, [user?.id])
+  }, [fetchLoteRows, uploadingBatchFile, user?.id])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -388,7 +584,7 @@ export default function ConsultaPresenca() {
     return () => controller.abort()
   }, [summaryRows, selectedLoginIndex, fetchHistoricoRows])
 
-  const filteredRows = useMemo(() => {
+  const filteredRowsForExport = useMemo(() => {
     const term = search.trim().toLowerCase()
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null
@@ -412,21 +608,27 @@ export default function ConsultaPresenca() {
       const tb = new Date(b?.data || 0).getTime()
       return tb - ta
     })
+    return sorted
+  }, [rows, search, dateFrom, dateTo])
 
+  const filteredRows = useMemo(() => {
     const seenComposite = new Set()
-    return sorted.filter((row) => {
+    return filteredRowsForExport.filter((row) => {
       const nameKey = String(row?.nome ?? '').trim().toLowerCase()
-      const dateKey = dateMinuteKey(row?.data)
+      const rawBase = row?.raw || row || {}
+      const createdKey = dateMinuteKey(pick(rawBase, ['created_at', 'createdAt'], ''))
+      const dateKey = createdKey || dateMinuteKey(row?.data)
       if (!nameKey || !dateKey) return true
       // Remove duplicados por Nome + Data de atualização (no minuto).
       // Inclui CPF no key para evitar colisões entre homônimos.
       const cpfKey = onlyDigits(row?.cpf) || '-'
-      const key = `${nameKey}__${dateKey}__${cpfKey}`
+      const loginKey = String(pick(rawBase, ['loginP', 'login'], '')).trim().toLowerCase() || '-'
+      const key = `${loginKey}__${nameKey}__${dateKey}__${cpfKey}`
       if (seenComposite.has(key)) return false
       seenComposite.add(key)
       return true
     })
-  }, [rows, search, dateFrom, dateTo])
+  }, [filteredRowsForExport])
 
   const currentSummary = summaryRows[selectedLoginIndex] || { loginP: '-', senhaP: '', total: '-', usado: '-', restantes: '-' }
   const pageSize = 50
@@ -438,6 +640,20 @@ export default function ConsultaPresenca() {
     const start = (currentPage - 1) * pageSize
     return filteredRows.slice(start, start + pageSize)
   }, [filteredRows, currentPage])
+  const loteSourceRows = batchJobs.length > 0 ? batchJobs : loteGroups
+  const lotePageSize = 10
+  const lotePages = Math.max(1, Math.ceil(loteSourceRows.length / lotePageSize))
+  const currentLotePage = Math.min(lotePage, lotePages)
+  const loteStartIndex = loteSourceRows.length === 0 ? 0 : ((currentLotePage - 1) * lotePageSize) + 1
+  const loteEndIndex = Math.min(loteSourceRows.length, currentLotePage * lotePageSize)
+  const pagedBatchJobs = useMemo(() => {
+    const start = (currentLotePage - 1) * lotePageSize
+    return batchJobs.slice(start, start + lotePageSize)
+  }, [batchJobs, currentLotePage])
+  const pagedLoteGroups = useMemo(() => {
+    const start = (currentLotePage - 1) * lotePageSize
+    return loteGroups.slice(start, start + lotePageSize)
+  }, [loteGroups, currentLotePage])
   const sortedTabelasBody = useMemo(() => {
     const list = Array.isArray(consultaResultModal?.tabelasBody) ? [...consultaResultModal.tabelasBody] : []
     const sorted = list.sort((a, b) => {
@@ -466,27 +682,52 @@ export default function ConsultaPresenca() {
     setPage(1)
   }, [search, dateFrom, dateTo, rows, selectedLoginIndex])
 
+  useEffect(() => {
+    if (consultaTab !== 'lote') return
+    setLotePage(1)
+  }, [consultaTab, selectedLoginIndex])
+
   const refresh = () => {
     fetchSummary()
   }
 
   const downloadFilteredCsv = useCallback(() => {
-    if (!filteredRows.length) {
+    if (!filteredRowsForExport.length) {
       notify.info('Nenhum registro para baixar.', { autoClose: 2000 })
       return
     }
 
-    const header = ['CPF', 'Nome', 'Data de atualização', 'Elegível', 'Data de nascimento']
-    const lines = [header.join(';')]
+    const exportRows = filteredRowsForExport.map((row) => {
+      const raw = row?.raw
+      return (raw && typeof raw === 'object') ? raw : row
+    })
 
-    for (const row of filteredRows) {
-      lines.push([
-        toCsvCell(formatCpf(row.cpf)),
-        toCsvCell(row.nome || ''),
-        toCsvCell(formatDate(row.data)),
-        toCsvCell(row.elegivel ? 'Sim' : 'Não'),
-        toCsvCell(formatDateOnly(row.dataNascimento))
-      ].join(';'))
+    const header = []
+    const seenHeader = new Set()
+    for (const row of exportRows) {
+      for (const key of Object.keys(row || {})) {
+        const norm = String(key || '').trim().toLowerCase()
+        if (!norm || norm === 'loginp' || seenHeader.has(norm)) continue
+        seenHeader.add(norm)
+        header.push(key)
+      }
+    }
+
+    if (header.length === 0) {
+      notify.info('Nenhuma coluna disponível para exportação.', { autoClose: 2000 })
+      return
+    }
+
+    const lines = [header.join(';')]
+    for (const row of exportRows) {
+      const values = header.map((col) => {
+        const rawValue = row?.[col]
+        const safeValue = (rawValue && typeof rawValue === 'object')
+          ? JSON.stringify(rawValue)
+          : toCsvCommaDecimalValue(col, rawValue ?? '')
+        return toCsvCell(safeValue)
+      })
+      lines.push(values.join(';'))
     }
 
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
@@ -505,7 +746,7 @@ export default function ConsultaPresenca() {
     document.body.removeChild(a)
 
     URL.revokeObjectURL(url)
-  }, [filteredRows])
+  }, [filteredRowsForExport])
 
   const openConsultaResultModalFromSource = useCallback((source, phoneOriginFallback = 'Registro do histórico') => {
     const payload = source && typeof source === 'object' ? source : {}
@@ -609,26 +850,23 @@ export default function ConsultaPresenca() {
       setConsultaMsg('Selecione um login válido no card Resumo.')
       return
     }
-    if (!currentSummary?.senhaP) {
-      setConsultaMsg('Senha do login não encontrada na API de credenciais.')
+    if (!user?.id) {
+      setConsultaMsg('Usuário sem ID para consulta.')
       return
     }
 
     const payload = {
+      loginP: currentSummary.loginP,
+      id_user: user.id,
       cpf: cpfDigits,
-      nome,
       telefone: phoneDigits,
-      produtoId: 28,
-      autoAcceptHeadless: true,
-      stepDelayMs: 2000,
-      login: currentSummary.loginP,
-      senha: currentSummary.senhaP
+      nome
     }
 
     setConsultando(true)
     setConsultaMsg('Enviando consulta individual...')
     try {
-      const response = await fetch(PROCESS_URL, {
+      const response = await fetch(INDIVIDUAL_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -642,44 +880,138 @@ export default function ConsultaPresenca() {
         parsed = raw || ''
       }
       const parsedObj = (parsed && typeof parsed === 'object') ? parsed : {}
-      openConsultaResultModalFromSource(parsedObj, phoneOrigin)
 
       if (!response.ok) {
         throw new Error(typeof parsed === 'string' ? parsed : JSON.stringify(parsedObj))
       }
 
-      setConsultaMsg(`Consulta enviada com sucesso | CPF ${formatCpf(cpfDigits)} | Telefone ${formatPhone(phoneDigits)}.`)
+      setConsultaMsg('Consulta enviada com sucesso. Aguardando retorno...')
+
+      const query = new URLSearchParams({
+        loginP: String(currentSummary.loginP),
+        id_user: String(user.id),
+        cpf: String(cpfDigits),
+        telefone: String(phoneDigits),
+        nome: String(nome)
+      })
+
+      let completedPayload = null
+      while (!completedPayload) {
+        const pollResp = await fetch(`${INDIVIDUAL_RESPONSE_API_URL}?${query.toString()}`, { method: 'GET' })
+        const pollRaw = await pollResp.text()
+        if (!pollResp.ok) throw new Error(pollRaw || `HTTP ${pollResp.status}`)
+
+        let pollPayload = pollRaw
+        try {
+          pollPayload = pollRaw ? JSON.parse(pollRaw) : []
+        } catch {
+          pollPayload = pollRaw || []
+        }
+
+        const sourceRows = normalizeRows(pollPayload)
+        const expectedCpf = onlyDigits(cpfDigits)
+        const expectedTel = onlyDigits(phoneDigits)
+        const expectedNome = String(nome).trim().toLowerCase()
+
+        const matchedRows = sourceRows.filter((row) => {
+          const rowCpf = onlyDigits(pick(row, ['cpf'], ''))
+          const rowTel = onlyDigits(pick(row, ['telefone'], ''))
+          const rowNome = String(pick(row, ['nome'], '')).trim().toLowerCase()
+          const rowLogin = String(pick(row, ['loginP', 'login'], '')).trim()
+          const rowUser = String(pick(row, ['id_user', 'idUser', 'user_id'], '')).trim()
+          const byCpf = !expectedCpf || !rowCpf || rowCpf === expectedCpf
+          const byTel = !expectedTel || !rowTel || rowTel === expectedTel
+          const byNome = !expectedNome || !rowNome || rowNome === expectedNome
+          const byLogin = !currentSummary.loginP || !rowLogin || rowLogin === String(currentSummary.loginP)
+          const byUser = !user?.id || !rowUser || rowUser === String(user.id)
+          return byCpf && byTel && byNome && byLogin && byUser
+        })
+
+        const rowsToCheck = matchedRows.length ? matchedRows : sourceRows
+        const doneRow = rowsToCheck.find((row) => {
+          const status = pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')
+          return isDoneIndividualStatus(status)
+        })
+
+        if (doneRow) {
+          const doneCreatedKey = dateMinuteKey(pick(doneRow, ['created_at', 'createdAt'], ''))
+          const doneCpf = onlyDigits(pick(doneRow, ['cpf'], ''))
+          const doneTel = onlyDigits(pick(doneRow, ['telefone'], ''))
+          const doneNome = String(pick(doneRow, ['nome'], '')).trim().toLowerCase()
+          const doneLogin = String(pick(doneRow, ['loginP', 'login'], '')).trim()
+
+          const relatedRows = rowsToCheck.filter((row) => {
+            const rowStatus = pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')
+            if (!isDoneIndividualStatus(rowStatus)) return false
+
+            const rowCreatedKey = dateMinuteKey(pick(row, ['created_at', 'createdAt'], ''))
+            const rowCpf = onlyDigits(pick(row, ['cpf'], ''))
+            const rowTel = onlyDigits(pick(row, ['telefone'], ''))
+            const rowNome = String(pick(row, ['nome'], '')).trim().toLowerCase()
+            const rowLogin = String(pick(row, ['loginP', 'login'], '')).trim()
+
+            const sameCreated = !doneCreatedKey || !rowCreatedKey || rowCreatedKey === doneCreatedKey
+            const sameCpf = !doneCpf || !rowCpf || rowCpf === doneCpf
+            const sameTel = !doneTel || !rowTel || rowTel === doneTel
+            const sameNome = !doneNome || !rowNome || rowNome === doneNome
+            const sameLogin = !doneLogin || !rowLogin || rowLogin === doneLogin
+            return sameCreated && sameCpf && sameTel && sameNome && sameLogin
+          })
+
+          const tabelasBody = relatedRows
+            .map(mapTabelaFromFlat)
+            .filter(Boolean)
+            .filter((item, idx, arr) => {
+              const key = `${item?.id ?? ''}|${item?.nome ?? ''}|${item?.prazo ?? ''}|${item?.taxaJuros ?? ''}|${item?.valorLiberado ?? ''}|${item?.valorParcela ?? ''}`
+              return arr.findIndex((x) => `${x?.id ?? ''}|${x?.nome ?? ''}|${x?.prazo ?? ''}|${x?.taxaJuros ?? ''}|${x?.valorLiberado ?? ''}|${x?.valorParcela ?? ''}` === key) === idx
+            })
+
+          completedPayload = {
+            ...doneRow,
+            tabelas_body: tabelasBody
+          }
+          break
+        }
+
+        setConsultaMsg('Consulta em processamento... aguardando status Concluido.')
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+      }
+
+      openConsultaResultModalFromSource(completedPayload, phoneOrigin)
+      setConsultaMsg(`Consulta concluída | CPF ${formatCpf(cpfDigits)} | Telefone ${formatPhone(phoneDigits)}.`)
       await fetchSummary()
     } catch (err) {
       setConsultaMsg(err?.message || 'Falha ao chamar API de consulta individual.')
     } finally {
       setConsultando(false)
     }
-  }, [cpfConsulta, telefoneConsulta, nomeConsulta, currentSummary, fetchSummary, openConsultaResultModalFromSource])
+  }, [cpfConsulta, telefoneConsulta, nomeConsulta, currentSummary, fetchSummary, openConsultaResultModalFromSource, user?.id])
 
   const handleBatchFileChange = useCallback(async (event) => {
     const file = event?.target?.files?.[0] ?? null
     setConsultaMsg('')
 
-    if (!file) return
+    if (!file) {
+      setSelectedBatchUpload(null)
+      return
+    }
 
     try {
       const name = String(file.name || '').toLowerCase()
-      let rawRows = []
-
-      if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-        const buffer = await file.arrayBuffer()
-        const xlsx = await import('xlsx')
-        const wb = xlsx.read(buffer, { type: 'array' })
-        const sheetName = wb.SheetNames?.[0]
-        const sheet = sheetName ? wb.Sheets[sheetName] : null
-        rawRows = sheet ? xlsx.utils.sheet_to_json(sheet, { defval: '' }) : []
-      } else {
-        const text = await file.text()
-        const firstLine = String(text ?? '').split(/\r\n|\n|\r/)[0] || ''
-        const delimiter = firstLine.includes(';') ? ';' : (firstLine.includes(',') ? ',' : ';')
-        rawRows = parseDelimited(text, delimiter)
+      if (!name.endsWith('.csv')) {
+        setSelectedBatchUpload(null)
+        setConsultaMsg('Formato inválido. Envie apenas CSV separado por ponto e vírgula (;).')
+        return
       }
+
+      const text = await file.text()
+      const firstLine = String(text ?? '').split(/\r\n|\n|\r/)[0] || ''
+      if (!firstLine.includes(';') && firstLine.includes(',')) {
+        setSelectedBatchUpload(null)
+        setConsultaMsg('CSV inválido para este fluxo. Use separador ponto e vírgula (;).')
+        return
+      }
+      const rawRows = parseDelimited(text, ';')
 
       if (!Array.isArray(rawRows) || rawRows.length === 0) {
         setConsultaMsg('Arquivo vazio ou inválido.')
@@ -703,33 +1035,239 @@ export default function ConsultaPresenca() {
         else invalid.push(norm)
       })
 
-      setConsultaMsg(`Arquivo carregado: ${valid.length} válido(s), ${invalid.length} inválido(s).`)
-
-      const job = {
-        id: makeJobId(),
-        fileName: file.name,
-        createdAt: new Date().toISOString(),
-        totalRows: rawRows.length,
-        validRows: valid,
-        invalidRows: invalid,
-        status: 'Pronto',
-        progress: 0,
-        okCount: 0,
-        errCount: 0,
-        pendingUploaded: false,
-        pendingInsertedRows: 0,
-        finishedAt: null
+      const restantesDigits = onlyDigits(currentSummary?.restantes)
+      const restantesLimit = restantesDigits ? Number(restantesDigits) : null
+      if (restantesLimit !== null && Number.isFinite(restantesLimit) && valid.length > restantesLimit) {
+        const droppedPreview = valid.length - restantesLimit
+        notify.warn(
+          `Atenção: ${droppedPreview} linha(s) excedente(s) serão ignorada(s) no envio (limite restante: ${restantesLimit}).`,
+          { autoClose: 3200 }
+        )
       }
 
-      setBatchJobs((prev) => [job, ...prev])
+      setSelectedBatchUpload({
+        id: makeJobId(),
+        file,
+        fileName: file.name,
+        totalRows: rawRows.length,
+        validRows: valid.length,
+        invalidRows: invalid.length,
+        validData: valid.map((row) => ({
+          cpf: row.cpf,
+          nome: row.nome,
+          telefone: row.telefone
+        }))
+      })
+      setConsultaMsg(`Arquivo selecionado: ${valid.length} válido(s), ${invalid.length} inválido(s). Clique em "Carregar arquivo".`)
     } catch (err) {
+      setSelectedBatchUpload(null)
       setConsultaMsg(err?.message || 'Falha ao ler arquivo.')
     }
-  }, [])
+  }, [currentSummary?.restantes])
 
   const deleteBatchJob = useCallback((jobId) => {
     setBatchJobs((prev) => prev.filter((j) => j.id !== jobId))
   }, [])
+
+  const stopBatchPolling = useCallback((jobId) => {
+    const timer = batchPollers.current.get(jobId)
+    if (timer) {
+      clearInterval(timer)
+      batchPollers.current.delete(jobId)
+    }
+  }, [])
+
+  const beginBatchPolling = useCallback((jobId, job) => {
+    if (!job || !user?.id || !currentSummary?.loginP) return
+    if (batchPollers.current.has(jobId)) return
+
+    const poll = async () => {
+      try {
+        const rows = await fetchLoteRows({ loginP: currentSummary.loginP, nomeArquivo: job.fileName })
+        if (!rows.length) return
+        const statuses = rows.map((r) => String(r?.status ?? "").toLowerCase())
+        const pendingCount = statuses.filter((s) => s === "pendente").length
+        const successCount = statuses.filter((s) => s === "concluído" || s === "concluido" || s === "ok").length
+        const errorCount = statuses.filter((s) => s === "erro" || s === "falha").length
+        const durationValues = rows
+          .map((r) => getRowDurationMs(r))
+          .filter((v) => v !== null)
+        const avgDurationMs = durationValues.length
+          ? (durationValues.reduce((acc, cur) => acc + cur, 0) / durationValues.length)
+          : null
+        setBatchJobs((prev) =>
+          prev.map((item) =>
+            item.id === jobId
+              ? {
+                ...item,
+                status: pendingCount ? "Processando" : (errorCount ? "Concluído com erros" : "Concluído"),
+                progress: pendingCount ? Math.round(((successCount + errorCount) / rows.length) * 100) : 100,
+                okCount: successCount,
+                errCount: errorCount,
+                avgDurationMs
+              }
+              : item
+          )
+        )
+
+        if (pendingCount === 0) {
+          stopBatchPolling(jobId)
+        }
+      } catch {
+        stopBatchPolling(jobId)
+      }
+    }
+
+    poll()
+    const timer = setInterval(poll, 5000)
+    batchPollers.current.set(jobId, timer)
+  }, [currentSummary?.loginP, fetchLoteRows, stopBatchPolling, user?.id])
+
+  const fetchLoteGroups = useCallback(async (signal, forcedLoginP) => {
+    const loginP = forcedLoginP || currentSummary?.loginP
+    if (!user?.id || !loginP || loginP === '-') {
+      loteSawPendingRef.current = false
+      setLoteAutoPollingEnabled(false)
+      return false
+    }
+    try {
+      const rows = await fetchLoteRows({ loginP, signal })
+      const grouped = groupLoteRows(rows)
+      const hasPending = rows.some((row) => !isDoneLoteStatus(row?.status))
+      if (hasPending) loteSawPendingRef.current = true
+      if (!hasPending && loteAutoPollingEnabled && loteSawPendingRef.current) {
+        notify.success('Consulta em lote concluída.', { autoClose: 2500 })
+        loteSawPendingRef.current = false
+      }
+      setLoteGroups(grouped)
+      setLoteAutoPollingEnabled(hasPending)
+      return hasPending
+    } catch (err) {
+      if (err?.name === 'AbortError') return
+      /* ignore */
+      return true
+    }
+  }, [currentSummary?.loginP, fetchLoteRows, loteAutoPollingEnabled, user?.id])
+
+  const uploadBatchFile = useCallback(async () => {
+    if (uploadingBatchFile || loteCsvUploadInFlightRef.current) return
+    if (!selectedBatchUpload) {
+      setConsultaMsg('Selecione um arquivo antes de carregar.')
+      return
+    }
+    if (!user?.id) {
+      setConsultaMsg('Usuário sem ID para enviar lote.')
+      return
+    }
+    if (!currentSummary?.loginP || currentSummary.loginP === '-') {
+      setConsultaMsg('Selecione um login válido no card Resumo.')
+      return
+    }
+
+    const validData = Array.isArray(selectedBatchUpload.validData) ? selectedBatchUpload.validData : []
+    if (!validData.length) {
+      setConsultaMsg('Arquivo sem linhas válidas para envio.')
+      return
+    }
+
+    const restantesDigits = onlyDigits(currentSummary?.restantes)
+    const restantesLimit = restantesDigits ? Number(restantesDigits) : null
+    if (restantesLimit !== null && Number.isFinite(restantesLimit) && restantesLimit <= 0) {
+      setConsultaMsg('Sem consultas restantes para este login.')
+      notify.warn('Sem consultas restantes para este login.', { autoClose: 2500 })
+      return
+    }
+
+    const rowsToSend = (restantesLimit !== null && Number.isFinite(restantesLimit))
+      ? validData.slice(0, restantesLimit)
+      : validData
+
+    if (!rowsToSend.length) {
+      setConsultaMsg('Nenhuma linha dentro do limite de consultas restantes.')
+      return
+    }
+
+    try {
+      loteCsvUploadInFlightRef.current = true
+      setUploadingBatchFile(true)
+      setLoteAutoPollingEnabled(false)
+      setConsultaMsg('Enviando arquivo em lote...')
+
+      const csvLines = ['cpf;nome;telefone']
+      for (const row of rowsToSend) {
+        csvLines.push([
+          toCsvCell(row?.cpf || ''),
+          toCsvCell(row?.nome || ''),
+          toCsvCell(row?.telefone || '')
+        ].join(';'))
+      }
+      const csvContent = `\ufeff${csvLines.join('\r\n')}\r\n`
+      const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
+
+      const formData = new FormData()
+      formData.append('file', csvBlob, selectedBatchUpload.fileName)
+      formData.append('loginP', String(currentSummary.loginP))
+      formData.append('id_user', String(user.id))
+
+      const response = await fetch(LOTE_CSV_API_URL, {
+        method: 'POST',
+        body: formData
+      })
+
+      const rawText = await response.text()
+      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+
+      setSelectedBatchUpload(null)
+      if (batchFileInputRef.current) batchFileInputRef.current.value = ''
+      if (rowsToSend.length < validData.length) {
+        const dropped = validData.length - rowsToSend.length
+        setConsultaMsg(`Arquivo carregado: ${rowsToSend.length} linha(s) enviada(s); ${dropped} excedente(s) ignorada(s) pelo limite restante.`)
+        notify.info(`${dropped} linha(s) excedente(s) ignorada(s) pelo limite restante.`, { autoClose: 2600 })
+      } else {
+        setConsultaMsg('Arquivo carregado com sucesso.')
+        notify.success('Arquivo carregado com sucesso.', { autoClose: 2000 })
+      }
+      const hasPending = await fetchLoteGroups(undefined, currentSummary.loginP)
+      setLoteAutoPollingEnabled(Boolean(hasPending))
+    } catch (err) {
+      setConsultaMsg(err?.message || 'Falha ao carregar arquivo.')
+      notify.error(err?.message || 'Falha ao carregar arquivo.', { autoClose: 2500 })
+    } finally {
+      setUploadingBatchFile(false)
+      loteCsvUploadInFlightRef.current = false
+    }
+  }, [batchFileInputRef, currentSummary?.loginP, currentSummary?.restantes, fetchLoteGroups, selectedBatchUpload, uploadingBatchFile, user?.id])
+
+  useEffect(() => {
+    const login = summaryRows[selectedLoginIndex]?.loginP
+    if (uploadingBatchFile || !user?.id || !login || login === '-') return undefined
+    const controller = new AbortController()
+    fetchLoteGroups(controller.signal)
+    return () => controller.abort()
+  }, [fetchLoteGroups, summaryRows, selectedLoginIndex, uploadingBatchFile, user?.id])
+
+  useEffect(() => {
+    const login = summaryRows[selectedLoginIndex]?.loginP
+    if (uploadingBatchFile || !loteAutoPollingEnabled || !user?.id || !login || login === '-') return undefined
+
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled || lotePollInFlightRef.current) return
+      lotePollInFlightRef.current = true
+      try {
+        const hasPending = await fetchLoteGroups(undefined, login)
+        if (!hasPending) setLoteAutoPollingEnabled(false)
+      } finally {
+        lotePollInFlightRef.current = false
+      }
+    }
+
+    const interval = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [fetchLoteGroups, loteAutoPollingEnabled, summaryRows, selectedLoginIndex, uploadingBatchFile, user?.id])
 
   const downloadBatchJobCsv = useCallback(async (job) => {
     if (!user?.id) {
@@ -760,49 +1298,70 @@ export default function ConsultaPresenca() {
         return
       }
 
-      // Agrupa por tipoConsulta + created_at (mesmo lote).
-      const groups = new Map()
-      for (const r of list) {
-        const tipo = String(pick(r, ['tipoConsulta'], '') || '').trim()
-        const created = String(pick(r, ['created_at', 'createdAt'], '') || '').trim()
-        const key = `${tipo}__${created}`
-        if (!groups.has(key)) groups.set(key, [])
-        groups.get(key).push(r)
-      }
+      let rowsToExport = list
+      const selectedCreated = String(job?.createdAt || job?.created || '').trim()
 
-      // Seleciona o grupo mais recente (maior created_at).
-      let chosenKey = null
-      let chosenTs = -Infinity
-      for (const key of groups.keys()) {
-        const created = key.split('__').slice(-1)[0]
-        const t = new Date(created).getTime()
-        const ts = Number.isFinite(t) ? t : -Infinity
-        if (ts > chosenTs) {
-          chosenTs = ts
-          chosenKey = key
+      if (selectedCreated) {
+        const selectedMinute = dateMinuteKey(selectedCreated)
+        const byMinute = list.filter((r) => dateMinuteKey(pick(r, ['created_at', 'createdAt'], '')) === selectedMinute)
+        if (byMinute.length > 0) rowsToExport = byMinute
+      } else {
+        // Fallback: escolhe a janela mais recente por minuto.
+        const groups = new Map()
+        for (const r of list) {
+          const tipo = String(pick(r, ['tipoConsulta'], '') || '').trim()
+          const createdMin = dateMinuteKey(pick(r, ['created_at', 'createdAt'], ''))
+          if (!tipo || !createdMin) continue
+          const key = `${tipo}__${createdMin}`
+          if (!groups.has(key)) groups.set(key, [])
+          groups.get(key).push(r)
         }
+
+        let chosenKey = null
+        let chosenTs = -Infinity
+        for (const key of groups.keys()) {
+          const createdMin = key.split('__').slice(-1)[0]
+          const t = new Date(createdMin.replace(' ', 'T')).getTime()
+          const ts = Number.isFinite(t) ? t : -Infinity
+          if (ts > chosenTs) {
+            chosenTs = ts
+            chosenKey = key
+          }
+        }
+        if (chosenKey) rowsToExport = groups.get(chosenKey) || list
       }
 
-      const rowsToExport = chosenKey ? (groups.get(chosenKey) || []) : list
       if (!rowsToExport.length) {
         notify.info('Nenhum registro retornado para exportação.', { autoClose: 2000 })
         return
       }
 
-      const header = ['cpf', 'nome', 'telefone', 'loginP', 'created_at', 'updated_at', 'status', 'tipoConsulta']
-      const lines = [header.join(';')]
+      const header = []
+      const seenHeader = new Set()
+      for (const row of rowsToExport) {
+        for (const key of Object.keys(row || {})) {
+          const norm = String(key || '').trim().toLowerCase()
+          if (!norm || norm === 'loginp' || seenHeader.has(norm)) continue
+          seenHeader.add(norm)
+          header.push(key)
+        }
+      }
 
+      if (header.length === 0) {
+        notify.info('Nenhuma coluna disponível para exportação.', { autoClose: 2000 })
+        return
+      }
+
+      const lines = [header.join(';')]
       for (const r of rowsToExport) {
-        lines.push([
-          toCsvCell(pick(r, ['cpf'], '')),
-          toCsvCell(pick(r, ['nome'], '')),
-          toCsvCell(pick(r, ['telefone'], '')),
-          toCsvCell(pick(r, ['loginP'], currentSummary.loginP)),
-          toCsvCell(pick(r, ['created_at'], '')),
-          toCsvCell(pick(r, ['updated_at'], '')),
-          toCsvCell(pick(r, ['status'], '')),
-          toCsvCell(pick(r, ['tipoConsulta'], job.fileName))
-        ].join(';'))
+        const values = header.map((col) => {
+          const rawValue = r?.[col]
+          const safeValue = (rawValue && typeof rawValue === 'object')
+            ? JSON.stringify(rawValue)
+            : toCsvCommaDecimalValue(col, rawValue ?? '')
+          return toCsvCell(safeValue)
+        })
+        lines.push(values.join(';'))
       }
 
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
@@ -825,6 +1384,50 @@ export default function ConsultaPresenca() {
     }
   }, [user?.id, currentSummary?.loginP])
 
+  const askDeleteLoteGroup = useCallback((group) => {
+    const login = String(group?.loginP || currentSummary?.loginP || '').trim()
+    if (!login || login === '-') {
+      notify.error('Login inválido para exclusão.', { autoClose: 2000 })
+      return
+    }
+    setDeleteLoteModal({
+      loginP: login,
+      fileName: String(group?.file || '-'),
+      totalRows: Number(group?.total || 0),
+      eligibleCount: Number(group?.okByValue || 0),
+      notEligibleCount: Number(group?.noValue || 0)
+    })
+  }, [currentSummary?.loginP])
+
+  const deleteLoteGroup = useCallback(async () => {
+    if (!deleteLoteModal) return
+    const userId = user?.id
+    const login = String(deleteLoteModal?.loginP || currentSummary?.loginP || '').trim()
+    if (!userId) {
+      notify.error('Usuário sem ID.', { autoClose: 2000 })
+      return
+    }
+    if (!login || login === '-') {
+      notify.error('Login inválido para exclusão.', { autoClose: 2000 })
+      return
+    }
+    try {
+      setDeletingLote(true)
+      const url = `${LOTE_DELETE_API_URL}?loginP=${encodeURIComponent(login)}&id_user=${encodeURIComponent(userId)}`
+      const response = await fetch(url, { method: 'DELETE' })
+      const rawText = await response.text()
+      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+
+      notify.success('Lotes excluídos com sucesso.', { autoClose: 2000 })
+      await fetchLoteGroups(undefined, login)
+      setDeleteLoteModal(null)
+    } catch (err) {
+      notify.error(err?.message || 'Falha ao excluir lotes.', { autoClose: 2500 })
+    } finally {
+      setDeletingLote(false)
+    }
+  }, [currentSummary?.loginP, deleteLoteModal, fetchLoteGroups, user?.id])
+
   const startBatchJob = useCallback(async (jobId) => {
     setConsultaMsg('')
 
@@ -839,91 +1442,43 @@ export default function ConsultaPresenca() {
 
     const job = batchJobs.find((j) => j.id === jobId)
     if (!job) return
-    if (!job.validRows?.length) {
-      setConsultaMsg('Nenhuma linha válida para consultar.')
+    if (!job.file) {
+      setConsultaMsg('Arquivo não disponível para o lote.')
       return
     }
 
-    // 1) Primeiro envia todas as linhas para a tabela (status = Pendente).
-    if (!job.pendingUploaded) {
-      try {
-        setConsultaMsg('Enviando lote para o banco (Pendente)...')
-        const response = await fetch(PENDING_UPLOAD_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            loginP: currentSummary.loginP,
-            tipoConsulta: job.fileName,
-            rows: job.validRows.map((r) => ({ cpf: r.cpf, nome: r.nome, telefone: r.telefone }))
-          })
-        })
-        const raw = await response.text()
-        let parsed = {}
-        try { parsed = raw ? JSON.parse(raw) : {} } catch { parsed = { error: raw } }
-        if (!response.ok) {
-          throw new Error(parsed?.error || raw || `HTTP ${response.status}`)
-        }
-        const inserted = Number(parsed?.insertedRows ?? parsed?.inserted ?? 0) || 0
-        setBatchJobs((prev) => prev.map((j) => (
-          j.id === jobId ? { ...j, pendingUploaded: true, pendingInsertedRows: inserted, status: 'Pendente' } : j
-        )))
-      } catch (err) {
-        setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Erro' } : j)))
-        setConsultaMsg(err?.message || 'Falha ao enviar lote para o banco.')
-        return
-      }
-    }
-
-    setConsultando(true)
-    setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Processando', progress: 0, okCount: 0, errCount: 0, finishedAt: null } : j)))
-
-    let okCount = 0
-    let errCount = 0
-
-    try {
-      for (let i = 0; i < job.validRows.length; i += 1) {
-        const row = job.validRows[i]
-        setConsultaMsg(`Processando ${i + 1}/${job.validRows.length}...`)
-
-        const payload = {
-          cpf: row.cpf,
-          nome: row.nome,
-          telefone: row.telefone,
-          produtoId: 28,
-          autoAcceptHeadless: true,
-          stepDelayMs: 2000,
-          login: currentSummary.loginP,
-          senha: currentSummary.senhaP,
-          // Ajuda o backend a identificar o lote na tabela.
-          tipoConsulta: job.fileName
-        }
-
-        const response = await fetch(PROCESS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        })
-
-        if (response.ok) okCount += 1
-        else errCount += 1
-        await response.text().catch(() => '')
-
-        const progress = Math.round(((i + 1) / job.validRows.length) * 100)
-        setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, progress, okCount, errCount } : j)))
-      }
-
-      const finalStatus = errCount > 0 ? 'Concluído com erros' : 'Concluído'
-      setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: finalStatus, progress: 100, okCount, errCount, finishedAt: new Date().toISOString() } : j)))
-
-      setConsultaMsg(`Lote finalizado: ${okCount} sucesso(s), ${errCount} erro(s).`)
-      await fetchSummary()
-    } catch (err) {
-      setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Erro', finishedAt: new Date().toISOString() } : j)))
-      setConsultaMsg(err?.message || 'Falha ao chamar API de consulta em lote.')
-    } finally {
-      setConsultando(false)
-    }
-  }, [batchJobs, currentSummary, fetchSummary])
+    setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Processando', progress: 0, okCount: 0, errCount: 0, avgDurationMs: null, finishedAt: null } : j)))
+    const formData = new FormData()
+    formData.append('file', job.file)
+    formData.append('login', currentSummary.loginP)
+    formData.append('senha', currentSummary.senhaP)
+    formData.append('fileName', job.fileName)
+    setConsultaMsg('Lote enviado para o Hostinger...')
+    beginBatchPolling(jobId, job)
+    fetchLoteGroups(undefined, currentSummary.loginP)
+    fetch(PROCESS_CSV_URL, {
+      method: 'POST',
+      body: formData
+    })
+      .then((response) => response.json().catch(() => ({})))
+      .then((parsed) => {
+        const okCount = Number(parsed?.processedOk ?? parsed?.okCount ?? 0)
+        const errCount = Number(parsed?.processedError ?? parsed?.erroCount ?? 0)
+        const finalStatus = errCount > 0 ? 'Concluído com erros' : 'Concluído'
+        setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: finalStatus, progress: 100, okCount, errCount, finishedAt: new Date().toISOString() } : j)))
+        setConsultaMsg(`Lote finalizado: ${okCount} sucesso(s), ${errCount} erro(s).`)
+        fetchSummary()
+        fetchLoteGroups(undefined, currentSummary.loginP)
+      })
+      .catch((err) => {
+        setBatchJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, status: 'Erro', finishedAt: new Date().toISOString() } : j)))
+        setConsultaMsg(err?.message || 'Falha ao processar lote.')
+        stopBatchPolling(jobId)
+      })
+      .finally(() => {
+        setConsultando(false)
+      })
+  }, [batchJobs, beginBatchPolling, currentSummary, fetchLoteGroups, fetchSummary, stopBatchPolling])
 
   return (
     <div className="bg-deep min-vh-100 d-flex flex-column text-light">
@@ -954,7 +1509,7 @@ export default function ConsultaPresenca() {
               <div className="small opacity-75">Última atualização: {formatDate(lastSyncAt)}</div>
             </div>
           </div>
-          <button type="button" className="btn btn-outline-info btn-sm d-flex align-items-center gap-2" onClick={refresh} disabled={loading}>
+          <button type="button" className="btn btn-outline-info btn-sm d-flex align-items-center gap-2" onClick={refresh} disabled={loading || uploadingBatchFile}>
             <FiRefreshCw size={14} />
             <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>
           </button>
@@ -1118,21 +1673,37 @@ export default function ConsultaPresenca() {
                   <div>
                     <div className="row g-2 align-items-end">
                       <div className="col-12 col-md-6">
-                        <label className="form-label small opacity-75 mb-1">Arquivo (CSV ou XLSX)</label>
+                        <label className="form-label small opacity-75 mb-1">Arquivo (CSV separado por ;)</label>
                         <input
+                          ref={batchFileInputRef}
                           type="file"
                           className="form-control form-control-sm"
-                          accept=".csv,.xlsx,.xls"
+                          accept=".csv,text/csv"
                           onChange={handleBatchFileChange}
-                          disabled={consultando}
+                          disabled={consultando || uploadingBatchFile}
                         />
                         <div className="small opacity-75 mt-1">
                           Colunas obrigatórias: <span className="fw-semibold">cpf</span>, <span className="fw-semibold">nome</span>, <span className="fw-semibold">telefone</span>.
                           Se <span className="fw-semibold">telefone</span> estiver vazio, será gerado automaticamente.
                         </div>
                         <div className="small opacity-75 mt-1">
-                          Ao carregar um arquivo, ele aparece na tabela abaixo para você iniciar (Play), excluir ou baixar o CSV normalizado.
+                          Depois de selecionar, clique em <span className="fw-semibold">Carregar arquivo</span> para enviar ao lote.
                         </div>
+                        {selectedBatchUpload && (
+                          <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={uploadBatchFile}
+                              disabled={consultando || uploadingBatchFile}
+                            >
+                              {uploadingBatchFile ? 'Carregando...' : 'Carregar arquivo'}
+                            </button>
+                            <span className="small opacity-75">
+                              {selectedBatchUpload.fileName} | {selectedBatchUpload.totalRows} linha(s)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1287,7 +1858,29 @@ export default function ConsultaPresenca() {
         ) : (
           <section className="neo-card neo-lg p-0">
             <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
-              <div className="small opacity-75">Lotes: {batchJobs.length}</div>
+              <div className="small opacity-75">Lotes: {loteSourceRows.length}</div>
+              {loteSourceRows.length > 0 && (
+                <div className="d-flex align-items-center gap-2">
+                  <div className="small opacity-75 d-none d-md-block">Exibindo {loteStartIndex}-{loteEndIndex} de {loteSourceRows.length}</div>
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setLotePage((p) => Math.max(1, p - 1))}
+                    disabled={currentLotePage === 1}
+                  >
+                    {'\u2039'}
+                  </button>
+                  <span className="small opacity-75 px-1">{currentLotePage}/{lotePages}</span>
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setLotePage((p) => Math.min(lotePages, p + 1))}
+                    disabled={currentLotePage === lotePages}
+                  >
+                    {'\u203A'}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="table-responsive">
               <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
@@ -1295,29 +1888,21 @@ export default function ConsultaPresenca() {
                   <tr>
                     <th>Nome do arquivo</th>
                     <th>Quantidade de nomes</th>
+                    <th>Resultado</th>
+                    <th>Tempo médio</th>
                     <th>Status</th>
                     <th className="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {batchJobs.length === 0 ? (
+                  {batchJobs.length === 0 && loteGroups.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="text-center py-4 opacity-75">Nenhum lote carregado.</td>
+                      <td colSpan={6} className="text-center py-4 opacity-75">Nenhum lote carregado.</td>
                     </tr>
-                  ) : (
-                    batchJobs.map((job) => {
+                  ) : batchJobs.length > 0 ? (
+                    pagedBatchJobs.map((job) => {
                       const statusTxt = String(job.status || 'Pronto')
-                      const cls = statusTxt === 'Processando'
-                        ? 'text-bg-info'
-                        : statusTxt === 'Pendente'
-                          ? 'text-bg-warning'
-                        : statusTxt === 'Concluído'
-                          ? 'text-bg-success'
-                          : statusTxt === 'Concluído com erros'
-                            ? 'text-bg-warning'
-                            : statusTxt === 'Erro'
-                              ? 'text-bg-danger'
-                              : 'text-bg-secondary'
+                      const cls = batchStatusClassName(statusTxt)
 
                       const canRun = !consultando && statusTxt !== 'Processando'
                       const canDelete = statusTxt !== 'Processando'
@@ -1330,6 +1915,25 @@ export default function ConsultaPresenca() {
                           <td title={`${job.validRows?.length ?? 0} válido(s), ${job.invalidRows?.length ?? 0} inválido(s)`}>
                             {qty}
                           </td>
+                          <td>
+                            <div className="d-flex flex-wrap gap-2">
+                              <span
+                                className="badge text-bg-success"
+                                title={`Elegível: ${Number(job?.okCount ?? 0)}`}
+                                aria-label={`Elegível: ${Number(job?.okCount ?? 0)}`}
+                              >
+                                {Number(job?.okCount ?? 0)}
+                              </span>
+                              <span
+                                className="badge text-bg-danger"
+                                title={`Não elegível: ${Number(job?.errCount ?? 0)}`}
+                                aria-label={`Não elegível: ${Number(job?.errCount ?? 0)}`}
+                              >
+                                {Number(job?.errCount ?? 0)}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{formatAvgDuration(job?.avgDurationMs)}</td>
                           <td>
                             <span className={`badge ${cls}`}>
                               {statusTxt}{statusTxt === 'Processando' ? ` (${job.progress ?? 0}%)` : ''}
@@ -1372,6 +1976,76 @@ export default function ConsultaPresenca() {
                         </tr>
                       )
                     })
+                  ) : (
+                    pagedLoteGroups.map((group) => {
+                      const hasPending = Number(group?.pending ?? 0) > 0
+                      const hasError = Number(group?.error ?? 0) > 0
+                      const hasSuccess = Number(group?.success ?? 0) > 0
+                      const statusTxt = hasPending
+                        ? 'Processando'
+                        : hasError
+                          ? (hasSuccess ? 'Concluído com erros' : 'Erro')
+                          : 'Concluído'
+                      const cls = batchStatusClassName(statusTxt)
+                      const qty = Number(group?.total ?? 0)
+                      return (
+                        <tr key={`${group.file}-${group.created}`}>
+                          <td className="text-wrap">
+                            <div>{group.file}</div>
+                            <div className="small opacity-75">{formatDate(group.created)}</div>
+                          </td>
+                          <td>
+                            {qty}
+                          </td>
+                          <td>
+                            <div className="d-flex flex-wrap gap-2">
+                              <span
+                                className="badge text-bg-success"
+                                title={`Elegível: ${Number(group?.okByValue ?? 0)}`}
+                                aria-label={`Elegível: ${Number(group?.okByValue ?? 0)}`}
+                              >
+                                {Number(group?.okByValue ?? 0)}
+                              </span>
+                              <span
+                                className="badge text-bg-danger"
+                                title={`Não elegível: ${Number(group?.noValue ?? 0)}`}
+                                aria-label={`Não elegível: ${Number(group?.noValue ?? 0)}`}
+                              >
+                                {Number(group?.noValue ?? 0)}
+                              </span>
+                            </div>
+                          </td>
+                          <td>{formatAvgDuration(group?.avgDurationMs)}</td>
+                          <td>
+                            <span className={`badge ${cls}`}>
+                              {statusTxt}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <div className="d-inline-flex align-items-center gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
+                                title="Excluir"
+                                aria-label="Excluir"
+                                onClick={() => askDeleteLoteGroup(group)}
+                              >
+                                <FiTrash2 />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
+                                title="Baixar"
+                                aria-label="Baixar"
+                                onClick={() => downloadBatchJobCsv({ fileName: group.file, createdAt: group.created })}
+                              >
+                                <FiDownload />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
@@ -1379,6 +2053,25 @@ export default function ConsultaPresenca() {
           </section>
         )}
       </main>
+
+      {uploadingBatchFile && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.65)', position: 'fixed', inset: 0, zIndex: 1069 }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 'min(92vw, 520px)' }}>
+            <div className="modal-content modal-dark">
+              <div className="modal-body text-center py-4">
+                <div className="spinner-border text-info mb-3" role="status" aria-hidden="true"></div>
+                <div className="fw-semibold">Aguarde o envio completo do arquivo</div>
+                <div className="small opacity-75 mt-1">Processando upload em lote...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {consultaResultModal && (
         <div
@@ -1501,6 +2194,77 @@ export default function ConsultaPresenca() {
                     </table>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteLoteModal && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1068 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => { if (!deletingLote) setDeleteLoteModal(null) }}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: 'min(92vw, 560px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content modal-dark">
+              <div className="modal-header">
+                <h5 className="modal-title">Confirmar exclusão do lote</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Close"
+                  disabled={deletingLote}
+                  onClick={() => setDeleteLoteModal(null)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-2">Você está prestes a excluir os lotes desse login.</p>
+                <div className="small opacity-75 mb-1">Arquivo</div>
+                <div className="mb-3">{deleteLoteModal.fileName || '-'}</div>
+                <div className="small opacity-75 mb-1">Quantidade de linhas</div>
+                <div className="mb-3">{Number(deleteLoteModal.totalRows || 0)}</div>
+                <div className="small opacity-75 mb-1">Resultado</div>
+                <div className="d-flex flex-wrap gap-2">
+                  <span
+                    className="badge text-bg-success"
+                    title={`Elegível: ${Number(deleteLoteModal.eligibleCount || 0)}`}
+                    aria-label={`Elegível: ${Number(deleteLoteModal.eligibleCount || 0)}`}
+                  >
+                    {Number(deleteLoteModal.eligibleCount || 0)}
+                  </span>
+                  <span
+                    className="badge text-bg-danger"
+                    title={`Não elegível: ${Number(deleteLoteModal.notEligibleCount || 0)}`}
+                    aria-label={`Não elegível: ${Number(deleteLoteModal.notEligibleCount || 0)}`}
+                  >
+                    {Number(deleteLoteModal.notEligibleCount || 0)}
+                  </span>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-light"
+                  disabled={deletingLote}
+                  onClick={() => setDeleteLoteModal(null)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={deletingLote}
+                  onClick={deleteLoteGroup}
+                >
+                  {deletingLote ? 'Excluindo...' : 'Excluir'}
+                </button>
               </div>
             </div>
           </div>
