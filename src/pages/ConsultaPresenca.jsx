@@ -12,7 +12,7 @@ const HIST_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-h
 const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
 const INDIVIDUAL_RESPONSE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual-resposta/'
-const LOTE_CSV_API_URL = 'https://n8n.apivieiracred.store/webhook-test/api/presencabank-lotecsv/'
+const LOTE_CSV_API_URL = `${PRESENCA_API_BASE}/api/presencabank-lotecsv`
 const LOTE_DELETE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote-delete/'
 const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
 
@@ -223,12 +223,36 @@ const parseDelimited = (text, delimiter = ';') => {
   return rows
 }
 
+const normalizeCpfBatch = (value) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+
+  let digits = onlyDigits(raw)
+
+  // Aceita formatos que o Excel costuma gerar, ex.: 3,03E+10
+  if (/[eE]/.test(raw)) {
+    const sci = raw
+      .replace(/\s+/g, '')
+      .replace(',', '.')
+    const num = Number(sci)
+    if (Number.isFinite(num) && num >= 0) {
+      digits = String(Math.trunc(num))
+    }
+  }
+
+  digits = onlyDigits(digits)
+  if (!digits) return ''
+  if (digits.length < 11) digits = digits.padStart(11, '0')
+  if (digits.length > 11) return ''
+  return digits
+}
+
 const normalizeBatchRow = (obj, index1Based) => {
-  const cpf = onlyDigits(obj?.cpf ?? obj?.CPF ?? obj?.Cpf ?? '')
+  const cpf = normalizeCpfBatch(obj?.cpf ?? obj?.CPF ?? obj?.Cpf ?? '')
   const nome = String(obj?.nome ?? obj?.Nome ?? obj?.NOME ?? '').trim()
   const telefoneRaw = onlyDigits(obj?.telefone ?? obj?.Telefone ?? obj?.TELEFONE ?? '')
 
-  if (cpf.length !== 11) return { ok: false, idx: index1Based, error: 'CPF inválido (precisa ter 11 dígitos).' }
+  if (cpf.length !== 11) return { ok: false, idx: index1Based, error: 'CPF inválido (normalizado precisa ter 11 dígitos).' }
   if (!nome) return { ok: false, idx: index1Based, error: 'Nome obrigatório.' }
 
   let telefone = telefoneRaw
@@ -1403,6 +1427,7 @@ export default function ConsultaPresenca() {
     if (!deleteLoteModal) return
     const userId = user?.id
     const login = String(deleteLoteModal?.loginP || currentSummary?.loginP || '').trim()
+    const fileName = String(deleteLoteModal?.fileName || '').trim()
     if (!userId) {
       notify.error('Usuário sem ID.', { autoClose: 2000 })
       return
@@ -1411,9 +1436,13 @@ export default function ConsultaPresenca() {
       notify.error('Login inválido para exclusão.', { autoClose: 2000 })
       return
     }
+    if (!fileName) {
+      notify.error('Nome do arquivo inválido para exclusão.', { autoClose: 2000 })
+      return
+    }
     try {
       setDeletingLote(true)
-      const url = `${LOTE_DELETE_API_URL}?loginP=${encodeURIComponent(login)}&id_user=${encodeURIComponent(userId)}`
+      const url = `${LOTE_DELETE_API_URL}?loginP=${encodeURIComponent(login)}&id_user=${encodeURIComponent(userId)}&nomeArquivo=${encodeURIComponent(fileName)}`
       const response = await fetch(url, { method: 'DELETE' })
       const rawText = await response.text()
       if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
