@@ -399,6 +399,15 @@ const isDoneIndividualStatus = (status) => {
   return s === 'concluido' || s === 'concluído'
 }
 
+const isFluxoCompletoOkMessage = (message) => {
+  const token = String(message ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  return token === 'fluxo completo ok'
+}
+
 const normalizeRows = (payload) => {
   if (Array.isArray(payload)) return payload
   if (Array.isArray(payload?.data)) return payload.data
@@ -834,6 +843,13 @@ export default function ConsultaPresenca() {
         .filter((item, idx, arr) => arr.findIndex((x) => `${x.id}-${x.nome}-${x.prazo}` === `${item.id}-${item.nome}-${item.prazo}`) === idx)
     }
 
+    const messageValue = pick(
+      resultData,
+      ['Mensagem', 'mensagem', 'final_message', 'finalMessage', 'msg'],
+      pick(payload, ['Mensagem', 'mensagem', 'final_message', 'finalMessage', 'error', 'message'], '')
+    )
+    const errorMessage = messageValue && !isFluxoCompletoOkMessage(messageValue) ? messageValue : ''
+
     setConsultaResultModal({
       cpf: cpfBase,
       nome: nomeBase,
@@ -857,7 +873,8 @@ export default function ConsultaPresenca() {
       },
       tabelasBody,
       finalStatus: pick(resultData, ['final_status'], pick(payload, ['final_status'], payload?.ok ? 'OK' : 'ERRO')),
-      finalMessage: pick(resultData, ['final_message'], pick(payload, ['error', 'message'], ''))
+      finalMessage: messageValue,
+      errorMessage
     })
   }, [rows])
 
@@ -2159,7 +2176,7 @@ export default function ConsultaPresenca() {
                     <div className="small opacity-75">{consultaResultModal.phoneOrigin}</div>
                   </div>
                   <div className="col-12">
-                    {consultaResultModal.finalMessage && (
+                    {consultaResultModal.finalMessage && !consultaResultModal.errorMessage && (
                       <>
                         <div className="small opacity-75">Mensagem</div>
                         <div className="fw-semibold small">{consultaResultModal.finalMessage}</div>
@@ -2246,6 +2263,13 @@ export default function ConsultaPresenca() {
                     </table>
                   </div>
                 </div>
+
+                {consultaResultModal.errorMessage && (
+                  <div className="neo-card p-3 mt-3 border border-danger-subtle">
+                    <div className="small text-danger fw-semibold mb-2">Mensagem de erro</div>
+                    <div className="small text-break">{consultaResultModal.errorMessage}</div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
