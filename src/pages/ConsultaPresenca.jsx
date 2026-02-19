@@ -12,6 +12,7 @@ const HIST_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-h
 const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
 const INDIVIDUAL_RESPONSE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual-resposta/'
+const NOVO_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/novo-login'
 const LOTE_CSV_API_URL = `${PRESENCA_API_BASE}/api/presencabank-lotecsv`
 const LOTE_DELETE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote-delete/'
 const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
@@ -502,6 +503,10 @@ export default function ConsultaPresenca() {
   const [consultaMsg, setConsultaMsg] = useState('')
   const [consultando, setConsultando] = useState(false)
   const [consultaResultModal, setConsultaResultModal] = useState(null)
+  const [showAddLoginModal, setShowAddLoginModal] = useState(false)
+  const [novoLogin, setNovoLogin] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
+  const [savingNovoLogin, setSavingNovoLogin] = useState(false)
 
   const fetchHistoricoRows = useCallback(async (loginP, signal) => {
     const userId = user?.id
@@ -745,6 +750,50 @@ export default function ConsultaPresenca() {
 
   const refresh = () => {
     fetchSummary()
+  }
+
+  const openAddLoginModal = () => {
+    setNovoLogin('')
+    setNovaSenha('')
+    setShowAddLoginModal(true)
+  }
+
+  const handleNovoLoginSubmit = async (event) => {
+    event.preventDefault()
+    if (savingNovoLogin) return
+
+    const login = String(novoLogin ?? '').trim()
+    const senha = String(novaSenha ?? '').trim()
+    if (!login || !senha) {
+      notify.warn('Preencha login e senha.', { autoClose: 2200 })
+      return
+    }
+    if (!user?.id) {
+      notify.error('Usuário sem ID para cadastrar login.', { autoClose: 2400 })
+      return
+    }
+
+    try {
+      setSavingNovoLogin(true)
+      const response = await fetch(NOVO_LOGIN_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          login,
+          senha,
+          id_user: user.id
+        })
+      })
+      const rawText = await response.text()
+      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+
+      notify.success('Novo login enviado com sucesso.', { autoClose: 2200 })
+      setShowAddLoginModal(false)
+    } catch (err) {
+      notify.error(err?.message || 'Falha ao enviar novo login.', { autoClose: 2800 })
+    } finally {
+      setSavingNovoLogin(false)
+    }
   }
 
   const downloadFilteredCsv = useCallback(() => {
@@ -1608,6 +1657,13 @@ export default function ConsultaPresenca() {
                     )}
                   </select>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-outline-info btn-sm w-100 mb-3"
+                  onClick={openAddLoginModal}
+                >
+                  Adicionar login
+                </button>
                 <div className="d-flex flex-column gap-3">
                   <div>
                     <div className="small opacity-75">Total</div>
@@ -2271,6 +2327,78 @@ export default function ConsultaPresenca() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddLoginModal && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1067 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => { if (!savingNovoLogin) setShowAddLoginModal(false) }}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: 'min(92vw, 520px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content modal-dark">
+              <form onSubmit={handleNovoLoginSubmit}>
+                <div className="modal-header">
+                  <h5 className="modal-title">Adicionar login</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    aria-label="Close"
+                    disabled={savingNovoLogin}
+                    onClick={() => setShowAddLoginModal(false)}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  <div className="mb-3">
+                    <label className="form-label small opacity-75 mb-1">Login</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={novoLogin}
+                      onChange={(e) => setNovoLogin(e.target.value)}
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label small opacity-75 mb-1">Senha</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={novaSenha}
+                      onChange={(e) => setNovaSenha(e.target.value)}
+                      autoComplete="off"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-outline-light"
+                    disabled={savingNovoLogin}
+                    onClick={() => setShowAddLoginModal(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-info"
+                    disabled={savingNovoLogin}
+                  >
+                    {savingNovoLogin ? 'Enviando...' : 'Salvar'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
