@@ -1,12 +1,14 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*", "use": "@vercel/node" },
+    { "src": "api/**/*.js", "use": "@vercel/node" },
     { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*\\..*)", "dest": "/$1" },
+    { "src": "/api/n8n", "dest": "/api/n8n/[...path].js" },
+    { "src": "/api/n8n/(.*)", "dest": "/api/n8n/[...path].js" },
+    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "handle": "filesystem" },
     { "src": "/.*", "dest": "/index.html" }
   ]
 }
