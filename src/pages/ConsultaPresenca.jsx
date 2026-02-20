@@ -49,45 +49,57 @@ const dateMinuteKey = (value) => {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
+const parseDurationToMs = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+
+  const str = String(value).trim()
+  if (!str) return null
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    const numeric = Number(str)
+    return Number.isFinite(numeric) ? numeric : null
+  }
+
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) {
+    const parts = str.split(':').map(Number)
+    if (parts.some((p) => Number.isNaN(p))) return null
+    const [a, b, c] = parts
+    const totalSeconds = parts.length === 3 ? (a * 3600 + b * 60 + c) : (a * 60 + b)
+    return totalSeconds * 1000
+  }
+
+  return null
+}
+
 const getRowDurationMs = (row) => {
-  const createdRaw =
-    row?.created_at ||
-    row?.createdAt ||
-    row?.data ||
-    row?.data_hora ||
-    row?.data_hora_registro ||
-    row?.timestamp ||
-    ''
-  const updatedRaw =
-    row?.updated_at ||
-    row?.updatedAt ||
-    row?.data_update ||
-    row?.updated ||
-    row?.data_hora_update ||
-    ''
-  if (!createdRaw || !updatedRaw) return null
+  const explicit = parseDurationToMs(pick(row, ['tempo_medio', 'tempoMedio', 'tempo_medio_ms', 'avg_duration_ms', 'duracao_ms'], null))
+  if (explicit !== null) return explicit
 
-  const created = new Date(createdRaw).getTime()
-  const updated = new Date(updatedRaw).getTime()
-  if (!Number.isFinite(created) || !Number.isFinite(updated)) return null
-
-  const start = Math.min(created, updated)
-  const end = Math.max(created, updated)
-  return end - start
+  const createdAt = new Date(row?.created_at || row?.createdAt || 0).getTime()
+  const updatedAt = new Date(row?.updated_at || row?.updatedAt || 0).getTime()
+  if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) return null
+  if (updatedAt < createdAt) return null
+  return updatedAt - createdAt
 }
 
 const formatAvgDuration = (ms) => {
-  if (!Number.isFinite(ms) || ms < 0) return '-'
-  const totalSeconds = Math.round(ms / 1000)
+  const durationMs = parseDurationToMs(ms)
+  if (durationMs === null) return '-'
+  if (durationMs < 1000) return `${Math.round(durationMs)} ms`
+  const totalSeconds = Math.round(durationMs / 1000)
   if (totalSeconds < 60) return `${totalSeconds}s`
 
   const totalMinutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   if (totalMinutes < 60) return `${totalMinutes}m ${String(seconds).padStart(2, '0')}s`
 
-  const hours = Math.floor(totalMinutes / 60)
+  const totalHours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
-  return `${hours}h ${String(minutes).padStart(2, '0')}m`
+  if (totalHours < 24) return `${totalHours}h ${String(minutes).padStart(2, '0')}m`
+
+  const totalDays = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  return `${totalDays}d ${String(hours).padStart(2, '0')}h`
 }
 
 const CSV_COMMA_DECIMAL_COLUMNS = new Set([
@@ -140,39 +152,89 @@ const parseMoneyValue = (value) => {
 
 const groupLoteRows = (rows) => {
   const list = Array.isArray(rows) ? rows : []
-  return list
-    .filter((row) => {
-      const tipo = String(pick(row, ['tipoConsulta', 'tipo_consulta', 'tipo', 'nomeArquivo', 'nome_arquivo'], '')).trim().toLowerCase()
-      return tipo !== 'individual'
-    })
-    .map((row, idx) => {
-      const file = String(pick(row, ['tipoConsulta', 'nomeArquivo', 'nome_arquivo', 'name', 'fileName'], '')).trim() || `Lote ${idx + 1}`
-      const created = String(pick(row, ['created_at', 'createdAt', 'data', 'data_hora'], '')).trim()
-      const loginP = String(pick(row, ['loginP', 'login', 'usuario_login'], '')).trim()
-      const status = String(pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], 'Pendente')).trim()
-      const pending = isPendingLoteStatus(status) ? 1 : 0
-      const success = isDoneLoteStatus(status) ? 1 : 0
-      const error = (pending || success) ? 0 : 1
-      const valorLiberado = parseMoneyValue(pick(row, ['valorLiberado', 'valor_liberado', 'valor'], 0))
-      const okByValue = valorLiberado > 0 ? 1 : 0
-      const noValue = okByValue ? 0 : 1
-      const durationMs = getRowDurationMs(row)
-      return {
-        id: String(pick(row, ['id', 'ID', 'id_consulta', 'consulta_id'], `${file}-${created}-${idx}`)),
-        file,
-        created,
-        loginP,
-        total: 1,
-        totalRows: 1,
-        pending,
-        success,
-        error,
-        okByValue,
-        noValue,
-        statusOtherCount: error,
-        avgDurationMs: durationMs
+  const byFile = new Map()
+
+  for (const row of list) {
+    const tipo = String(pick(row, ['tipoConsulta', 'tipo_consulta', 'tipo'], '')).trim().toLowerCase()
+    if (tipo === 'individual') continue
+
+    const file = String(pick(row, ['nomeArquivo', 'nome_arquivo', 'tipoConsulta', 'name', 'fileName'], '')).trim()
+    if (!file) continue
+
+    const created = String(pick(row, ['created_at', 'createdAt', 'data', 'data_hora'], '')).trim()
+    const loginP = String(pick(row, ['loginP', 'login', 'usuario_login'], '')).trim()
+    const status = String(pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], 'Pendente')).trim()
+    const pending = isPendingLoteStatus(status) ? 1 : 0
+    const success = isDoneLoteStatus(status) ? 1 : 0
+    const error = (pending || success) ? 0 : 1
+    const valorLiberado = parseMoneyValue(pick(row, ['valorLiberado', 'valor_liberado', 'valor'], 0))
+    const okByValue = valorLiberado > 0 ? 1 : 0
+    const durationMs = getRowDurationMs(row)
+
+    const key = file.toLowerCase()
+    const prev = byFile.get(key) || {
+      id: key,
+      file,
+      created: '',
+      loginP: '',
+      total: 0,
+      totalRows: 0,
+      pending: 0,
+      success: 0,
+      error: 0,
+      okByValue: 0,
+      noValue: 0,
+      statusOtherCount: 0,
+      durationMsTotal: 0,
+      durationCount: 0,
+      cpfSet: new Set()
+    }
+
+    if (!prev.loginP && loginP) prev.loginP = loginP
+    const prevTs = new Date(prev.created || 0).getTime()
+    const currTs = new Date(created || 0).getTime()
+    if (created && (!Number.isFinite(prevTs) || currTs > prevTs)) prev.created = created
+
+    prev.totalRows += 1
+    const cpfKey = normalizeCpfBatch(row?.cpf ?? row?.CPF ?? row?.Cpf ?? '')
+    if (cpfKey) {
+      if (!prev.cpfSet.has(cpfKey)) {
+        prev.cpfSet.add(cpfKey)
+        prev.total += 1
       }
-    })
+    } else {
+      prev.total += 1
+    }
+
+    prev.pending += pending
+    prev.success += success
+    prev.error += error
+    prev.okByValue += okByValue
+    prev.noValue += okByValue ? 0 : 1
+    prev.statusOtherCount += error
+    if (durationMs !== null) {
+      prev.durationMsTotal += durationMs
+      prev.durationCount += 1
+    }
+
+    byFile.set(key, prev)
+  }
+
+  return Array.from(byFile.values()).map((entry) => ({
+    id: entry.id,
+    file: entry.file,
+    created: entry.created,
+    loginP: entry.loginP,
+    total: entry.total,
+    totalRows: entry.totalRows,
+    pending: entry.pending,
+    success: entry.success,
+    error: entry.error,
+    okByValue: entry.okByValue,
+    noValue: entry.noValue,
+    statusOtherCount: entry.statusOtherCount,
+    avgDurationMs: entry.durationCount > 0 ? (entry.durationMsTotal / entry.durationCount) : null
+  }))
 }
 
 const toCsvCell = (value) => {
@@ -704,11 +766,17 @@ export default function ConsultaPresenca() {
     return () => controller.abort()
   }, [summaryRows, selectedLoginIndex, fetchHistoricoRows])
 
+  const selectedLoginToken = String(summaryRows[selectedLoginIndex]?.loginP ?? '').trim().toLowerCase()
+
   const filteredRowsForExport = useMemo(() => {
     const term = search.trim().toLowerCase()
     const fromTs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null
     const toTs = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null
     const base = rows.filter((row) => {
+      const rawBase = row?.raw || row || {}
+      const rowLogin = String(pick(rawBase, ['loginP', 'login', 'usuario_login'], '')).trim().toLowerCase()
+      if (selectedLoginToken && rowLogin && rowLogin !== selectedLoginToken) return false
+
       if (fromTs !== null || toTs !== null) {
         const t = new Date(row?.data || '').getTime()
         if (!Number.isFinite(t)) return false
@@ -729,7 +797,7 @@ export default function ConsultaPresenca() {
       return tb - ta
     })
     return sorted
-  }, [rows, search, dateFrom, dateTo])
+  }, [rows, search, dateFrom, dateTo, selectedLoginToken])
 
   const filteredRows = useMemo(() => {
     const seenComposite = new Set()
@@ -751,6 +819,22 @@ export default function ConsultaPresenca() {
   }, [filteredRowsForExport])
 
   const currentSummary = summaryRows[selectedLoginIndex] || { loginP: '-', senhaP: '', total: '-', usado: '-', restantes: '-' }
+  const loteGroupsByLogin = useMemo(() => {
+    const list = Array.isArray(loteGroups) ? loteGroups : []
+    if (!selectedLoginToken) return list
+    return list.filter((item) => {
+      const itemLogin = String(item?.loginP ?? item?.login ?? '').trim().toLowerCase()
+      return !itemLogin || itemLogin === selectedLoginToken
+    })
+  }, [loteGroups, selectedLoginToken])
+  const batchJobsByLogin = useMemo(() => {
+    const list = Array.isArray(batchJobs) ? batchJobs : []
+    if (!selectedLoginToken) return list
+    return list.filter((item) => {
+      const itemLogin = String(item?.loginP ?? item?.login ?? '').trim().toLowerCase()
+      return !itemLogin || itemLogin === selectedLoginToken
+    })
+  }, [batchJobs, selectedLoginToken])
   const pageSize = 50
   const pages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const currentPage = Math.min(page, pages)
@@ -760,7 +844,7 @@ export default function ConsultaPresenca() {
     const start = (currentPage - 1) * pageSize
     return filteredRows.slice(start, start + pageSize)
   }, [filteredRows, currentPage])
-  const loteSourceRows = batchJobs.length > 0 ? batchJobs : loteGroups
+  const loteSourceRows = batchJobsByLogin.length > 0 ? batchJobsByLogin : loteGroupsByLogin
   const lotePageSize = 10
   const lotePages = Math.max(1, Math.ceil(loteSourceRows.length / lotePageSize))
   const currentLotePage = Math.min(lotePage, lotePages)
@@ -768,12 +852,12 @@ export default function ConsultaPresenca() {
   const loteEndIndex = Math.min(loteSourceRows.length, currentLotePage * lotePageSize)
   const pagedBatchJobs = useMemo(() => {
     const start = (currentLotePage - 1) * lotePageSize
-    return batchJobs.slice(start, start + lotePageSize)
-  }, [batchJobs, currentLotePage])
+    return batchJobsByLogin.slice(start, start + lotePageSize)
+  }, [batchJobsByLogin, currentLotePage])
   const pagedLoteGroups = useMemo(() => {
     const start = (currentLotePage - 1) * lotePageSize
-    return loteGroups.slice(start, start + lotePageSize)
-  }, [loteGroups, currentLotePage])
+    return loteGroupsByLogin.slice(start, start + lotePageSize)
+  }, [loteGroupsByLogin, currentLotePage])
   const sortedTabelasBody = useMemo(() => {
     const list = Array.isArray(consultaResultModal?.tabelasBody) ? [...consultaResultModal.tabelasBody] : []
     const sorted = list.sort((a, b) => {
@@ -1294,12 +1378,17 @@ export default function ConsultaPresenca() {
     const poll = async () => {
       try {
         const rows = await fetchLoteRows({ loginP: currentSummary.loginP, nomeArquivo: job.fileName })
-        if (!rows.length) return
-        const statuses = rows.map((r) => String(r?.status ?? "").toLowerCase())
+        const scopedRows = (Array.isArray(rows) ? rows : []).filter((r) => {
+          const tipo = String(pick(r, ['tipoConsulta', 'tipo_consulta', 'tipo'], '')).trim().toLowerCase()
+          return tipo !== 'individual'
+        })
+        if (!scopedRows.length) return
+
+        const statuses = scopedRows.map((r) => String(r?.status ?? '').toLowerCase())
         const pendingCount = statuses.filter((s) => isPendingLoteStatus(s)).length
         const successCount = statuses.filter((s) => isDoneLoteStatus(s)).length
         const errorCount = statuses.filter((s) => !isPendingLoteStatus(s) && !isDoneLoteStatus(s)).length
-        const durationValues = rows
+        const durationValues = scopedRows
           .map((r) => getRowDurationMs(r))
           .filter((v) => v !== null)
         const avgDurationMs = durationValues.length
@@ -1311,7 +1400,7 @@ export default function ConsultaPresenca() {
               ? {
                 ...item,
                 status: pendingCount ? "Processando" : (errorCount ? "Concluído com erros" : "Concluído"),
-                progress: pendingCount ? Math.round(((successCount + errorCount) / rows.length) * 100) : 100,
+                progress: pendingCount ? Math.round(((successCount + errorCount) / scopedRows.length) * 100) : 100,
                 okCount: successCount,
                 errCount: errorCount,
                 avgDurationMs
@@ -2252,16 +2341,6 @@ export default function ConsultaPresenca() {
                             <div className="d-inline-flex align-items-center gap-2">
                               <button
                                 type="button"
-                                className={`btn btn-ghost btn-sm btn-icon ${consultaPaused ? 'btn-ghost-success' : 'btn-ghost-info'}`}
-                                title={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
-                                aria-label={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
-                                onClick={toggleConsultaPause}
-                                disabled={consultaPauseBusy}
-                              >
-                                {consultaPaused ? <FiPlay /> : <FiPause />}
-                              </button>
-                              <button
-                                type="button"
                                 className="btn btn-ghost btn-sm btn-icon btn-ghost-success"
                                 title="Iniciar"
                                 aria-label="Iniciar"
@@ -2342,16 +2421,6 @@ export default function ConsultaPresenca() {
                           </td>
                           <td className="text-center">
                             <div className="d-inline-flex align-items-center gap-2">
-                              <button
-                                type="button"
-                                className={`btn btn-ghost btn-sm btn-icon ${consultaPaused ? 'btn-ghost-success' : 'btn-ghost-info'}`}
-                                title={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
-                                aria-label={consultaPaused ? 'Retomar processamento' : 'Pausar processamento'}
-                                onClick={toggleConsultaPause}
-                                disabled={consultaPauseBusy}
-                              >
-                                {consultaPaused ? <FiPlay /> : <FiPause />}
-                              </button>
                               <button
                                 type="button"
                                 className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
