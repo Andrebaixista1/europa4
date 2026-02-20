@@ -420,7 +420,8 @@ const copyToClipboard = async (text, successMsg = 'Copiado!') => {
 
 const statusClassName = (status) => {
   const token = String(status ?? '').trim().toLowerCase()
-  if (token === 'presente') return 'text-bg-success'
+  if (token === 'concluído' || token === 'concluido' || token === 'ok' || token === 'presente') return 'text-bg-success'
+  if (token.includes('pendente') || token.includes('process')) return 'text-bg-warning'
   if (token === 'ausente') return 'text-bg-danger'
   return 'text-bg-secondary'
 }
@@ -2168,6 +2169,7 @@ export default function ConsultaPresenca() {
                     <th>CPF</th>
                     <th>Nome</th>
                     <th>Data de atualização</th>
+                    <th>Status</th>
                     <th>Elegível</th>
                     <th>Data de nascimento</th>
                   </tr>
@@ -2175,7 +2177,7 @@ export default function ConsultaPresenca() {
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={5} className="text-center py-4">
+                      <td colSpan={6} className="text-center py-4">
                         <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                         Carregando registros...
                       </td>
@@ -2183,12 +2185,12 @@ export default function ConsultaPresenca() {
                   )}
                   {!loading && error && (
                     <tr>
-                      <td colSpan={5} className="text-center py-4 text-danger">{error}</td>
+                      <td colSpan={6} className="text-center py-4 text-danger">{error}</td>
                     </tr>
                   )}
                   {!loading && !error && filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-4 opacity-75">Nenhum registro encontrado.</td>
+                      <td colSpan={6} className="text-center py-4 opacity-75">Nenhum registro encontrado.</td>
                     </tr>
                   ) : (
                     !loading && !error && pagedRows.map((row) => (
@@ -2231,6 +2233,11 @@ export default function ConsultaPresenca() {
                           )}
                         </td>
                         <td>{formatDate(row.data)}</td>
+                        <td>
+                          <span className={`badge ${statusClassName(row?.status)}`}>
+                            {row?.status || '-'}
+                          </span>
+                        </td>
                         <td>
                           <span className={`badge ${row.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
                             {row.elegivel ? 'Sim' : 'Não'}

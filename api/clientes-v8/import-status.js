@@ -5,7 +5,7 @@ export const config = {
   },
 }
 
-const ALLOWED_METHODS = ['POST', 'OPTIONS']
+const ALLOWED_METHODS = ['GET', 'OPTIONS']
 const CORS_HEADERS = {
   'Access-Control-Allow-Methods': ALLOWED_METHODS.join(','),
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
@@ -13,17 +13,9 @@ const CORS_HEADERS = {
 }
 
 const getUpstreamUrl = () => {
-  const fromEnv = String(process.env.V8_IMPORT_CSV_UPSTREAM_URL || '').trim()
+  const fromEnv = String(process.env.V8_IMPORT_STATUS_UPSTREAM_URL || '').trim()
   if (fromEnv) return fromEnv
-  return 'http://85.31.61.242:3002/api/clientes-v8/import-csv'
-}
-
-const getRawBody = async (req) => {
-  const chunks = []
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-  }
-  return Buffer.concat(chunks)
+  return 'http://85.31.61.242:3002/api/clientes-v8/import-status'
 }
 
 export default async function handler(req, res) {
@@ -45,19 +37,18 @@ export default async function handler(req, res) {
     return
   }
 
+  const jobId = String(req.query?.jobId ?? req.query?.job_id ?? '').trim()
+  const params = new URLSearchParams()
+  if (jobId) params.set('jobId', jobId)
+
   const upstreamUrl = getUpstreamUrl()
-  const body = await getRawBody(req)
-  const headers = {
-    'Content-Type': req.headers['content-type'] || 'application/json',
-    Accept: 'application/json, text/plain, */*',
-  }
+  const targetUrl = params.toString() ? `${upstreamUrl}?${params.toString()}` : upstreamUrl
 
   let upstream
   try {
-    upstream = await fetch(upstreamUrl, {
-      method: 'POST',
-      headers,
-      body,
+    upstream = await fetch(targetUrl, {
+      method: 'GET',
+      headers: { Accept: 'application/json, text/plain, */*' },
       redirect: 'manual',
     })
   } catch (err) {
@@ -70,8 +61,7 @@ export default async function handler(req, res) {
 
   const buffer = Buffer.from(await upstream.arrayBuffer())
   res.status(upstream.status)
-  const contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8'
-  res.setHeader('Content-Type', contentType)
+  res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/json; charset=utf-8')
   res.setHeader('Content-Length', buffer.length)
   res.setHeader('Access-Control-Allow-Origin', origin)
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))

@@ -4,7 +4,7 @@ import Footer from '../components/Footer.jsx'
 import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiChevronDown, FiDownload, FiEye, FiFileText, FiRefreshCw, FiTrash2, FiUpload } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
-import { importarCsvV8 } from '../services/v8Client.js'
+import { consultarImportacaoCsvV8Status, importarCsvV8 } from '../services/v8Client.js'
 import { notify } from '../utils/notify.js'
 
 const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8'
@@ -758,6 +758,7 @@ export default function ConsultasV8() {
   const [batchPreviewRow, setBatchPreviewRow] = useState(null)
   const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
   const [batchPollingTarget, setBatchPollingTarget] = useState(null)
+  const [batchImportJob, setBatchImportJob] = useState(null)
   const [showAddLoginModal, setShowAddLoginModal] = useState(false)
   const [novoEmail, setNovoEmail] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
@@ -1027,6 +1028,49 @@ export default function ConsultasV8() {
     }
   }, [batchPollingTarget, fetchConsultas])
 
+  useEffect(() => {
+    const jobId = String(batchImportJob?.jobId ?? '').trim()
+    if (!jobId) return undefined
+
+    let cancelled = false
+    let errorsCount = 0
+
+    const tick = async () => {
+      if (cancelled) return
+      try {
+        const status = await consultarImportacaoCsvV8Status({ jobId })
+        if (cancelled) return
+        errorsCount = 0
+
+        if (status.failed) {
+          setBatchImportJob(null)
+          notify.error('Falha no processamento do lote.', { autoClose: 2800 })
+          fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+          return
+        }
+
+        if (status.done) {
+          setBatchImportJob(null)
+          notify.success('Lote processado com sucesso.', { autoClose: 2400 })
+          fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+        }
+      } catch {
+        errorsCount += 1
+        if (errorsCount >= 4) {
+          setBatchImportJob(null)
+          notify.warn('Nao foi possivel acompanhar o status do lote.', { autoClose: 2600 })
+        }
+      }
+    }
+
+    tick()
+    const interval = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [batchImportJob, fetchConsultas])
+
   const openAddLoginModal = useCallback(() => {
     setNovoEmail('')
     setNovaSenha('')
@@ -1246,7 +1290,7 @@ export default function ConsultasV8() {
       setUploadingBatchFile(true)
       setBatchUploadError('')
 
-      await importarCsvV8({
+      const result = await importarCsvV8({
         csv: csvBody,
         nomeArquivo,
         empresa: empresa || '-',
@@ -1258,7 +1302,14 @@ export default function ConsultasV8() {
       setPendingBatchUpload(null)
       setBatchUploads((prev) => prev.filter((item) => item?.fileName !== nomeArquivo))
       setBatchPollingTarget({ fileName: nomeArquivo })
-      notify.success('Lote enviado com sucesso.', { autoClose: 2200 })
+
+      if (result?.accepted) {
+        if (result?.jobId) setBatchImportJob({ jobId: result.jobId, fileName: nomeArquivo })
+        notify.info('Arquivo recebido, processando em background.', { autoClose: 2800 })
+      } else {
+        notify.success('Lote enviado com sucesso.', { autoClose: 2200 })
+      }
+
       fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
     } catch (err) {
       const msg = err?.message || 'Falha ao enviar lote CSV.'
