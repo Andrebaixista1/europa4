@@ -4,13 +4,13 @@ import Footer from '../components/Footer.jsx'
 import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiChevronDown, FiDownload, FiEye, FiFileText, FiRefreshCw, FiTrash2, FiUpload } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
+import { importarCsvV8 } from '../services/v8Client.js'
 import { notify } from '../utils/notify.js'
 
 const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8'
 const V8_GET_LOGINS_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8'
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const V8_INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-individual'
-const V8_IMPORT_CSV_API_URL = 'http://85.31.61.242:3002/api/clientes-v8/import-csv'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
 
@@ -799,7 +799,7 @@ export default function ConsultasV8() {
       const mapped = sourceRows.map((row) => ({
         loginId: pickRowValue(row, ['id_login', 'idLogin', 'login_id', 'id', 'Id'], ''),
         idTokenUsado: pickRowValue(row, ['id_token_usado', 'idTokenUsado', 'id_token', 'token_id', 'id_login', 'idLogin', 'login_id', 'id'], ''),
-        tokenUsado: String(pickRowValue(row, ['token_usado', 'token_usaro', 'tokenUsado', 'token', 'login', 'email'], '')).trim(),
+        tokenUsado: String(pickRowValue(row, ['token_usado', 'tokenUsado', 'token'], '')).trim(),
         login: String(pickRowValue(row, ['login', 'loginP', 'usuario_login', 'email'], '-')).trim() || '-',
         email: String(pickRowValue(row, ['email', 'Email', 'login', 'loginP'], '')).trim(),
         empresa: String(pickRowValue(row, ['empresa', 'Empresa', 'company', 'nome_empresa'], '')).trim(),
@@ -1230,7 +1230,11 @@ export default function ConsultasV8() {
     }
 
     const empresa = String(selectedLogin?.empresa ?? '').trim()
-    const tokenUsado = String(selectedLogin?.tokenUsado ?? selectedLogin?.login ?? selectedLogin?.email ?? '').trim()
+    const tokenUsado = String(selectedLogin?.tokenUsado ?? '').trim()
+    if (!tokenUsado) {
+      notify.error('Login sem token_usado para envio.', { autoClose: 2800 })
+      return
+    }
     const nomeArquivo = String(pendingBatchUpload?.fileName || `lote_${Date.now()}.csv`).trim()
     const csvBody = buildNormalizedBatchCsv(pendingBatchUpload?.validRows)
     if (!csvBody || csvBody.split(/\r?\n/).length <= 1) {
@@ -1242,23 +1246,14 @@ export default function ConsultasV8() {
       setUploadingBatchFile(true)
       setBatchUploadError('')
 
-      const requestUrl = new URL(V8_IMPORT_CSV_API_URL)
-      requestUrl.searchParams.set('nomeArquivo', nomeArquivo)
-      requestUrl.searchParams.set('empresa', empresa || '-')
-      if (tokenUsado) {
-        requestUrl.searchParams.set('token_usado', tokenUsado)
-        requestUrl.searchParams.set('token_usaro', tokenUsado)
-      }
-      requestUrl.searchParams.set('id_token_usado', idTokenUsado)
-      requestUrl.searchParams.set('id_user', String(userId))
-
-      const response = await fetch(requestUrl.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: csvBody
+      await importarCsvV8({
+        csv: csvBody,
+        nomeArquivo,
+        empresa: empresa || '-',
+        tokenUsado,
+        idTokenUsado: toNumberOrNull(idTokenUsado) ?? idTokenUsado,
+        idUser: userId
       })
-      const rawText = await response.text()
-      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
 
       setPendingBatchUpload(null)
       setBatchUploads((prev) => prev.filter((item) => item?.fileName !== nomeArquivo))

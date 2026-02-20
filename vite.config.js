@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const N8N_WEBHOOK = env.N8N_WEBHOOK_URL || process.env.N8N_WEBHOOK_URL || 'http://localhost:5679'
   const BMG_SOAP_URL = env.BMG_SOAP_URL || env.VITE_BMG_SOAP_URL || process.env.BMG_SOAP_URL || process.env.VITE_BMG_SOAP_URL || ''
   const PRESENCA_API_BASE = env.PRESENCA_API_BASE_URL || process.env.PRESENCA_API_BASE_URL || 'http://85.31.61.242:3011'
+  const V8_IMPORT_API_BASE = env.V8_IMPORT_API_BASE_URL || process.env.V8_IMPORT_API_BASE_URL || 'http://85.31.61.242:3002'
 
   return {
     plugins: [react()],
@@ -28,6 +29,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           rewrite: (path) => path.replace(/^\/api\/presenca/, ''),
+        },
+        '/api/clientes-v8': {
+          target: V8_IMPORT_API_BASE,
+          changeOrigin: true,
+          secure: false,
         },
         ...(BMG_SOAP_URL
           ? {
