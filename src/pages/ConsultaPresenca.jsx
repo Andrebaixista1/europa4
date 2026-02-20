@@ -50,17 +50,30 @@ const dateMinuteKey = (value) => {
 }
 
 const getRowDurationMs = (row) => {
-  const createdRaw = row?.created_at || row?.createdAt || row?.data || ''
-  const updatedRaw = row?.updated_at || row?.updatedAt || ''
+  const createdRaw =
+    row?.created_at ||
+    row?.createdAt ||
+    row?.data ||
+    row?.data_hora ||
+    row?.data_hora_registro ||
+    row?.timestamp ||
+    ''
+  const updatedRaw =
+    row?.updated_at ||
+    row?.updatedAt ||
+    row?.data_update ||
+    row?.updated ||
+    row?.data_hora_update ||
+    ''
   if (!createdRaw || !updatedRaw) return null
 
   const created = new Date(createdRaw).getTime()
   const updated = new Date(updatedRaw).getTime()
   if (!Number.isFinite(created) || !Number.isFinite(updated)) return null
 
-  const diff = updated - created
-  if (diff < 0) return null
-  return diff
+  const start = Math.min(created, updated)
+  const end = Math.max(created, updated)
+  return end - start
 }
 
 const formatAvgDuration = (ms) => {

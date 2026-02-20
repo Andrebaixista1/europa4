@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 .env
 .env.*
+!.env.example
 
 # Codex CLI
 .codex_known_hosts

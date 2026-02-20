@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiChevronDown, FiDownload, FiEye, FiRefreshCw } from 'react-icons/fi'
+import { FiArrowLeft, FiChevronDown, FiDownload, FiEye, FiFileText, FiRefreshCw, FiTrash2, FiUpload } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 
@@ -10,6 +10,7 @@ const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8'
 const V8_GET_LOGINS_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8'
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const V8_INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-individual'
+const V8_IMPORT_CSV_API_URL = 'http://85.31.61.242:3002/api/clientes-v8/import-csv'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
 
@@ -110,6 +111,9 @@ const normalizeClientName = (value) => {
   return txt
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
     .toUpperCase()
 }
 
@@ -222,6 +226,16 @@ const normalizeStatusToken = (status) => {
     .toUpperCase()
 }
 
+const getV8RowStatus = (row) => {
+  return String(
+    pickRowValue(
+      row,
+      ['status_consulta_v8', 'statusConsultaV8', 'status_consulta', 'status', 'situacao', 'final_status'],
+      ''
+    )
+  ).trim()
+}
+
 const isSuccessV8Status = (status) => {
   const token = normalizeStatusToken(status)
   if (!token) return false
@@ -275,7 +289,7 @@ const isPendingV8Status = (status) => {
 
 const hasPendingRows = (rows) => {
   const list = Array.isArray(rows) ? rows : []
-  return list.some((row) => isPendingV8Status(row?.status_consulta_v8))
+  return list.some((row) => isPendingV8Status(getV8RowStatus(row)))
 }
 
 const normalizeNameToken = (value) => {
@@ -298,10 +312,63 @@ const rowMatchesPollingQuery = (row, query) => {
   return byCpf && byNome
 }
 
+const getRowCreatedAtTimestamp = (row) => {
+  const raw = row?.created_at ?? row?.createdAt ?? 0
+  const directTs = new Date(raw).getTime()
+  if (Number.isFinite(directTs)) return directTs
+
+  const str = String(raw ?? '').trim()
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(str)
+  if (!match) return 0
+
+  const day = Number(match[1])
+  const month = Number(match[2])
+  const year = Number(match[3])
+  const hour = Number(match[4] ?? 0)
+  const minute = Number(match[5] ?? 0)
+  const second = Number(match[6] ?? 0)
+  const parsedTs = new Date(year, month - 1, day, hour, minute, second).getTime()
+  return Number.isFinite(parsedTs) ? parsedTs : 0
+}
+
 const getRowSortTimestamp = (row) => {
   const raw = row?.created_at || row?.updated_at || row?.createdAt || row?.updatedAt || 0
   const ts = new Date(raw).getTime()
   return Number.isFinite(ts) ? ts : 0
+}
+
+const getV8RowIdentityKey = (row) => {
+  const cpf = normalizeCpf11(row?.cliente_cpf ?? row?.cpf)
+  const nome = normalizeNameToken(row?.cliente_nome ?? row?.nome)
+  const telefone = onlyDigits(row?.telefone ?? row?.phone ?? row?.celular ?? '')
+  if (cpf || nome || telefone) {
+    return `${cpf}|${nome}|${telefone}`
+  }
+
+  const id = String(row?.id ?? '').trim()
+  const createdAt = String(row?.created_at ?? row?.createdAt ?? '').trim()
+  const updatedAt = String(row?.updated_at ?? row?.updatedAt ?? '').trim()
+  return `fallback|${id}|${createdAt}|${updatedAt}`
+}
+
+const dedupeRowsByIdentityLatest = (rows) => {
+  const list = Array.isArray(rows) ? rows : []
+  const byKey = new Map()
+
+  for (const row of list) {
+    const key = getV8RowIdentityKey(row)
+    const prev = byKey.get(key)
+    if (!prev) {
+      byKey.set(key, row)
+      continue
+    }
+
+    if (getRowSortTimestamp(row) >= getRowSortTimestamp(prev)) {
+      byKey.set(key, row)
+    }
+  }
+
+  return Array.from(byKey.values())
 }
 
 const pickLatestRow = (rows) => {
@@ -356,8 +423,8 @@ const mergeRowsKeepingSuccessStatus = (previousRows, nextRows) => {
     const prevRow = prevById.get(id)
     if (!prevRow) return nextRow
 
-    const prevStatus = prevRow?.status_consulta_v8
-    const nextStatus = nextRow?.status_consulta_v8
+    const prevStatus = getV8RowStatus(prevRow)
+    const nextStatus = getV8RowStatus(nextRow)
     if (!isSuccessV8Status(prevStatus)) return nextRow
 
     const nextIsPendingOrEmpty = !String(nextStatus ?? '').trim() || isPendingV8Status(nextStatus)
@@ -378,6 +445,287 @@ const normalizeDescricao = (value) => {
 }
 
 const descricaoKey = (value) => normalizeDescricao(value).toLowerCase()
+
+const normalizeProvidedPhone = (value) => {
+  const digits = onlyDigits(value)
+  if (!digits) return ''
+  return digits.length > 11 ? digits.slice(-11) : digits
+}
+
+const generateRandomPhone11 = () => {
+  const ddd = Math.floor(Math.random() * 89) + 11
+  const tail = Math.floor(Math.random() * (99999999 - 11111111 + 1)) + 11111111
+  return `${ddd}9${String(tail).padStart(8, '0')}`
+}
+
+const normalizeOrGenerateBatchPhone = (value) => {
+  const provided = normalizeProvidedPhone(value)
+  if (provided) return provided
+  return generateRandomPhone11()
+}
+
+const normalizeHeaderToken = (value) => {
+  const txt = String(value ?? '').trim()
+  if (!txt) return ''
+  return txt
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+}
+
+const parseSemicolonCsvLine = (line) => {
+  const src = String(line ?? '')
+  const out = []
+  let current = ''
+  let inQuotes = false
+
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i]
+    if (ch === '"') {
+      if (inQuotes && src[i + 1] === '"') {
+        current += '"'
+        i += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+    if (ch === ';' && !inQuotes) {
+      out.push(current)
+      current = ''
+      continue
+    }
+    current += ch
+  }
+  out.push(current)
+
+  return out.map((cell, idx) => {
+    const value = String(cell ?? '').trim()
+    if (idx === 0) return value.replace(/^\uFEFF/, '')
+    return value
+  })
+}
+
+const parseBatchCsvFile = (rawText, fileName = '') => {
+  const text = String(rawText ?? '').replace(/^\uFEFF/, '')
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => String(line ?? '').trim())
+    .filter((line) => line.length > 0)
+
+  if (lines.length === 0) {
+    return { ok: false, error: 'Arquivo CSV vazio.' }
+  }
+
+  const headerCells = parseSemicolonCsvLine(lines[0])
+  if (headerCells.length < 2) {
+    return { ok: false, error: 'CSV invalido. Use separador ; e colunas cpf;nome.' }
+  }
+
+  const headerTokens = headerCells.map(normalizeHeaderToken)
+  const cpfIndex = headerTokens.indexOf('cpf')
+  const nomeIndex = headerTokens.indexOf('nome')
+  const telefoneIndex = headerTokens.findIndex((token) => token === 'telefone' || token === 'phone' || token === 'celular')
+  if (cpfIndex === -1 || nomeIndex === -1) {
+    return { ok: false, error: 'CSV precisa ter as colunas obrigatorias: cpf e nome.' }
+  }
+
+  const validRows = []
+  const invalidRows = []
+
+  for (let idx = 1; idx < lines.length; idx += 1) {
+    const cells = parseSemicolonCsvLine(lines[idx])
+    const rawCpf = cells[cpfIndex] ?? ''
+    const rawNome = cells[nomeIndex] ?? ''
+    const rawTelefone = telefoneIndex >= 0 ? (cells[telefoneIndex] ?? '') : ''
+    const cpf = normalizeCpf11(rawCpf)
+    const nome = normalizeClientName(rawNome)
+    const telefone = normalizeOrGenerateBatchPhone(rawTelefone)
+
+    if (!cpf || !nome) {
+      invalidRows.push({
+        line: idx + 1,
+        cpf: String(rawCpf ?? ''),
+        nome: String(rawNome ?? ''),
+        telefone: String(rawTelefone ?? ''),
+        reason: 'cpf ou nome invalido'
+      })
+      continue
+    }
+
+    validRows.push({
+      line: idx + 1,
+      cpf,
+      nome,
+      telefone
+    })
+  }
+
+  const uniqueValidRows = dedupeRowsByIdentityLatest(validRows)
+
+  if (uniqueValidRows.length === 0) {
+    return {
+      ok: false,
+      error: 'Nenhuma linha valida encontrada no CSV.',
+      fileName,
+      totalRows: Math.max(0, lines.length - 1),
+      validRows: uniqueValidRows,
+      invalidRows
+    }
+  }
+
+  return {
+    ok: true,
+    fileName,
+    totalRows: Math.max(0, lines.length - 1),
+    validRows: uniqueValidRows,
+    invalidRows
+  }
+}
+
+const parseDurationToMs = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+
+  const str = String(value).trim()
+  if (!str) return null
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    const numeric = Number(str)
+    return Number.isFinite(numeric) ? numeric : null
+  }
+
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) {
+    const parts = str.split(':').map(Number)
+    if (parts.some((p) => Number.isNaN(p))) return null
+    const [a, b, c] = parts
+    const totalSeconds = parts.length === 3 ? (a * 3600 + b * 60 + c) : (a * 60 + b)
+    return totalSeconds * 1000
+  }
+
+  return null
+}
+
+const getRowDurationMs = (row) => {
+  const explicit = parseDurationToMs(pickRowValue(row, ['tempo_medio', 'tempoMedio', 'tempo_medio_ms', 'avg_duration_ms', 'duracao_ms'], null))
+  if (explicit !== null) return explicit
+
+  const createdAt = new Date(row?.created_at || row?.createdAt || 0).getTime()
+  const updatedAt = new Date(row?.updated_at || row?.updatedAt || 0).getTime()
+  if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) return null
+  if (updatedAt < createdAt) return null
+  return updatedAt - createdAt
+}
+
+const formatAvgDuration = (value) => {
+  const ms = parseDurationToMs(value)
+  if (ms === null) return '-'
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  const sec = ms / 1000
+  if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)} s`
+  const min = Math.floor(sec / 60)
+  const rem = Math.round(sec % 60)
+  return `${min}m ${String(rem).padStart(2, '0')}s`
+}
+
+const toCsvEscaped = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+
+const formatValorLiberadoCsv = (value) => {
+  if (value === null || value === undefined || value === '') return ''
+  const parsed = parseMoney(value)
+  if (parsed !== null) {
+    return parsed.toFixed(2).replace('.', ',')
+  }
+  return String(value).replace(/\./g, ',')
+}
+
+const mapRowToV8CsvPayload = (row, fallbackTipoConsulta = '') => {
+  const rawCpf = String(row?.cliente_cpf ?? row?.cpf ?? '').trim()
+  const rawNome = String(row?.cliente_nome ?? row?.nome ?? '').trim()
+  const rawTelefone = String(row?.telefone ?? row?.phone ?? row?.celular ?? '').trim()
+
+  const clienteCpf = rawCpf || normalizeCpf11(row?.cliente_cpf ?? row?.cpf)
+  const clienteNome = rawNome
+  const telefone = rawTelefone ? normalizeProvidedPhone(rawTelefone) : ''
+  const mensagem = String(row?.mensagem ?? row?.descricao ?? '').trim()
+  const tipoConsulta = String(
+    pickRowValue(
+      row,
+      ['tipoConsulta', 'tipo_consulta', 'tipoConsultaV8', 'tipo_consulta_v8', 'nome_arquivo', 'nomeArquivo', 'arquivo', 'file_name', 'fileName'],
+      fallbackTipoConsulta
+    )
+  ).trim()
+  const statusConsultaV8 = getV8RowStatus(row)
+  const valorLiberado = formatValorLiberadoCsv(row?.valor_liberado ?? row?.valorLiberado ?? row?.valor)
+  const createdAt = String(row?.created_at ?? row?.createdAt ?? '').trim()
+  const updatedAt = String(row?.updated_at ?? row?.updatedAt ?? '').trim()
+
+  return {
+    cliente_cpf: clienteCpf,
+    cliente_nome: clienteNome,
+    telefone,
+    mensagem,
+    tipoConsulta,
+    status_consulta_v8: statusConsultaV8,
+    valor_liberado: valorLiberado,
+    created_at: createdAt,
+    updated_at: updatedAt
+  }
+}
+
+const dedupeV8CsvRows = (rows) => {
+  const list = Array.isArray(rows) ? rows : []
+  const seen = new Set()
+  const out = []
+
+  for (const row of list) {
+    const key = [
+      row?.cliente_cpf ?? '',
+      row?.cliente_nome ?? '',
+      row?.telefone ?? '',
+      row?.mensagem ?? '',
+      row?.tipoConsulta ?? '',
+      row?.status_consulta_v8 ?? '',
+      row?.valor_liberado ?? '',
+      row?.created_at ?? '',
+      row?.updated_at ?? ''
+    ].map((v) => String(v ?? '').trim().toLowerCase()).join('|')
+
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(row)
+  }
+
+  return out
+}
+
+const getBatchFileNameFromRow = (row) => {
+  return String(pickRowValue(row, [
+    'nome_arquivo',
+    'nomeArquivo',
+    'arquivo',
+    'file_name',
+    'fileName',
+    'lote',
+    'batch',
+    'tipoConsulta',
+    'tipo_consulta',
+    'tipoConsultaV8',
+    'tipo_consulta_v8'
+  ], '')).trim()
+}
+
+const buildNormalizedBatchCsv = (rows) => {
+  const list = Array.isArray(rows) ? rows : []
+  const lines = ['cpf;nome;telefone']
+  for (const row of list) {
+    const cpf = normalizeCpf11(row?.cpf)
+    const nome = normalizeClientName(row?.nome)
+    const telefone = normalizeOrGenerateBatchPhone(row?.telefone)
+    if (!cpf || !nome) continue
+    lines.push(`${cpf};${nome};${telefone}`)
+  }
+  return lines.join('\r\n')
+}
 
 export default function ConsultasV8() {
   const { user } = useAuth()
@@ -403,6 +751,13 @@ export default function ConsultasV8() {
   const [consultaCpf, setConsultaCpf] = useState('')
   const [consultaNome, setConsultaNome] = useState('')
   const [consultaError, setConsultaError] = useState('')
+  const [consultaMode, setConsultaMode] = useState('individual')
+  const [pendingBatchUpload, setPendingBatchUpload] = useState(null)
+  const [batchUploads, setBatchUploads] = useState([])
+  const [batchUploadError, setBatchUploadError] = useState('')
+  const [batchPreviewRow, setBatchPreviewRow] = useState(null)
+  const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
+  const [batchPollingTarget, setBatchPollingTarget] = useState(null)
   const [showAddLoginModal, setShowAddLoginModal] = useState(false)
   const [novoEmail, setNovoEmail] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
@@ -412,8 +767,10 @@ export default function ConsultasV8() {
   const [autoPollingActive, setAutoPollingActive] = useState(false)
   const [pollingQuery, setPollingQuery] = useState(null)
   const pollInFlightRef = useRef(false)
+  const batchPollInFlightRef = useRef(false)
   const pollSawPendingRef = useRef(false)
   const tableScrollRef = useRef(null)
+  const batchFileInputRef = useRef(null)
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
 
@@ -441,6 +798,8 @@ export default function ConsultasV8() {
       const sourceRows = normalizeRows(payload)
       const mapped = sourceRows.map((row) => ({
         loginId: pickRowValue(row, ['id_login', 'idLogin', 'login_id', 'id', 'Id'], ''),
+        idTokenUsado: pickRowValue(row, ['id_token_usado', 'idTokenUsado', 'id_token', 'token_id', 'id_login', 'idLogin', 'login_id', 'id'], ''),
+        tokenUsado: String(pickRowValue(row, ['token_usado', 'token_usaro', 'tokenUsado', 'token', 'login', 'email'], '')).trim(),
         login: String(pickRowValue(row, ['login', 'loginP', 'usuario_login', 'email'], '-')).trim() || '-',
         email: String(pickRowValue(row, ['email', 'Email', 'login', 'loginP'], '')).trim(),
         empresa: String(pickRowValue(row, ['empresa', 'Empresa', 'company', 'nome_empresa'], '')).trim(),
@@ -607,7 +966,7 @@ export default function ConsultasV8() {
         }, null)
         if (!latestScopedRow) return
 
-        const latestIsPending = isPendingV8Status(latestScopedRow?.status_consulta_v8)
+        const latestIsPending = isPendingV8Status(getV8RowStatus(latestScopedRow))
         if (latestIsPending) {
           pollSawPendingRef.current = true
           return
@@ -628,6 +987,45 @@ export default function ConsultasV8() {
       clearInterval(interval)
     }
   }, [autoPollingActive, pollingQuery, fetchConsultas])
+
+  useEffect(() => {
+    const fileName = String(batchPollingTarget?.fileName ?? '').trim()
+    if (!fileName) return undefined
+
+    let cancelled = false
+    const normalizedTarget = normalizeHeaderToken(fileName)
+
+    const tick = async () => {
+      if (cancelled || batchPollInFlightRef.current) return
+      batchPollInFlightRef.current = true
+      try {
+        const latestRows = await fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+        if (cancelled) return
+
+        const scopedRows = (Array.isArray(latestRows) ? latestRows : []).filter((row) => {
+          const rowBatchName = getBatchFileNameFromRow(row)
+          return normalizeHeaderToken(rowBatchName) === normalizedTarget
+        })
+
+        // Enquanto o lote ainda não aparece no retorno, continua polling.
+        if (scopedRows.length === 0) return
+
+        const hasPending = scopedRows.some((row) => isPendingV8Status(getV8RowStatus(row)))
+        if (hasPending) return
+
+        setBatchPollingTarget(null)
+      } finally {
+        batchPollInFlightRef.current = false
+      }
+    }
+
+    tick()
+    const interval = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [batchPollingTarget, fetchConsultas])
 
   const openAddLoginModal = useCallback(() => {
     setNovoEmail('')
@@ -755,6 +1153,219 @@ export default function ConsultasV8() {
     }
   }, [consultaCpf, consultaNome, fetchConsultas, loginSummaries, selectedLoginIndex, user?.id])
 
+  const openBatchFilePicker = useCallback(() => {
+    if (!batchFileInputRef.current) return
+    batchFileInputRef.current.click()
+  }, [])
+
+  const handleBatchFileChange = useCallback(async (event) => {
+    const input = event?.target
+    const file = input?.files?.[0]
+    if (!file) return
+
+    try {
+      const fileName = String(file?.name ?? '').trim()
+      if (!fileName.toLowerCase().endsWith('.csv')) {
+        const msg = 'Selecione um arquivo .csv.'
+        setBatchUploadError(msg)
+        setPendingBatchUpload(null)
+        notify.warn(msg, { autoClose: 2200 })
+        return
+      }
+
+      const rawText = await file.text()
+      const parsed = parseBatchCsvFile(rawText, fileName)
+      if (!parsed.ok) {
+        const msg = parsed?.error || 'Arquivo CSV invalido.'
+        setBatchUploadError(msg)
+        setPendingBatchUpload(null)
+        notify.error(msg, { autoClose: 2800 })
+        return
+      }
+
+      setBatchUploadError('')
+      setPendingBatchUpload({
+        id: `draft-${Date.now()}`,
+        fileName: parsed.fileName || fileName,
+        totalRows: parsed.totalRows,
+        validRows: parsed.validRows,
+        invalidRows: parsed.invalidRows,
+        status: 'Pronto',
+        createdAt: new Date().toISOString()
+      })
+      notify.success(`Arquivo validado: ${parsed.validRows.length} nome(s) pronto(s).`, { autoClose: 2200 })
+    } catch (err) {
+      const msg = err?.message || 'Falha ao ler o CSV.'
+      setBatchUploadError(msg)
+      setPendingBatchUpload(null)
+      notify.error(msg, { autoClose: 2600 })
+    } finally {
+      if (input) input.value = ''
+    }
+  }, [])
+
+  const addPendingBatchToList = useCallback(async () => {
+    if (uploadingBatchFile) return
+    if (!pendingBatchUpload) {
+      notify.warn('Selecione e valide um CSV primeiro.', { autoClose: 2200 })
+      return
+    }
+
+    const userId = toNumberOrNull(user?.id)
+    if (userId === null) {
+      notify.error('Usuario sem ID para envio do lote.', { autoClose: 2600 })
+      return
+    }
+
+    const selectedLogin = loginSummaries[selectedLoginIndex] || null
+    if (!selectedLogin) {
+      notify.error('Selecione um login valido para enviar o lote.', { autoClose: 2600 })
+      return
+    }
+
+    const idTokenUsado = String(selectedLogin?.idTokenUsado ?? selectedLogin?.loginId ?? '').trim()
+    if (!idTokenUsado) {
+      notify.error('Login sem id_token_usado para envio.', { autoClose: 2800 })
+      return
+    }
+
+    const empresa = String(selectedLogin?.empresa ?? '').trim()
+    const tokenUsado = String(selectedLogin?.tokenUsado ?? selectedLogin?.login ?? selectedLogin?.email ?? '').trim()
+    const nomeArquivo = String(pendingBatchUpload?.fileName || `lote_${Date.now()}.csv`).trim()
+    const csvBody = buildNormalizedBatchCsv(pendingBatchUpload?.validRows)
+    if (!csvBody || csvBody.split(/\r?\n/).length <= 1) {
+      notify.error('CSV sem linhas validas para envio.', { autoClose: 2600 })
+      return
+    }
+
+    try {
+      setUploadingBatchFile(true)
+      setBatchUploadError('')
+
+      const requestUrl = new URL(V8_IMPORT_CSV_API_URL)
+      requestUrl.searchParams.set('nomeArquivo', nomeArquivo)
+      requestUrl.searchParams.set('empresa', empresa || '-')
+      if (tokenUsado) {
+        requestUrl.searchParams.set('token_usado', tokenUsado)
+        requestUrl.searchParams.set('token_usaro', tokenUsado)
+      }
+      requestUrl.searchParams.set('id_token_usado', idTokenUsado)
+      requestUrl.searchParams.set('id_user', String(userId))
+
+      const response = await fetch(requestUrl.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: csvBody
+      })
+      const rawText = await response.text()
+      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+
+      setPendingBatchUpload(null)
+      setBatchUploads((prev) => prev.filter((item) => item?.fileName !== nomeArquivo))
+      setBatchPollingTarget({ fileName: nomeArquivo })
+      notify.success('Lote enviado com sucesso.', { autoClose: 2200 })
+      fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+    } catch (err) {
+      const msg = err?.message || 'Falha ao enviar lote CSV.'
+      setBatchUploadError(msg)
+      notify.error(msg, { autoClose: 3200 })
+    } finally {
+      setUploadingBatchFile(false)
+    }
+  }, [uploadingBatchFile, pendingBatchUpload, user?.id, loginSummaries, selectedLoginIndex, fetchConsultas])
+
+  const removeLocalBatchEntry = useCallback((id) => {
+    setBatchUploads((prev) => prev.filter((entry) => entry?.id !== id))
+  }, [])
+
+  const openBatchPreviewModal = useCallback((entry) => {
+    if (!entry) return
+    let previewRows = []
+    if (entry?.source === 'local') {
+      previewRows = Array.isArray(entry?.validRows) ? entry.validRows : []
+    } else {
+      const sourceRows = Array.isArray(entry?.apiRows) ? entry.apiRows : []
+      previewRows = sourceRows
+        .map((row) => ({
+          cpf: normalizeCpf11(row?.cliente_cpf ?? row?.cpf),
+          nome: normalizeClientName(row?.cliente_nome ?? row?.nome),
+          telefone: normalizeProvidedPhone(row?.telefone ?? row?.phone ?? row?.celular)
+        }))
+        .filter((row) => row.cpf && row.nome)
+    }
+
+    previewRows = dedupeRowsByIdentityLatest(previewRows)
+
+    setBatchPreviewRow({
+      ...entry,
+      previewRows: previewRows.slice(0, 120),
+      previewTotal: previewRows.length
+    })
+  }, [])
+
+  const downloadBatchRows = useCallback((entry) => {
+    if (!entry) return
+    let rowsForCsv = []
+    if (entry?.source === 'local') {
+      rowsForCsv = (Array.isArray(entry?.validRows) ? entry.validRows : []).map((row) => mapRowToV8CsvPayload({
+        cliente_cpf: row?.cpf,
+        cliente_nome: row?.nome,
+        telefone: row?.telefone,
+        mensagem: '',
+        tipoConsulta: entry?.fileName || '',
+        valor_liberado: '',
+        created_at: '',
+        updated_at: ''
+      }, entry?.fileName || ''))
+    } else {
+      const sourceRows = Array.isArray(entry?.apiRows) ? entry.apiRows : []
+      rowsForCsv = sourceRows
+        .map((row) => mapRowToV8CsvPayload(row, entry?.fileName || ''))
+        .filter((row) => row.cliente_cpf && row.cliente_nome)
+    }
+
+    rowsForCsv = dedupeV8CsvRows(rowsForCsv)
+
+    if (rowsForCsv.length === 0) {
+      notify.warn('Nao ha linhas validas para download.', { autoClose: 2200 })
+      return
+    }
+
+    const header = [
+      'cliente_cpf',
+      'cliente_nome',
+      'telefone',
+      'mensagem',
+      'tipoConsulta',
+      'status_consulta_v8',
+      'valor_liberado',
+      'created_at',
+      'updated_at'
+    ].join(';')
+    const lines = rowsForCsv.map((item) => ([
+      item?.cliente_cpf ?? '',
+      item?.cliente_nome ?? '',
+      item?.telefone ?? '',
+      item?.mensagem ?? '',
+      item?.tipoConsulta ?? '',
+      item?.status_consulta_v8 ?? '',
+      item?.valor_liberado ?? '',
+      item?.created_at ?? '',
+      item?.updated_at ?? ''
+    ].map(toCsvEscaped).join(';')))
+    const csv = ['\ufeff' + header, ...lines].join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const baseName = String(entry?.fileName || 'consulta-v8-lote')
+      .replace(/\.csv$/i, '')
+      .replace(/[^\w.-]+/g, '_')
+    a.href = url
+    a.download = `${baseName}_normalizado.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [])
+
   const handleRefresh = useCallback(() => {
     const normalizedCpf = normalizeCpf11(consultaCpf)
     const normalizedNome = normalizeClientName(consultaNome)
@@ -777,9 +1388,10 @@ export default function ConsultasV8() {
   const sortedRows = useMemo(() => {
     const list = Array.isArray(visibleRows) ? [...visibleRows] : []
     return list.sort((a, b) => {
-      const ta = new Date(a?.created_at || 0).getTime()
-      const tb = new Date(b?.created_at || 0).getTime()
-      return tb - ta
+      const ta = getRowCreatedAtTimestamp(a)
+      const tb = getRowCreatedAtTimestamp(b)
+      if (tb !== ta) return tb - ta
+      return getRowSortTimestamp(b) - getRowSortTimestamp(a)
     })
   }, [visibleRows])
 
@@ -796,7 +1408,7 @@ export default function ConsultasV8() {
   const statusOptions = useMemo(() => {
     const set = new Set()
     for (const r of sortedRows) {
-      const status = String(r?.status_consulta_v8 ?? '').trim()
+      const status = getV8RowStatus(r)
       if (status) set.add(status)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -863,6 +1475,11 @@ export default function ConsultasV8() {
     setPage(1)
   }, [searchTerm, ageMin, ageMax, updatedFrom, updatedTo, descriptionFilters, statusFilters, valorMin, valorMax])
 
+  useEffect(() => {
+    setPage(1)
+    if (consultaMode !== 'individual') setConsultaError('')
+  }, [consultaMode])
+
   const selectedStatusSet = useMemo(() => {
     return new Set(statusFilters.map((s) => String(s ?? '').trim().toLowerCase()).filter(Boolean))
   }, [statusFilters])
@@ -903,10 +1520,10 @@ export default function ConsultasV8() {
       }
 
       if (fromDate || toDate) {
-        const updatedAt = new Date(row?.created_at)
-        if (Number.isNaN(updatedAt.getTime())) return false
-        if (fromDate && updatedAt < fromDate) return false
-        if (toDate && updatedAt > toDate) return false
+        const createdAtTs = getRowCreatedAtTimestamp(row)
+        if (!Number.isFinite(createdAtTs) || createdAtTs <= 0) return false
+        if (fromDate && createdAtTs < fromDate.getTime()) return false
+        if (toDate && createdAtTs > toDate.getTime()) return false
       }
 
       if (minValor !== null || maxValor !== null) {
@@ -952,7 +1569,7 @@ export default function ConsultasV8() {
   const filteredRows = useMemo(() => {
     if (selectedStatusSet.size === 0) return preStatusFilteredRows
     return preStatusFilteredRows.filter((row) => {
-      const status = String(row?.status_consulta_v8 ?? '').trim().toLowerCase()
+      const status = getV8RowStatus(row).toLowerCase()
       return selectedStatusSet.has(status)
     })
   }, [preStatusFilteredRows, selectedStatusSet])
@@ -960,7 +1577,7 @@ export default function ConsultasV8() {
   const statusCounts = useMemo(() => {
     const map = new Map()
     for (const row of preStatusFilteredRows) {
-      const label = String(row?.status_consulta_v8 ?? '').trim()
+      const label = getV8RowStatus(row)
       if (!label) continue
       const key = label.toLowerCase()
       const prev = map.get(key)
@@ -970,17 +1587,97 @@ export default function ConsultasV8() {
     return Array.from(map.values()).sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label, 'pt-BR'))
   }, [preStatusFilteredRows])
 
+  const apiBatchRows = useMemo(() => {
+    return sortedRows.filter((row) => {
+      const tipoConsulta = String(pickRowValue(row, ['tipoConsulta', 'tipo_consulta', 'tipoConsultaV8', 'tipo_consulta_v8'], '')).trim()
+      const tipoToken = normalizeHeaderToken(tipoConsulta)
+      return Boolean(tipoToken) && tipoToken !== 'individual'
+    })
+  }, [sortedRows])
+
+  const apiBatchGroups = useMemo(() => {
+    const grouped = new Map()
+    for (const row of apiBatchRows) {
+      const fileName = getBatchFileNameFromRow(row) || 'Lote sem nome'
+
+      const prev = grouped.get(fileName)
+      if (prev) {
+        prev.apiRows.push(row)
+      } else {
+        grouped.set(fileName, { fileName, source: 'api', apiRows: [row] })
+      }
+    }
+
+    return Array.from(grouped.values()).map((group, idx) => {
+      const rowsList = dedupeRowsByIdentityLatest(Array.isArray(group.apiRows) ? group.apiRows : [])
+      const quantity = rowsList.length
+      const okCount = rowsList.filter((r) => isSuccessV8Status(getV8RowStatus(r))).length
+      const pendingCount = rowsList.filter((r) => isPendingV8Status(getV8RowStatus(r))).length
+      const errCount = Math.max(0, quantity - okCount)
+      const durationCandidates = rowsList
+        .map((r) => getRowDurationMs(r))
+        .filter((v) => Number.isFinite(v) && v >= 0)
+      const avgDurationMs = durationCandidates.length > 0
+        ? durationCandidates.reduce((acc, v) => acc + v, 0) / durationCandidates.length
+        : null
+
+      let status = 'Aguardando'
+      if (pendingCount > 0) status = 'Processando'
+      else if (quantity > 0) status = 'Concluido'
+
+      const latestTs = rowsList.reduce((acc, row) => Math.max(acc, getRowSortTimestamp(row)), 0)
+      return {
+        id: `api-${idx}-${group.fileName}`,
+        source: 'api',
+        fileName: group.fileName,
+        totalRows: quantity,
+        okCount,
+        errCount,
+        avgDurationMs,
+        status,
+        createdAt: latestTs > 0 ? new Date(latestTs).toISOString() : '',
+        apiRows: rowsList
+      }
+    })
+  }, [apiBatchRows])
+
+  const batchTableRows = useMemo(() => {
+    const localEntries = Array.isArray(batchUploads) ? batchUploads : []
+    const combined = [...localEntries, ...apiBatchGroups]
+    return combined.sort((a, b) => {
+      const ta = new Date(a?.createdAt || 0).getTime()
+      const tb = new Date(b?.createdAt || 0).getTime()
+      return tb - ta
+    })
+  }, [batchUploads, apiBatchGroups])
+
   const pageSize = 50
-  const pages = useMemo(() => Math.max(1, Math.ceil(filteredRows.length / pageSize)), [filteredRows.length])
-  const currentPage = useMemo(() => Math.min(page, pages), [page, pages])
+  const individualPages = useMemo(() => Math.max(1, Math.ceil(filteredRows.length / pageSize)), [filteredRows.length])
+  const currentIndividualPage = useMemo(() => Math.min(page, individualPages), [page, individualPages])
 
   const pageRows = useMemo(() => {
-    const start = (currentPage - 1) * pageSize
+    const start = (currentIndividualPage - 1) * pageSize
     return filteredRows.slice(start, start + pageSize)
-  }, [filteredRows, currentPage])
+  }, [filteredRows, currentIndividualPage])
 
-  const startIndex = (currentPage - 1) * pageSize + 1
-  const endIndex = Math.min(currentPage * pageSize, filteredRows.length)
+  const batchPages = useMemo(() => Math.max(1, Math.ceil(batchTableRows.length / pageSize)), [batchTableRows.length])
+  const currentBatchPage = useMemo(() => Math.min(page, batchPages), [page, batchPages])
+  const pagedBatchRows = useMemo(() => {
+    const start = (currentBatchPage - 1) * pageSize
+    return batchTableRows.slice(start, start + pageSize)
+  }, [batchTableRows, currentBatchPage])
+
+  const activeTotalRows = consultaMode === 'lote' ? batchTableRows.length : filteredRows.length
+  const activePages = consultaMode === 'lote' ? batchPages : individualPages
+  const activeCurrentPage = consultaMode === 'lote' ? currentBatchPage : currentIndividualPage
+  const activeStartIndex = activeTotalRows === 0 ? 0 : ((activeCurrentPage - 1) * pageSize + 1)
+  const activeEndIndex = activeTotalRows === 0 ? 0 : Math.min(activeCurrentPage * pageSize, activeTotalRows)
+
+  const pages = individualPages
+  const currentPage = currentIndividualPage
+  const startIndex = filteredRows.length === 0 ? 0 : ((currentIndividualPage - 1) * pageSize + 1)
+  const endIndex = filteredRows.length === 0 ? 0 : Math.min(currentIndividualPage * pageSize, filteredRows.length)
+
   const currentLoginSummary = loginSummaries[selectedLoginIndex] || null
   const currentLimitSummary = {
     total: displayOrFallback(currentLoginSummary?.total, limitSummary.total),
@@ -990,35 +1687,37 @@ export default function ConsultasV8() {
 
   const exportCSV = useCallback(() => {
     const headers = [
-      'ID',
-      'CPF',
-      'Sexo',
-      'Nascimento',
-      'Nome',
-      'Telefone',
-      'Última atualização',
-      'Status Consulta V8',
-      'Valor Liberado',
-      'Descrição'
+      'cliente_cpf',
+      'cliente_nome',
+      'telefone',
+      'mensagem',
+      'tipoConsulta',
+      'status_consulta_v8',
+      'valor_liberado',
+      'created_at',
+      'updated_at'
     ]
-    const out = filteredRows.map((r) => ([
-      r?.id ?? '',
-      formatCpf(r?.cliente_cpf),
-      sexoToken(r?.cliente_sexo),
-      formatDate(r?.nascimento, { dateOnly: true }),
-      r?.cliente_nome ?? '',
-      formatPhone(r?.telefone),
-      formatDate(r?.created_at),
-      r?.status_consulta_v8 ?? '',
-      formatCurrency(r?.valor_liberado),
-      r?.descricao ?? ''
-    ]))
+    const outRows = dedupeV8CsvRows(
+      filteredRows
+      .map((row) => mapRowToV8CsvPayload(row))
+    )
+    const out = outRows
+      .map((item) => ([
+        item?.cliente_cpf ?? '',
+        item?.cliente_nome ?? '',
+        item?.telefone ?? '',
+        item?.mensagem ?? '',
+        item?.tipoConsulta ?? '',
+        item?.status_consulta_v8 ?? '',
+        item?.valor_liberado ?? '',
+        item?.created_at ?? '',
+        item?.updated_at ?? ''
+      ]))
 
     const csv = [headers, ...out]
-      .map(row => row.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(';'))
+      .map((row) => row.map((value) => '"' + String(value ?? '').replace(/"/g, '""') + '"').join(';'))
       .join('\r\n')
 
-    // Excel (Windows) often needs a UTF-8 BOM to display PT-BR accents correctly.
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1251,8 +1950,8 @@ export default function ConsultasV8() {
                           type="button"
                           className="btn btn-outline-light btn-sm flex-fill d-inline-flex align-items-center justify-content-center gap-2"
                           onClick={exportCSV}
-                          disabled={loading || Boolean(error) || filteredRows.length === 0}
-                          title="Baixar CSV (;)"
+                          disabled={consultaMode === 'lote' || loading || Boolean(error) || filteredRows.length === 0}
+                          title={consultaMode === 'lote' ? 'Disponivel no modo Individual' : 'Baixar CSV (;)'}
                         >
                           <FiDownload size={16} />
                           <span>CSV</span>
@@ -1267,42 +1966,111 @@ export default function ConsultasV8() {
             <div className="col-12 col-xxl-3">
               <div className="neo-card neo-lg p-3 p-md-4 h-100">
                 <div className="opacity-75 small mb-2 text-uppercase">Consulta</div>
-                <form className="d-flex flex-column gap-2" onSubmit={handleConsultaSubmit}>
-                  <div>
-                    <label className="form-label small opacity-75 mb-1" htmlFor="v8-consulta-cpf">CPF</label>
-                    <input
-                      id="v8-consulta-cpf"
-                      className="form-control form-control-sm"
-                      inputMode="numeric"
-                      maxLength={14}
-                      placeholder="00000000000"
-                      value={consultaCpf}
-                      onChange={(e) => setConsultaCpf(onlyDigits(e.target.value).slice(0, 11))}
-                      onBlur={() => setConsultaCpf((prev) => normalizeCpf11(prev))}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label small opacity-75 mb-1" htmlFor="v8-consulta-nome">Nome do cliente</label>
-                    <input
-                      id="v8-consulta-nome"
-                      className="form-control form-control-sm"
-                      placeholder="NOME DO CLIENTE"
-                      value={consultaNome}
-                      onChange={(e) => setConsultaNome(e.target.value)}
-                      onBlur={() => setConsultaNome((prev) => normalizeClientName(prev))}
-                    />
-                  </div>
-
-                  {consultaError && <div className="small text-danger">{consultaError}</div>}
-
-                  <button type="submit" className="btn btn-outline-info btn-sm mt-1" disabled={loading || sendingConsultaIndividual}>
-                    {sendingConsultaIndividual ? 'Enviando...' : 'Consultar'}
+                <div className="btn-group btn-group-sm w-100 mb-3" role="group" aria-label="Modo de consulta">
+                  <button
+                    type="button"
+                    className={`btn ${consultaMode === 'individual' ? 'btn-info text-dark' : 'btn-outline-light'}`}
+                    onClick={() => setConsultaMode('individual')}
+                  >
+                    Individual
                   </button>
-                </form>
+                  <button
+                    type="button"
+                    className={`btn ${consultaMode === 'lote' ? 'btn-info text-dark' : 'btn-outline-light'}`}
+                    onClick={() => setConsultaMode('lote')}
+                  >
+                    Em lote
+                  </button>
+                </div>
+
+                {consultaMode === 'individual' ? (
+                  <form className="d-flex flex-column gap-2" onSubmit={handleConsultaSubmit}>
+                    <div>
+                      <label className="form-label small opacity-75 mb-1" htmlFor="v8-consulta-cpf">CPF</label>
+                      <input
+                        id="v8-consulta-cpf"
+                        className="form-control form-control-sm"
+                        inputMode="numeric"
+                        maxLength={14}
+                        placeholder="00000000000"
+                        value={consultaCpf}
+                        onChange={(e) => setConsultaCpf(onlyDigits(e.target.value).slice(0, 11))}
+                        onBlur={() => setConsultaCpf((prev) => normalizeCpf11(prev))}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="form-label small opacity-75 mb-1" htmlFor="v8-consulta-nome">Nome do cliente</label>
+                      <input
+                        id="v8-consulta-nome"
+                        className="form-control form-control-sm"
+                        placeholder="NOME DO CLIENTE"
+                        value={consultaNome}
+                        onChange={(e) => setConsultaNome(e.target.value)}
+                        onBlur={() => setConsultaNome((prev) => normalizeClientName(prev))}
+                      />
+                    </div>
+
+                    {consultaError && <div className="small text-danger">{consultaError}</div>}
+
+                    <button type="submit" className="btn btn-outline-info btn-sm mt-1" disabled={loading || sendingConsultaIndividual}>
+                      {sendingConsultaIndividual ? 'Enviando...' : 'Consultar'}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="d-flex flex-column gap-2">
+                    <input
+                      ref={batchFileInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="d-none"
+                      onChange={handleBatchFileChange}
+                    />
+
+                    <button
+                      type="button"
+                      className="btn btn-outline-info btn-sm d-inline-flex align-items-center justify-content-center gap-2"
+                      onClick={openBatchFilePicker}
+                      disabled={uploadingBatchFile}
+                    >
+                      <FiUpload size={15} />
+                      <span>Selecionar CSV</span>
+                    </button>
+
+                    <div className="small opacity-75">
+                      Arquivo separado por <code>;</code> com colunas obrigatorias <code>cpf</code> e <code>nome</code>. <code>telefone</code> e opcional.
+                    </div>
+
+                    {batchUploadError && (
+                      <div className="small text-danger">{batchUploadError}</div>
+                    )}
+
+                    {pendingBatchUpload && (
+                      <div className="neo-card p-2 mt-1">
+                        <div className="small fw-semibold text-break">{pendingBatchUpload.fileName}</div>
+                        <div className="small opacity-75">
+                          Total: {pendingBatchUpload.totalRows} | validos: {pendingBatchUpload.validRows.length} | invalidos: {pendingBatchUpload.invalidRows.length}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-outline-light btn-sm w-100 mt-2"
+                          onClick={addPendingBatchToList}
+                          disabled={uploadingBatchFile}
+                        >
+                          {uploadingBatchFile ? 'Enviando...' : 'Enviar lote'}
+                        </button>
+                      </div>
+                    )}
+
+                    {!pendingBatchUpload && (
+                      <div className="small opacity-75">Nenhum CSV selecionado.</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
+            {consultaMode === 'individual' && (
             <div className="col-12">
               <div className="neo-card neo-lg p-3 p-md-4 h-100">
                 <div className="d-flex align-items-center justify-content-between gap-2 mb-2">
@@ -1378,9 +2146,129 @@ export default function ConsultasV8() {
                 )}
               </div>
             </div>
+            )}
           </div>
         </section>
 
+        {consultaMode === 'lote' ? (
+          <section className="neo-card neo-lg p-0">
+            {batchTableRows.length > 0 && (
+              <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
+                <div className="small opacity-75">Exibindo {activeStartIndex}-{activeEndIndex} de {activeTotalRows}</div>
+                <div className="d-flex align-items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={activeCurrentPage === 1}
+                  >
+                    {'\u2039'}
+                  </button>
+                  <span className="small opacity-75 px-1">{activeCurrentPage}/{activePages}</span>
+                  <button
+                    type="button"
+                    className="btn btn-outline-light btn-sm"
+                    onClick={() => setPage((p) => Math.min(activePages, p + 1))}
+                    disabled={activeCurrentPage === activePages}
+                  >
+                    {'\u203A'}
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="table-responsive" ref={tableScrollRef}>
+              <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
+                <thead>
+                  <tr>
+                    <th>Nome do arquivo</th>
+                    <th>Quantidade de nomes</th>
+                    <th>Resultado</th>
+                    <th>Tempo medio</th>
+                    <th>Status</th>
+                    <th className="text-center">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batchTableRows.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-4 text-center opacity-75">
+                        Nenhum lote encontrado.
+                      </td>
+                    </tr>
+                  )}
+
+                  {pagedBatchRows.map((entry) => {
+                    const statusTxt = String(entry?.status || '-')
+                    const statusToken = normalizeHeaderToken(statusTxt)
+                    const statusClass = statusToken.includes('process')
+                      ? 'text-bg-warning'
+                      : (statusToken.includes('conclu') || statusToken.includes('sucesso'))
+                        ? 'text-bg-success'
+                        : statusToken.includes('erro')
+                          ? 'text-bg-danger'
+                          : 'text-bg-secondary'
+                    const canDelete = entry?.source === 'local'
+                    const isTargetPolling = normalizeHeaderToken(entry?.fileName) === normalizeHeaderToken(batchPollingTarget?.fileName)
+
+                    return (
+                      <tr key={String(entry?.id ?? entry?.fileName)}>
+                        <td className="text-wrap">
+                          <div className="fw-semibold">{entry?.fileName || '-'}</div>
+                          <div className="small opacity-75">{entry?.createdAt ? formatDate(entry.createdAt) : '-'}</div>
+                        </td>
+                        <td>{Number(entry?.totalRows ?? 0)}</td>
+                        <td>
+                          <div className="d-flex flex-wrap gap-2">
+                            <span className="badge text-bg-success">{Number(entry?.okCount ?? 0)}</span>
+                            <span className="badge text-bg-danger">{Number(entry?.errCount ?? 0)}</span>
+                          </div>
+                        </td>
+                        <td>{formatAvgDuration(entry?.avgDurationMs)}</td>
+                        <td>
+                          <span className={`badge ${statusClass}`}>
+                            {isTargetPolling ? 'Processando' : statusTxt}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <div className="d-inline-flex align-items-center gap-2">
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
+                              title="Visualizar"
+                              aria-label="Visualizar"
+                              onClick={() => openBatchPreviewModal(entry)}
+                            >
+                              <FiFileText />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm btn-icon btn-ghost-success"
+                              title="Baixar"
+                              aria-label="Baixar"
+                              onClick={() => downloadBatchRows(entry)}
+                            >
+                              <FiDownload />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
+                              title={canDelete ? 'Excluir lote local' : 'Disponivel apenas para lote local'}
+                              aria-label="Excluir"
+                              disabled={!canDelete}
+                              onClick={() => removeLocalBatchEntry(entry?.id)}
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : (
         <section className="neo-card neo-lg p-0">
           {!loading && !error && filteredRows.length > 0 && (
             <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
@@ -1442,7 +2330,6 @@ export default function ConsultasV8() {
                   <th>ID</th>
                   <th>CPF</th>
                   <th>Sexo</th>
-                  <th>Nascimento</th>
                   <th>Nome</th>
                   <th>Telefone</th>
                   <th>Última atualização</th>
@@ -1454,7 +2341,7 @@ export default function ConsultasV8() {
               <tbody>
                 {loading && (
                   <tr>
-                    <td colSpan={10} className="py-4 text-center">
+                    <td colSpan={9} className="py-4 text-center">
                       <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                       Carregando consultas...
                     </td>
@@ -1463,7 +2350,7 @@ export default function ConsultasV8() {
 
                 {!loading && error && (
                   <tr>
-                    <td colSpan={10} className="py-4 text-center text-danger">
+                    <td colSpan={9} className="py-4 text-center text-danger">
                       {error}
                     </td>
                   </tr>
@@ -1471,50 +2358,53 @@ export default function ConsultasV8() {
 
                 {!loading && !error && filteredRows.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="py-4 text-center opacity-75">
+                    <td colSpan={9} className="py-4 text-center opacity-75">
                       Nenhum registro encontrado.
                     </td>
                   </tr>
                 )}
 
-                {!loading && !error && pageRows.map((row, idx) => (
-                  <tr key={String(row?.id ?? `${row?.cliente_cpf ?? 'sem-cpf'}-${row?.created_at ?? idx}`)}>
-                    <td>{row?.id ?? '-'}</td>
-                    <td>{formatCpf(row?.cliente_cpf)}</td>
-                    <td>{renderSexo(row?.cliente_sexo)}</td>
-                    <td>{formatDate(row?.nascimento, { dateOnly: true })}</td>
-                    <td className="text-nowrap">{row?.cliente_nome || '-'}</td>
-                    <td>{formatPhone(row?.telefone)}</td>
-                    <td>{formatDate(row?.created_at)}</td>
-                    <td>
-                      <span className={`badge ${statusClassName(row?.status_consulta_v8)}`}>
-                        {row?.status_consulta_v8 || '-'}
-                      </span>
-                    </td>
-                    <td>{formatCurrency(row?.valor_liberado)}</td>
-                    <td className="text-center">
-                      {(() => {
-                        const token = String(row?.mensagem ?? row?.descricao ?? '').trim()
-                        const hasDescricao = Boolean(token && token !== '-')
-                        return (
-                          <button
-                            type="button"
-                            className={`btn btn-ghost ${hasDescricao ? 'btn-ghost-success' : ''} btn-icon`}
-                            title="Ver detalhes"
-                            aria-label="Ver detalhes"
-                            onClick={() => setSelectedRow(row)}
-                          >
-                            <FiEye size={18} />
-                          </button>
-                        )
-                      })()}
-                    </td>
-                  </tr>
-                ))}
+                {!loading && !error && pageRows.map((row, idx) => {
+                  const resolvedStatus = getV8RowStatus(row)
+                  return (
+                    <tr key={String(row?.id ?? `${row?.cliente_cpf ?? 'sem-cpf'}-${row?.created_at ?? idx}`)}>
+                      <td>{row?.id ?? '-'}</td>
+                      <td>{formatCpf(row?.cliente_cpf)}</td>
+                      <td>{renderSexo(row?.cliente_sexo)}</td>
+                      <td className="text-nowrap">{row?.cliente_nome || '-'}</td>
+                      <td>{formatPhone(row?.telefone)}</td>
+                      <td>{formatDate(row?.created_at)}</td>
+                      <td>
+                        <span className={`badge ${statusClassName(resolvedStatus)}`}>
+                          {resolvedStatus || '-'}
+                        </span>
+                      </td>
+                      <td>{formatCurrency(row?.valor_liberado)}</td>
+                      <td className="text-center">
+                        {(() => {
+                          const token = String(row?.mensagem ?? row?.descricao ?? '').trim()
+                          const hasDescricao = Boolean(token && token !== '-')
+                          return (
+                            <button
+                              type="button"
+                              className={`btn btn-ghost ${hasDescricao ? 'btn-ghost-success' : ''} btn-icon`}
+                              title="Ver detalhes"
+                              aria-label="Ver detalhes"
+                              onClick={() => setSelectedRow(row)}
+                            >
+                              <FiEye size={18} />
+                            </button>
+                          )
+                        })()}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </section>
+        )}
       </main>
       {showAddLoginModal && (
         <div
@@ -1638,10 +2528,6 @@ export default function ConsultasV8() {
                     <div className="small opacity-75">Sexo</div>
                     <div className="fw-semibold">{renderSexo(selectedRow?.cliente_sexo)}</div>
                   </div>
-                  <div className="col-3 col-lg-3">
-                    <div className="small opacity-75">Nascimento</div>
-                    <div className="fw-semibold">{formatDate(selectedRow?.nascimento, { dateOnly: true })}</div>
-                  </div>
                   <div className="col-12 col-lg-3">
                     <div className="small opacity-75">Telefone</div>
                     <div className="fw-semibold">{formatPhone(selectedRow?.telefone)}</div>
@@ -1659,8 +2545,8 @@ export default function ConsultasV8() {
                   <div className="col-12">
                     <div className="small opacity-75">Status Consulta V8</div>
                     <div className="fw-semibold">
-                      <span className={`badge ${statusClassName(selectedRow?.status_consulta_v8)}`}>
-                        {selectedRow?.status_consulta_v8 || '-'}
+                      <span className={`badge ${statusClassName(getV8RowStatus(selectedRow))}`}>
+                        {getV8RowStatus(selectedRow) || '-'}
                       </span>
                     </div>
                   </div>
@@ -1675,8 +2561,82 @@ export default function ConsultasV8() {
           </div>
         </div>
       )}
+      {batchPreviewRow && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1061 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setBatchPreviewRow(null)}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: 'min(92vw, 760px)' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-content modal-dark">
+              <div className="modal-header">
+                <div>
+                  <h5 className="modal-title mb-0">Lote selecionado</h5>
+                  <div className="small opacity-75">{batchPreviewRow?.fileName || '-'}</div>
+                </div>
+                <button type="button" className="btn-close" aria-label="Close" onClick={() => setBatchPreviewRow(null)}></button>
+              </div>
+              <div className="modal-body">
+                <div className="row g-2 mb-3">
+                  <div className="col-6 col-md-3">
+                    <div className="small opacity-75">Quantidade</div>
+                    <div className="fw-semibold">{Number(batchPreviewRow?.previewTotal ?? 0)}</div>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <div className="small opacity-75">Status</div>
+                    <div className="fw-semibold">{batchPreviewRow?.status || '-'}</div>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <div className="small opacity-75">Tempo medio</div>
+                    <div className="fw-semibold">{formatAvgDuration(batchPreviewRow?.avgDurationMs)}</div>
+                  </div>
+                  <div className="col-6 col-md-3">
+                    <div className="small opacity-75">Origem</div>
+                    <div className="fw-semibold">{batchPreviewRow?.source === 'local' ? 'Local' : 'Tabela'}</div>
+                  </div>
+                </div>
+
+                <div className="table-responsive" style={{ maxHeight: 360 }}>
+                  <table className="table table-dark table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>CPF</th>
+                        <th>Nome</th>
+                        <th>Telefone</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(batchPreviewRow?.previewRows?.length ?? 0) === 0 && (
+                        <tr>
+                          <td colSpan={4} className="text-center py-3 opacity-75">Sem linhas para visualizar.</td>
+                        </tr>
+                      )}
+                      {(batchPreviewRow?.previewRows ?? []).map((item, idx) => (
+                        <tr key={`${item?.cpf || 'cpf'}-${idx}`}>
+                          <td>{idx + 1}</td>
+                          <td>{formatCpf(item?.cpf)}</td>
+                          <td className="text-wrap">{item?.nome || '-'}</td>
+                          <td>{formatPhone(item?.telefone)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <Footer />
     </div>
   )
 }
+
 
