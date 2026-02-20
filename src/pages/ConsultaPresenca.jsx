@@ -16,7 +16,7 @@ const NOVO_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/novo-log
 const CONSULTA_PAUSE_STATUS_URL = `${PRESENCA_API_BASE}/api/consulta/pause-status`
 const CONSULTA_PAUSE_URL = `${PRESENCA_API_BASE}/api/consulta/pause`
 const CONSULTA_RESUME_URL = `${PRESENCA_API_BASE}/api/consulta/resume`
-const LOTE_CSV_API_URL = `${PRESENCA_API_BASE}/api/presencabank-lotecsv`
+const LOTE_CSV_API_URL = 'https://apivieiracred.store/api/presencabank-lotecsv'
 const LOTE_DELETE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote-delete/'
 const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
 
@@ -139,68 +139,40 @@ const parseMoneyValue = (value) => {
 }
 
 const groupLoteRows = (rows) => {
-  const map = new Map()
-  for (const row of rows || []) {
-    const file = String(row?.tipoConsulta || row?.name || '').trim()
-    const created = String(row?.created_at || row?.createdAt || '').trim()
-    const loginP = String(row?.loginP || row?.login || '').trim()
-    const createdKey = dateMinuteKey(created)
-    if (!file || !createdKey) continue
-    const key = `${file.toLowerCase()}--${createdKey}`
-    const status = String(row?.status ?? 'Pendente')
-    const entry = map.get(key) || {
-      file,
-      created,
-      loginP,
-      total: 0,
-      totalRows: 0,
-      pending: 0,
-      success: 0,
-      error: 0,
-      okByValue: 0,
-      noValue: 0,
-      durationMsTotal: 0,
-      durationCount: 0,
-      statusOtherCount: 0,
-      cpfSet: new Set()
-    }
-    if (!entry.loginP && loginP) entry.loginP = loginP
-    entry.totalRows += 1
-    const cpfKey = normalizeCpfBatch(row?.cpf ?? row?.CPF ?? row?.Cpf ?? '')
-    if (cpfKey) {
-      if (!entry.cpfSet.has(cpfKey)) {
-        entry.cpfSet.add(cpfKey)
-        entry.total += 1
+  const list = Array.isArray(rows) ? rows : []
+  return list
+    .filter((row) => {
+      const tipo = String(pick(row, ['tipoConsulta', 'tipo_consulta', 'tipo', 'nomeArquivo', 'nome_arquivo'], '')).trim().toLowerCase()
+      return tipo !== 'individual'
+    })
+    .map((row, idx) => {
+      const file = String(pick(row, ['tipoConsulta', 'nomeArquivo', 'nome_arquivo', 'name', 'fileName'], '')).trim() || `Lote ${idx + 1}`
+      const created = String(pick(row, ['created_at', 'createdAt', 'data', 'data_hora'], '')).trim()
+      const loginP = String(pick(row, ['loginP', 'login', 'usuario_login'], '')).trim()
+      const status = String(pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], 'Pendente')).trim()
+      const pending = isPendingLoteStatus(status) ? 1 : 0
+      const success = isDoneLoteStatus(status) ? 1 : 0
+      const error = (pending || success) ? 0 : 1
+      const valorLiberado = parseMoneyValue(pick(row, ['valorLiberado', 'valor_liberado', 'valor'], 0))
+      const okByValue = valorLiberado > 0 ? 1 : 0
+      const noValue = okByValue ? 0 : 1
+      const durationMs = getRowDurationMs(row)
+      return {
+        id: String(pick(row, ['id', 'ID', 'id_consulta', 'consulta_id'], `${file}-${created}-${idx}`)),
+        file,
+        created,
+        loginP,
+        total: 1,
+        totalRows: 1,
+        pending,
+        success,
+        error,
+        okByValue,
+        noValue,
+        statusOtherCount: error,
+        avgDurationMs: durationMs
       }
-    } else {
-      entry.total += 1
-    }
-    const normalized = status.toLowerCase()
-    const isPending = normalized.includes('pendente')
-    const isDone = normalized === 'concluído' || normalized === 'concluido' || normalized === 'ok'
-    if (isPending) entry.pending += 1
-    else if (isDone) entry.success += 1
-    else {
-      entry.error += 1
-      entry.statusOtherCount += 1
-    }
-
-    const valorLiberado = parseMoneyValue(row?.valorLiberado ?? row?.valor_liberado ?? row?.valor ?? 0)
-    if (valorLiberado > 0) entry.okByValue += 1
-    else entry.noValue += 1
-
-    const durationMs = getRowDurationMs(row)
-    if (durationMs !== null) {
-      entry.durationMsTotal += durationMs
-      entry.durationCount += 1
-    }
-    map.set(key, entry)
-  }
-  return Array.from(map.values()).map((entry) => ({
-    ...entry,
-    cpfSet: undefined,
-    avgDurationMs: entry.durationCount > 0 ? (entry.durationMsTotal / entry.durationCount) : null
-  }))
+    })
 }
 
 const toCsvCell = (value) => {
@@ -689,7 +661,7 @@ export default function ConsultaPresenca() {
         const loteRows = await fetchLoteRows({ loginP: firstLogin, signal })
         const grouped = groupLoteRows(loteRows)
         setLoteGroups(grouped)
-        const hasPending = loteRows.some((row) => !isDoneLoteStatus(row?.status))
+        const hasPending = grouped.some((row) => Number(row?.pending ?? 0) > 0)
         loteSawPendingRef.current = hasPending
         setLoteAutoPollingEnabled(hasPending)
       } else if (!uploadingBatchFile) {
@@ -1371,7 +1343,7 @@ export default function ConsultaPresenca() {
     try {
       const rows = await fetchLoteRows({ loginP, signal })
       const grouped = groupLoteRows(rows)
-      const hasPending = rows.some((row) => !isDoneLoteStatus(row?.status))
+      const hasPending = grouped.some((row) => Number(row?.pending ?? 0) > 0)
       if (hasPending) loteSawPendingRef.current = true
       if (!hasPending && loteAutoPollingEnabled && loteSawPendingRef.current) {
         notify.success('Consulta em lote concluída.', { autoClose: 2500 })
@@ -2336,7 +2308,7 @@ export default function ConsultaPresenca() {
                       const cls = batchStatusClassName(statusTxt)
                       const qty = Number(group?.total ?? 0)
                       return (
-                        <tr key={`${group.file}-${group.created}`}>
+                        <tr key={String(group?.id ?? `${group.file}-${group.created}`)}>
                           <td className="text-wrap">
                             <div>{group.file}</div>
                             <div className="small opacity-75">{formatDate(group.created)}</div>
