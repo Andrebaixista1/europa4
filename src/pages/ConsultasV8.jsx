@@ -214,19 +214,63 @@ const renderSexo = (value) => {
   return <span className="opacity-75">NI</span>
 }
 
+const normalizeStatusToken = (status) => {
+  return String(status ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+}
+
+const isSuccessV8Status = (status) => {
+  const token = normalizeStatusToken(status)
+  if (!token) return false
+  return (
+    token.includes('APROV') ||
+    token.includes('SUCESSO') ||
+    token.includes('SUCCESS') ||
+    token.includes('CONCLUIDO') ||
+    token.includes('CONCLUIDA')
+  )
+}
+
 const statusClassName = (status) => {
-  const token = String(status ?? '').trim().toUpperCase()
+  const token = normalizeStatusToken(status)
   if (!token) return 'text-bg-secondary'
-  if (token.includes('APROV')) return 'text-bg-success'
+  if (isSuccessV8Status(token)) return 'text-bg-success'
   if (token.includes('WAITING') || token.includes('CONSENT')) return 'text-bg-warning'
   if (token.includes('REPROV') || token.includes('RECUS') || token.includes('ERROR')) return 'text-bg-danger'
   return 'text-bg-secondary'
 }
 
 const isPendingV8Status = (status) => {
-  const token = String(status ?? '').trim().toUpperCase()
+  const token = normalizeStatusToken(status)
+    .toUpperCase()
+    .replace(/\s+/g, '_')
+
   if (!token) return false
-  return token.includes('PEND') || token.includes('WAITING') || token.includes('CONSENT') || token.includes('PROCESS')
+
+  const explicitPendingStatuses = new Set([
+    'PENDENTE',
+    'PENDING',
+    'CONSENT_APPROVED',
+    'WAITING_CONSULT',
+    'WAITING_CREDIT_ANALYSIS',
+    'AGUARDANDO_CONSULTA',
+    'AGUARDANDO_ANALISE_DE_CREDITO',
+    'CONSENTIMENTO_APROVADO'
+  ])
+
+  if (explicitPendingStatuses.has(token)) return true
+
+  return (
+    token.includes('PEND') ||
+    token.includes('WAITING') ||
+    token.includes('CONSENT') ||
+    token.includes('AGUARDANDO') ||
+    (token.includes('ANALISE') && token.includes('CREDITO')) ||
+    token.includes('PROCESS')
+  )
 }
 
 const hasPendingRows = (rows) => {
@@ -249,8 +293,8 @@ const rowMatchesPollingQuery = (row, query) => {
   const expectedNome = normalizeNameToken(query?.nome)
   const rowCpf = onlyDigits(row?.cliente_cpf ?? row?.cpf)
   const rowNome = normalizeNameToken(row?.cliente_nome ?? row?.nome)
-  const byCpf = !expectedCpf || !rowCpf || rowCpf === expectedCpf
-  const byNome = !expectedNome || !rowNome || rowNome === expectedNome
+  const byCpf = !expectedCpf || (rowCpf && rowCpf === expectedCpf)
+  const byNome = !expectedNome || (rowNome && rowNome === expectedNome)
   return byCpf && byNome
 }
 
@@ -258,6 +302,74 @@ const getRowSortTimestamp = (row) => {
   const raw = row?.created_at || row?.updated_at || row?.createdAt || row?.updatedAt || 0
   const ts = new Date(raw).getTime()
   return Number.isFinite(ts) ? ts : 0
+}
+
+const pickLatestRow = (rows) => {
+  const list = Array.isArray(rows) ? rows : []
+  if (list.length === 0) return null
+  return list.reduce((acc, row) => {
+    if (!acc) return row
+    return getRowSortTimestamp(row) >= getRowSortTimestamp(acc) ? row : acc
+  }, null)
+}
+
+const findBestRowForModal = (rows, prevRow) => {
+  if (!prevRow) return null
+  const list = Array.isArray(rows) ? rows : []
+  if (list.length === 0) return null
+
+  const prevId = String(prevRow?.id ?? '').trim()
+  if (prevId) {
+    const byId = list.find((row) => String(row?.id ?? '').trim() === prevId)
+    if (byId) return byId
+  }
+
+  const prevCpf = onlyDigits(prevRow?.cliente_cpf ?? prevRow?.cpf)
+  const prevNome = normalizeNameToken(prevRow?.cliente_nome ?? prevRow?.nome)
+  const matched = list.filter((row) => {
+    const rowCpf = onlyDigits(row?.cliente_cpf ?? row?.cpf)
+    const rowNome = normalizeNameToken(row?.cliente_nome ?? row?.nome)
+    const byCpf = !prevCpf || !rowCpf || rowCpf === prevCpf
+    const byNome = !prevNome || !rowNome || rowNome === prevNome
+    return byCpf && byNome
+  })
+
+  const latestMatched = pickLatestRow(matched)
+  return latestMatched || null
+}
+
+const mergeRowsKeepingSuccessStatus = (previousRows, nextRows) => {
+  const prevList = Array.isArray(previousRows) ? previousRows : []
+  const nextList = Array.isArray(nextRows) ? nextRows : []
+  if (prevList.length === 0 || nextList.length === 0) return nextList
+
+  const prevById = new Map()
+  for (const row of prevList) {
+    const id = String(row?.id ?? '').trim()
+    if (!id) continue
+    prevById.set(id, row)
+  }
+
+  return nextList.map((nextRow) => {
+    const id = String(nextRow?.id ?? '').trim()
+    if (!id) return nextRow
+    const prevRow = prevById.get(id)
+    if (!prevRow) return nextRow
+
+    const prevStatus = prevRow?.status_consulta_v8
+    const nextStatus = nextRow?.status_consulta_v8
+    if (!isSuccessV8Status(prevStatus)) return nextRow
+
+    const nextIsPendingOrEmpty = !String(nextStatus ?? '').trim() || isPendingV8Status(nextStatus)
+    if (!nextIsPendingOrEmpty) return nextRow
+
+    return {
+      ...nextRow,
+      status_consulta_v8: prevStatus,
+      mensagem: String(nextRow?.mensagem ?? '').trim() ? nextRow?.mensagem : prevRow?.mensagem,
+      descricao: String(nextRow?.descricao ?? '').trim() ? nextRow?.descricao : prevRow?.descricao
+    }
+  })
 }
 
 const normalizeDescricao = (value) => {
@@ -301,6 +413,9 @@ export default function ConsultasV8() {
   const [pollingQuery, setPollingQuery] = useState(null)
   const pollInFlightRef = useRef(false)
   const pollSawPendingRef = useRef(false)
+  const tableScrollRef = useRef(null)
+  const rowsRef = useRef([])
+  const fetchSeqRef = useRef(0)
 
   const fetchLoginSummaries = useCallback(async (signal) => {
     const userId = toNumberOrNull(user?.id)
@@ -355,14 +470,34 @@ export default function ConsultasV8() {
     }
   }, [user?.id])
 
-  const fetchConsultas = useCallback(async (signal, query = {}) => {
-    setLoading(true)
-    setError('')
+  const fetchConsultas = useCallback(async (signal, query = {}, options = {}) => {
+    const requestSeq = ++fetchSeqRef.current
+    const silent = options?.silent === true
+    const preservePosition = options?.preservePosition === true
+    let windowY = 0
+    let tableTop = 0
+    let tableLeft = 0
+
+    if (!silent) {
+      setLoading(true)
+      setError('')
+    }
+
+    if (preservePosition && typeof window !== 'undefined') {
+      windowY = window.scrollY || 0
+      const tableEl = tableScrollRef.current
+      if (tableEl) {
+        tableTop = tableEl.scrollTop
+        tableLeft = tableEl.scrollLeft
+      }
+    }
+
     try {
       const userId = toNumberOrNull(user?.id)
       const selectedLogin = loginSummaries[selectedLoginIndex] || null
 
       if (userId === null || !selectedLogin) {
+        rowsRef.current = []
         setRows([])
         setLimitSummary(DEFAULT_LIMIT_SUMMARY)
         return []
@@ -396,18 +531,43 @@ export default function ConsultasV8() {
         throw new Error('Resposta da API invalida')
       }
       const normalizedRows = normalizeRows(payload)
-      setRows(normalizedRows)
-      setLimitSummary(resolveLimitSummary(payload, normalizedRows.length))
+      if (requestSeq !== fetchSeqRef.current) {
+        return rowsRef.current
+      }
+
+      const mergedRows = mergeRowsKeepingSuccessStatus(rowsRef.current, normalizedRows)
+      rowsRef.current = mergedRows
+      setRows(mergedRows)
+      setSelectedRow((prev) => {
+        if (!prev) return prev
+        const synced = findBestRowForModal(mergedRows, prev)
+        return synced || prev
+      })
+      setLimitSummary(resolveLimitSummary(payload, mergedRows.length))
       setLastSyncAt(new Date())
-      return normalizedRows
+
+      if (preservePosition && typeof window !== 'undefined') {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: windowY, left: 0, behavior: 'auto' })
+          const tableEl = tableScrollRef.current
+          if (tableEl) {
+            tableEl.scrollTop = tableTop
+            tableEl.scrollLeft = tableLeft
+          }
+        })
+      }
+
+      return mergedRows
     } catch (err) {
       if (err?.name === 'AbortError') return
+      if (requestSeq !== fetchSeqRef.current) return rowsRef.current
+      rowsRef.current = []
       setRows([])
       setLimitSummary(DEFAULT_LIMIT_SUMMARY)
       setError(err?.message || 'Falha ao carregar consultas V8')
       return []
     } finally {
-      if (!signal?.aborted) setLoading(false)
+      if (!silent && !signal?.aborted && requestSeq === fetchSeqRef.current) setLoading(false)
     }
   }, [user?.id, loginSummaries, selectedLoginIndex])
 
@@ -431,7 +591,7 @@ export default function ConsultasV8() {
       if (cancelled || pollInFlightRef.current) return
       pollInFlightRef.current = true
       try {
-        const latestRows = await fetchConsultas(undefined, pollingQuery || {})
+        const latestRows = await fetchConsultas(undefined, pollingQuery || {}, { silent: true, preservePosition: true })
         if (cancelled) return
 
         const scopedRows = (pollingQuery && typeof pollingQuery === 'object')
@@ -571,10 +731,21 @@ export default function ConsultasV8() {
       } else {
         notify.success('Consulta individual enviada com sucesso.', { autoClose: 2200 })
       }
+      setSelectedRow({
+        id: '-',
+        cliente_cpf: normalizedCpf,
+        cliente_nome: normalizedNome,
+        status_consulta_v8: 'Aguardando Consulta',
+        mensagem: 'Consulta iniciada. Aguardando retorno...',
+        created_at: new Date().toISOString(),
+        telefone: '',
+        valor_liberado: '',
+        descricao: ''
+      })
       pollSawPendingRef.current = false
       setPollingQuery({ cpf: normalizedCpf, nome: normalizedNome })
       setAutoPollingActive(true)
-      fetchConsultas(undefined, { cpf: normalizedCpf, nome: normalizedNome })
+      fetchConsultas(undefined, { cpf: normalizedCpf, nome: normalizedNome }, { silent: true, preservePosition: true })
     } catch (err) {
       const msg = err?.message || 'Falha ao enviar consulta individual.'
       setConsultaError(msg)
@@ -610,6 +781,16 @@ export default function ConsultasV8() {
       const tb = new Date(b?.created_at || 0).getTime()
       return tb - ta
     })
+  }, [visibleRows])
+
+  const latestTableUpdatedAt = useMemo(() => {
+    const list = Array.isArray(visibleRows) ? visibleRows : []
+    let maxTs = -Infinity
+    for (const row of list) {
+      const ts = getRowSortTimestamp(row)
+      if (ts > maxTs) maxTs = ts
+    }
+    return Number.isFinite(maxTs) && maxTs > 0 ? new Date(maxTs) : null
   }, [visibleRows])
 
   const statusOptions = useMemo(() => {
@@ -870,6 +1051,9 @@ export default function ConsultasV8() {
               </div>
               <div className="small opacity-75">
                 {lastSyncAt ? `Última atualização: ${formatDate(lastSyncAt)}` : 'Carregando dados...'}
+              </div>
+              <div className="small opacity-75">
+                {latestTableUpdatedAt ? `Mais recente da tabela: ${formatDate(latestTableUpdatedAt)}` : 'Mais recente da tabela: -'}
               </div>
             </div>
           </div>
@@ -1251,7 +1435,7 @@ export default function ConsultasV8() {
               </div>
             </div>
           )}
-          <div className="table-responsive">
+          <div className="table-responsive" ref={tableScrollRef}>
             <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
               <thead>
                 <tr>
@@ -1310,7 +1494,7 @@ export default function ConsultasV8() {
                     <td>{formatCurrency(row?.valor_liberado)}</td>
                     <td className="text-center">
                       {(() => {
-                        const token = String(row?.descricao ?? '').trim()
+                        const token = String(row?.mensagem ?? row?.descricao ?? '').trim()
                         const hasDescricao = Boolean(token && token !== '-')
                         return (
                           <button
@@ -1429,7 +1613,10 @@ export default function ConsultasV8() {
           >
             <div className="modal-content modal-dark">
               <div className="modal-header">
-                <h5 className="modal-title">Detalhes do cliente</h5>
+                <div>
+                  <h5 className="modal-title mb-0">Detalhes do cliente</h5>
+                  <div className="small opacity-75">Ultima atualizacao: {formatDate(selectedRow?.created_at)}</div>
+                </div>
                 <button type="button" className="btn-close" aria-label="Close" onClick={() => setSelectedRow(null)}></button>
               </div>
               <div className="modal-body">
@@ -1464,11 +1651,7 @@ export default function ConsultasV8() {
                     <div className="small opacity-75">Email</div>
                     <div className="fw-semibold text-break">{selectedRow?.email || '-'}</div>
                   </div>
-                  <div className="col-6 col-lg-3">
-                    <div className="small opacity-75">Última atualização</div>
-                    <div className="fw-semibold">{formatDate(selectedRow?.created_at)}</div>
-                  </div>
-                  <div className="col-6 col-lg-3">
+                  <div className="col-6 col-lg-6">
                     <div className="small opacity-75">Valor liberado</div>
                     <div className="fw-semibold">{formatCurrency(selectedRow?.valor_liberado)}</div>
                   </div>
@@ -1485,7 +1668,7 @@ export default function ConsultasV8() {
 
                 <div className="neo-card p-3 mt-3">
                   <div className="small opacity-75 mb-1">Descrição</div>
-                  <div className="fw-semibold text-break">{selectedRow?.descricao || '-'}</div>
+                  <div className="fw-semibold text-break">{selectedRow?.mensagem || selectedRow?.descricao || '-'}</div>
                 </div>
               </div>
             </div>
@@ -1496,3 +1679,4 @@ export default function ConsultasV8() {
     </div>
   )
 }
+
