@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiChevronDown, FiDownload, FiEye, FiFileText, FiRefreshCw, FiTrash2, FiUpload } from 'react-icons/fi'
+import { FiAlertCircle, FiArrowLeft, FiCheckCircle, FiChevronDown, FiClock, FiDownload, FiEye, FiFileText, FiRefreshCw, FiTrash2, FiUpload } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
-import { consultarImportacaoCsvV8Status, importarCsvV8 } from '../services/v8Client.js'
+import { consultarImportacaoCsvV8Status } from '../services/v8Client.js'
 import { notify } from '../utils/notify.js'
 
-const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8'
-const V8_GET_LOGINS_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8'
+const V8_LARAVEL_BASE_PATH = '/api/consulta-v8'
+const V8_CONSULTAS_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
+const V8_LIMITES_API_URL = `${V8_LARAVEL_BASE_PATH}/limites`
+const V8_INDIVIDUAL_API_URL = V8_LARAVEL_BASE_PATH
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
-const V8_INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-individual'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
 
@@ -22,6 +23,7 @@ const toNumberOrNull = (value) => {
 
 const canUser3347SeeRow = (row) => {
   const token = String(row?.token_usado ?? '').trim().toLowerCase()
+  if (!token) return true
   return token === '*' || token === 'vision' || token === 'a vision'
 }
 
@@ -31,6 +33,84 @@ const normalizeRows = (payload) => {
   if (Array.isArray(payload?.rows)) return payload.rows
   if (payload && typeof payload === 'object') return [payload]
   return []
+}
+
+const parseResponseBody = async (response) => {
+  const raw = await response.text()
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+  const looksLikeHtml = contentType.includes('text/html') || /^\s*<!doctype html/i.test(raw) || /^\s*<html/i.test(raw)
+  let payload = null
+  try {
+    payload = raw ? JSON.parse(raw) : {}
+  } catch {
+    payload = null
+  }
+
+  if (!response.ok) {
+    if (looksLikeHtml) throw new Error(`Rota não encontrada (HTTP ${response.status})`)
+    if (payload?.message) throw new Error(payload.message)
+    if (payload?.error) throw new Error(payload.error)
+    throw new Error(raw || `HTTP ${response.status}`)
+  }
+
+  if (looksLikeHtml) {
+    throw new Error('A API retornou HTML em vez de JSON')
+  }
+
+  if (payload?.ok === false) {
+    throw new Error(payload?.message || payload?.error || 'Falha na API')
+  }
+
+  return payload
+}
+
+const filterConsultasByUser = (rows, userId) => {
+  const list = Array.isArray(rows) ? rows : []
+  const parsedUserId = toNumberOrNull(userId)
+  if (parsedUserId === null || parsedUserId === 1) return list
+
+  return list.filter((row) => {
+    const rowUserId = toNumberOrNull(row?.id_user ?? row?.idUser)
+    return rowUserId !== null && rowUserId === parsedUserId
+  })
+}
+
+const buildLimitSummaryFromRows = (rows) => {
+  const list = Array.isArray(rows) ? rows : []
+  if (list.length === 0) return DEFAULT_LIMIT_SUMMARY
+
+  let total = 0
+  let usado = 0
+  let hasAnyNumeric = false
+
+  for (const row of list) {
+    const totalRow = toNumberOrNull(row?.total)
+    const consultadosRow = toNumberOrNull(row?.consultados ?? row?.usado)
+    if (totalRow !== null) {
+      total += totalRow
+      hasAnyNumeric = true
+    }
+    if (consultadosRow !== null) {
+      usado += consultadosRow
+      hasAnyNumeric = true
+    }
+  }
+
+  if (!hasAnyNumeric) return DEFAULT_LIMIT_SUMMARY
+
+  return {
+    total,
+    usado,
+    restantes: Math.max(0, total - usado),
+  }
+}
+
+const resolveUserEquipeId = (user) => {
+  return toNumberOrNull(user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId)
+}
+
+const resolveUserRoleId = (user) => {
+  return toNumberOrNull(user?.id_role ?? user?.role_id ?? user?.roleId ?? user?.level)
 }
 
 const pickFromObjects = (objects, keys) => {
@@ -224,6 +304,58 @@ const normalizeStatusToken = (status) => {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
+}
+
+const V8_STATUS_PT_BR_MAP = {
+  WAITING_CONSENT: 'Aguardando consentimento',
+  WAITING_CONSULT: 'Aguardando consulta',
+  WAITING_CREDIT_ANALYSIS: 'Aguardando análise de crédito',
+  CONSENT_APPROVED: 'Consentimento aprovado',
+  CONSENT_REJECTED: 'Consentimento recusado',
+  CONSENT_DENIED: 'Consentimento negado',
+  CONSENT_EXPIRED: 'Consentimento expirado',
+  CONSENT_PENDING: 'Consentimento pendente',
+  CREDIT_ANALYSIS_APPROVED: 'Análise de crédito aprovada',
+  CREDIT_ANALYSIS_REJECTED: 'Análise de crédito reprovada',
+  CREDIT_ANALYSIS_DENIED: 'Análise de crédito negada',
+  APPROVED: 'Aprovado',
+  REJECTED: 'Reprovado',
+  DENIED: 'Negado',
+  ERROR: 'Erro',
+  FAILED: 'Falha',
+  PENDING: 'Pendente',
+  PENDENTE: 'Pendente',
+  PROCESSING: 'Processando',
+  IN_PROGRESS: 'Em processamento',
+  COMPLETED: 'Concluído',
+  SUCCESS: 'Sucesso',
+  CANCELLED: 'Cancelado',
+  CANCELED: 'Cancelado',
+  EXPIRED: 'Expirado',
+  NOT_FOUND: 'Não encontrado',
+  NO_OFFER: 'Sem oferta',
+  NO_OFFERS: 'Sem ofertas',
+}
+
+const formatUnknownV8StatusLabel = (status) => {
+  const raw = String(status ?? '').trim()
+  if (!raw) return ''
+  if (!/[a-z]/.test(raw) && /[_-]/.test(raw)) {
+    return raw
+      .toLowerCase()
+      .split(/[_-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
+  }
+  return raw
+}
+
+const translateV8StatusLabel = (status) => {
+  const raw = String(status ?? '').trim()
+  if (!raw) return ''
+  const token = normalizeStatusToken(raw).replace(/\s+/g, '_')
+  return V8_STATUS_PT_BR_MAP[token] || formatUnknownV8StatusLabel(raw)
 }
 
 const getV8RowStatus = (row) => {
@@ -658,12 +790,14 @@ const mapRowToV8CsvPayload = (row, fallbackTipoConsulta = '') => {
   const valorLiberado = formatValorLiberadoCsv(row?.valor_liberado ?? row?.valorLiberado ?? row?.valor)
   const createdAt = String(row?.created_at ?? row?.createdAt ?? '').trim()
   const updatedAt = String(row?.updated_at ?? row?.updatedAt ?? '').trim()
+  const descricao = String(row?.descricao ?? row?.descricao_v8 ?? row?.mensagem ?? '').trim()
 
   return {
     cliente_cpf: clienteCpf,
     cliente_nome: clienteNome,
     telefone,
     mensagem,
+    descricao,
     tipoConsulta,
     status_consulta_v8: statusConsultaV8,
     valor_liberado: valorLiberado,
@@ -714,6 +848,25 @@ const getBatchFileNameFromRow = (row) => {
   ], '')).trim()
 }
 
+const getTipoConsultaFromRow = (row) => {
+  return String(pickRowValue(row, [
+    'tipoConsulta',
+    'tipo_consulta',
+    'tipoConsultaV8',
+    'tipo_consulta_v8'
+  ], '')).trim()
+}
+
+const isIndividualBatchToken = (value) => {
+  const token = normalizeHeaderToken(value).replace(/\s+/g, '')
+  if (!token) return false
+  return (
+    token === 'individual' ||
+    token === 'consultaindividual' ||
+    token === 'indiv'
+  )
+}
+
 const buildNormalizedBatchCsv = (rows) => {
   const list = Array.isArray(rows) ? rows : []
   const lines = ['cpf;nome;telefone']
@@ -731,6 +884,9 @@ export default function ConsultasV8() {
   const { user } = useAuth()
   const [rows, setRows] = useState([])
   const [limitSummary, setLimitSummary] = useState(DEFAULT_LIMIT_SUMMARY)
+  const [limitRows, setLimitRows] = useState([])
+  const [loadingLimites, setLoadingLimites] = useState(false)
+  const [limitesError, setLimitesError] = useState('')
   const [loginSummaries, setLoginSummaries] = useState([])
   const [selectedLoginIndex, setSelectedLoginIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -775,58 +931,33 @@ export default function ConsultasV8() {
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
 
-  const fetchLoginSummaries = useCallback(async (signal) => {
-    const userId = toNumberOrNull(user?.id)
-    if (userId === null) {
-      setLoginSummaries([])
-      setSelectedLoginIndex(0)
-      return
+  const fetchLimites = useCallback(async (signal, options = {}) => {
+    const silent = options?.silent === true
+    if (!silent) {
+      setLoadingLimites(true)
+      setLimitesError('')
     }
 
     try {
-      const url = `${V8_GET_LOGINS_API_URL}?id_user=${encodeURIComponent(userId)}`
-      const response = await fetch(url, { method: 'GET', signal })
-      const raw = await response.text()
-      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
-
-      let payload = []
-      try {
-        payload = raw ? JSON.parse(raw) : []
-      } catch {
-        payload = []
+      let requestUrl = V8_LIMITES_API_URL
+      if (user?.id && user.id !== 1) {
+        requestUrl = `${V8_LIMITES_API_URL}?id_user=${encodeURIComponent(String(user.id))}`
       }
+      const response = await fetch(requestUrl, { method: 'GET', signal })
+      const payload = await parseResponseBody(response)
+      const normalized = normalizeRows(payload)
 
-      const sourceRows = normalizeRows(payload)
-      const mapped = sourceRows.map((row) => ({
-        loginId: pickRowValue(row, ['id_login', 'idLogin', 'login_id', 'id', 'Id'], ''),
-        idTokenUsado: pickRowValue(row, ['id_token_usado', 'idTokenUsado', 'id_token', 'token_id', 'id_login', 'idLogin', 'login_id', 'id'], ''),
-        tokenUsado: String(pickRowValue(row, ['token_usado', 'tokenUsado', 'token'], '')).trim(),
-        login: String(pickRowValue(row, ['login', 'loginP', 'usuario_login', 'email'], '-')).trim() || '-',
-        email: String(pickRowValue(row, ['email', 'Email', 'login', 'loginP'], '')).trim(),
-        empresa: String(pickRowValue(row, ['empresa', 'Empresa', 'company', 'nome_empresa'], '')).trim(),
-        total: pickRowValue(row, ['total', 'limite_total', 'total_limite', 'total_creditos'], '-'),
-        usado: pickRowValue(row, ['usado', 'utilizado', 'total_usado', 'creditos_usados'], '-'),
-        restantes: pickRowValue(row, ['restantes', 'restante', 'saldo', 'disponivel', 'creditos_restantes'], '-')
-      }))
-
-      const unique = []
-      const seen = new Set()
-      for (const item of mapped) {
-        const key = `${String(item.loginId || '').toLowerCase()}|${String(item.login || '').toLowerCase()}|${String(item.email || '').toLowerCase()}|${String(item.empresa || '').toLowerCase()}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        unique.push(item)
-      }
-
-      setLoginSummaries(unique)
-      setSelectedLoginIndex((prev) => {
-        if (unique.length === 0) return 0
-        return Math.min(prev, unique.length - 1)
-      })
+      setLimitRows(normalized)
+      setLimitSummary(buildLimitSummaryFromRows(normalized))
+      return normalized
     } catch (err) {
-      if (err?.name === 'AbortError') return
-      setLoginSummaries([])
-      setSelectedLoginIndex(0)
+      if (err?.name === 'AbortError') return []
+      setLimitRows([])
+      setLimitSummary(DEFAULT_LIMIT_SUMMARY)
+      setLimitesError(err?.message || 'Falha ao carregar limites V8')
+      return []
+    } finally {
+      if (!silent && !signal?.aborted) setLoadingLimites(false)
     }
   }, [user?.id])
 
@@ -854,25 +985,16 @@ export default function ConsultasV8() {
 
     try {
       const userId = toNumberOrNull(user?.id)
-      const selectedLogin = loginSummaries[selectedLoginIndex] || null
 
-      if (userId === null || !selectedLogin) {
+      if (userId === null) {
         rowsRef.current = []
         setRows([])
-        setLimitSummary(DEFAULT_LIMIT_SUMMARY)
         return []
       }
 
-      const requestUrl = new URL(API_URL)
-      const activeLogin = String(selectedLogin?.login ?? selectedLogin?.email ?? '').trim()
-      const activeEmail = String(selectedLogin?.email ?? '').trim()
-      const activeEmpresa = String(selectedLogin?.empresa ?? '').trim()
-
-      // Sempre envia todos os filtros-base da consulta V8.
-      requestUrl.searchParams.set('user_id', String(userId))
-      requestUrl.searchParams.set('login', activeLogin)
-      requestUrl.searchParams.set('email', activeEmail)
-      requestUrl.searchParams.set('empresa', activeEmpresa)
+      const requestUrl = new URL(V8_CONSULTAS_API_URL, window.location.origin)
+      requestUrl.searchParams.set('id_user', String(userId))
+      if (userId === 1) requestUrl.searchParams.set('all', '1')
 
       const normalizedCpf = normalizeCpf11(query?.cpf)
       const normalizedNome = normalizeClientName(query?.nome)
@@ -880,17 +1002,8 @@ export default function ConsultasV8() {
       if (normalizedNome) requestUrl.searchParams.set('nome', normalizedNome)
 
       const response = await fetch(requestUrl.toString(), { method: 'GET', signal })
-      const raw = await response.text()
-      if (!response.ok) {
-        throw new Error(raw || `HTTP ${response.status}`)
-      }
-      let payload = null
-      try {
-        payload = raw ? JSON.parse(raw) : []
-      } catch {
-        throw new Error('Resposta da API invalida')
-      }
-      const normalizedRows = normalizeRows(payload)
+      const payload = await parseResponseBody(response)
+      const normalizedRows = filterConsultasByUser(normalizeRows(payload), userId)
       if (requestSeq !== fetchSeqRef.current) {
         return rowsRef.current
       }
@@ -903,7 +1016,6 @@ export default function ConsultasV8() {
         const synced = findBestRowForModal(mergedRows, prev)
         return synced || prev
       })
-      setLimitSummary(resolveLimitSummary(payload, mergedRows.length))
       setLastSyncAt(new Date())
 
       if (preservePosition && typeof window !== 'undefined') {
@@ -923,19 +1035,18 @@ export default function ConsultasV8() {
       if (requestSeq !== fetchSeqRef.current) return rowsRef.current
       rowsRef.current = []
       setRows([])
-      setLimitSummary(DEFAULT_LIMIT_SUMMARY)
       setError(err?.message || 'Falha ao carregar consultas V8')
       return []
     } finally {
       if (!silent && !signal?.aborted && requestSeq === fetchSeqRef.current) setLoading(false)
     }
-  }, [user?.id, loginSummaries, selectedLoginIndex])
+  }, [user?.id])
 
   useEffect(() => {
     const controller = new AbortController()
-    fetchLoginSummaries(controller.signal)
+    fetchLimites(controller.signal)
     return () => controller.abort()
-  }, [fetchLoginSummaries])
+  }, [fetchLimites])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -976,6 +1087,7 @@ export default function ConsultasV8() {
         // Para somente quando o registro mais recente sair de pendente.
         setAutoPollingActive(false)
         setPollingQuery(null)
+        fetchLimites(undefined, { silent: true })
       } finally {
         pollInFlightRef.current = false
       }
@@ -987,7 +1099,7 @@ export default function ConsultasV8() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [autoPollingActive, pollingQuery, fetchConsultas])
+  }, [autoPollingActive, pollingQuery, fetchConsultas, fetchLimites])
 
   useEffect(() => {
     const fileName = String(batchPollingTarget?.fileName ?? '').trim()
@@ -1015,6 +1127,7 @@ export default function ConsultasV8() {
         if (hasPending) return
 
         setBatchPollingTarget(null)
+        fetchLimites(undefined, { silent: true })
       } finally {
         batchPollInFlightRef.current = false
       }
@@ -1026,7 +1139,7 @@ export default function ConsultasV8() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [batchPollingTarget, fetchConsultas])
+  }, [batchPollingTarget, fetchConsultas, fetchLimites])
 
   useEffect(() => {
     const jobId = String(batchImportJob?.jobId ?? '').trim()
@@ -1046,6 +1159,7 @@ export default function ConsultasV8() {
           setBatchImportJob(null)
           notify.error('Falha no processamento do lote.', { autoClose: 2800 })
           fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+          fetchLimites(undefined, { silent: true })
           return
         }
 
@@ -1053,6 +1167,7 @@ export default function ConsultasV8() {
           setBatchImportJob(null)
           notify.success('Lote processado com sucesso.', { autoClose: 2400 })
           fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+          fetchLimites(undefined, { silent: true })
         }
       } catch {
         errorsCount += 1
@@ -1069,7 +1184,7 @@ export default function ConsultasV8() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [batchImportJob, fetchConsultas])
+  }, [batchImportJob, fetchConsultas, fetchLimites])
 
   const openAddLoginModal = useCallback(() => {
     setNovoEmail('')
@@ -1115,13 +1230,13 @@ export default function ConsultasV8() {
 
       notify.success('Novo login enviado com sucesso.', { autoClose: 2200 })
       setShowAddLoginModal(false)
-      fetchLoginSummaries()
+      fetchLimites()
     } catch (err) {
       notify.error(err?.message || 'Falha ao enviar novo login.', { autoClose: 2800 })
     } finally {
       setSavingNovoLogin(false)
     }
-  }, [savingNovoLogin, novoEmail, novaSenha, novaEmpresa, user?.id, fetchLoginSummaries])
+  }, [savingNovoLogin, novoEmail, novaSenha, novaEmpresa, user?.id, fetchLimites])
 
   const handleConsultaSubmit = useCallback(async (event) => {
     event.preventDefault()
@@ -1137,23 +1252,29 @@ export default function ConsultasV8() {
 
     const userId = toNumberOrNull(user?.id)
     if (userId === null) {
-      setConsultaError('Usuário sem ID para consulta.')
+      setConsultaError('Usuario sem ID para consulta.')
       return
     }
 
-    const selectedLogin = loginSummaries[selectedLoginIndex] || null
-    const loginIdRaw = String(selectedLogin?.loginId ?? '').trim()
-    if (!loginIdRaw) {
-      setConsultaError('Selecione um login válido com ID para consultar.')
+    const equipeId = resolveUserEquipeId(user)
+    if (equipeId === null) {
+      setConsultaError('Usuario sem id_equipe para consulta.')
       return
     }
 
-    const parsedLoginId = toNumberOrNull(loginIdRaw)
+    const roleId = resolveUserRoleId(user)
+    if (roleId === null) {
+      setConsultaError('Usuario sem id_role para consulta.')
+      return
+    }
+
     const payload = {
-      id_login: parsedLoginId ?? loginIdRaw,
+      cliente_cpf: normalizedCpf,
+      cliente_nome: normalizedNome,
+      tipoConsulta: 'Individual',
       id_user: userId,
-      cpf: normalizedCpf,
-      nome: normalizedNome
+      id_equipe: equipeId,
+      id_role: roleId
     }
 
     try {
@@ -1165,10 +1286,9 @@ export default function ConsultasV8() {
         body: JSON.stringify(payload)
       })
 
-      const rawText = await response.text()
-      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+      await parseResponseBody(response)
 
-      if (response.status === 200) {
+      if ([200, 201].includes(response.status)) {
         notify.success('Consulta iniciada.', { autoClose: 2200 })
       } else {
         notify.success('Consulta individual enviada com sucesso.', { autoClose: 2200 })
@@ -1177,6 +1297,7 @@ export default function ConsultasV8() {
         id: '-',
         cliente_cpf: normalizedCpf,
         cliente_nome: normalizedNome,
+        tipoConsulta: 'Individual',
         status_consulta_v8: 'Aguardando Consulta',
         mensagem: 'Consulta iniciada. Aguardando retorno...',
         created_at: new Date().toISOString(),
@@ -1195,7 +1316,7 @@ export default function ConsultasV8() {
     } finally {
       setSendingConsultaIndividual(false)
     }
-  }, [consultaCpf, consultaNome, fetchConsultas, loginSummaries, selectedLoginIndex, user?.id])
+  }, [consultaCpf, consultaNome, fetchConsultas, user])
 
   const openBatchFilePicker = useCallback(() => {
     if (!batchFileInputRef.current) return
@@ -1248,8 +1369,11 @@ export default function ConsultasV8() {
     }
   }, [])
 
+  const batchUploadInFlightRef = useRef(false)
+
   const addPendingBatchToList = useCallback(async () => {
     if (uploadingBatchFile) return
+    if (batchUploadInFlightRef.current) return
     if (!pendingBatchUpload) {
       notify.warn('Selecione e valide um CSV primeiro.', { autoClose: 2200 })
       return
@@ -1261,53 +1385,107 @@ export default function ConsultasV8() {
       return
     }
 
-    const selectedLogin = loginSummaries[selectedLoginIndex] || null
-    if (!selectedLogin) {
-      notify.error('Selecione um login valido para enviar o lote.', { autoClose: 2600 })
+    const equipeId = resolveUserEquipeId(user)
+    if (equipeId === null) {
+      notify.error('Usuario sem id_equipe para envio do lote.', { autoClose: 2600 })
       return
     }
 
-    const idTokenUsado = String(selectedLogin?.idTokenUsado ?? selectedLogin?.loginId ?? '').trim()
-    if (!idTokenUsado) {
-      notify.error('Login sem id_token_usado para envio.', { autoClose: 2800 })
+    const roleId = resolveUserRoleId(user)
+    if (roleId === null) {
+      notify.error('Usuario sem id_role para envio do lote.', { autoClose: 2600 })
       return
     }
 
-    const empresa = String(selectedLogin?.empresa ?? '').trim()
-    const tokenUsado = String(selectedLogin?.tokenUsado ?? '').trim()
-    if (!tokenUsado) {
-      notify.error('Login sem token_usado para envio.', { autoClose: 2800 })
-      return
-    }
     const nomeArquivo = String(pendingBatchUpload?.fileName || `lote_${Date.now()}.csv`).trim()
-    const csvBody = buildNormalizedBatchCsv(pendingBatchUpload?.validRows)
-    if (!csvBody || csvBody.split(/\r?\n/).length <= 1) {
+    const validRows = Array.isArray(pendingBatchUpload?.validRows) ? pendingBatchUpload.validRows : []
+    if (validRows.length === 0) {
       notify.error('CSV sem linhas validas para envio.', { autoClose: 2600 })
       return
     }
 
+    const startedAtIso = new Date().toISOString()
+    const durationSamples = []
+    let okCount = 0
+    let errCount = 0
+
+    batchUploadInFlightRef.current = true
     try {
       setUploadingBatchFile(true)
       setBatchUploadError('')
 
-      const result = await importarCsvV8({
-        csv: csvBody,
-        nomeArquivo,
-        empresa: empresa || '-',
-        tokenUsado,
-        idTokenUsado: toNumberOrNull(idTokenUsado) ?? idTokenUsado,
-        idUser: userId
-      })
+      for (const row of validRows) {
+        const rowPayload = {
+          cliente_cpf: normalizeCpf11(row?.cpf),
+          cliente_nome: normalizeClientName(row?.nome),
+          telefone: normalizeOrGenerateBatchPhone(row?.telefone),
+          tipoConsulta: nomeArquivo,
+          id_user: userId,
+          id_equipe: equipeId,
+          id_role: roleId
+        }
+
+        if (!rowPayload.cliente_cpf || !rowPayload.cliente_nome) {
+          errCount += 1
+          continue
+        }
+
+        const started = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
+        try {
+          const response = await fetch(V8_INDIVIDUAL_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rowPayload)
+          })
+          await parseResponseBody(response)
+          okCount += 1
+        } catch {
+          errCount += 1
+        } finally {
+          const ended = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
+          const elapsed = Number(ended) - Number(started)
+          if (Number.isFinite(elapsed) && elapsed >= 0) durationSamples.push(elapsed)
+        }
+      }
+
+      const avgDurationMs = durationSamples.length > 0
+        ? durationSamples.reduce((acc, ms) => acc + ms, 0) / durationSamples.length
+        : null
 
       setPendingBatchUpload(null)
-      setBatchUploads((prev) => prev.filter((item) => item?.fileName !== nomeArquivo))
-      setBatchPollingTarget({ fileName: nomeArquivo })
-
-      if (result?.accepted) {
-        if (result?.jobId) setBatchImportJob({ jobId: result.jobId, fileName: nomeArquivo })
-        notify.info('Arquivo recebido, processando em background.', { autoClose: 2800 })
+      if (okCount > 0) {
+        setBatchPollingTarget({ fileName: nomeArquivo })
       } else {
+        setBatchPollingTarget(null)
+      }
+      setBatchImportJob(null)
+      setBatchUploads((prev) => {
+        const next = (Array.isArray(prev) ? prev : []).filter((item) => item?.fileName !== nomeArquivo)
+        const localStatus = okCount > 0 ? 'Processando' : 'Erro'
+        return [{
+          id: `local-${Date.now()}`,
+          source: 'local',
+          fileName: nomeArquivo,
+          totalRows: validRows.length,
+          okCount,
+          errCount,
+          pendingCount: okCount,
+          successCount: 0,
+          errorCount: errCount,
+          avgDurationMs,
+          status: localStatus,
+          createdAt: startedAtIso,
+          validRows,
+          invalidRows: Array.isArray(pendingBatchUpload?.invalidRows) ? pendingBatchUpload.invalidRows : []
+        }, ...next]
+      })
+
+      if (okCount > 0 && errCount === 0) {
         notify.success('Lote enviado com sucesso.', { autoClose: 2200 })
+      } else if (okCount > 0) {
+        notify.warn(`${okCount} enviados e ${errCount} com erro.`, { autoClose: 3200 })
+      } else {
+        notify.error('Nenhuma linha do lote foi enviada com sucesso.', { autoClose: 3200 })
       }
 
       fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
@@ -1317,8 +1495,9 @@ export default function ConsultasV8() {
       notify.error(msg, { autoClose: 3200 })
     } finally {
       setUploadingBatchFile(false)
+      batchUploadInFlightRef.current = false
     }
-  }, [uploadingBatchFile, pendingBatchUpload, user?.id, loginSummaries, selectedLoginIndex, fetchConsultas])
+  }, [uploadingBatchFile, pendingBatchUpload, user, fetchConsultas])
 
   const removeLocalBatchEntry = useCallback((id) => {
     setBatchUploads((prev) => prev.filter((entry) => entry?.id !== id))
@@ -1328,14 +1507,61 @@ export default function ConsultasV8() {
     if (!entry) return
     let previewRows = []
     if (entry?.source === 'local') {
-      previewRows = Array.isArray(entry?.validRows) ? entry.validRows : []
+      const backendRows = Array.isArray(rowsRef.current) ? rowsRef.current : []
+      const entryBatchName = String(entry?.fileName || '').trim()
+      const latestByCpfNome = new Map()
+      const latestByCpf = new Map()
+
+      for (const backendRow of backendRows) {
+        const backendBatchName = getBatchFileNameFromRow(backendRow)
+        if (entryBatchName && backendBatchName && normalizeHeaderToken(backendBatchName) !== normalizeHeaderToken(entryBatchName)) {
+          continue
+        }
+        const cpf = normalizeCpf11(backendRow?.cliente_cpf ?? backendRow?.cpf)
+        const nome = normalizeClientName(backendRow?.cliente_nome ?? backendRow?.nome)
+        if (!cpf) continue
+
+        const keyCpf = cpf
+        const keyCpfNome = `${cpf}|${normalizeNameToken(nome)}`
+        const ts = getRowSortTimestamp(backendRow)
+
+        const prevByCpfNome = latestByCpfNome.get(keyCpfNome)
+        if (!prevByCpfNome || getRowSortTimestamp(prevByCpfNome) <= ts) {
+          latestByCpfNome.set(keyCpfNome, backendRow)
+        }
+
+        const prevByCpf = latestByCpf.get(keyCpf)
+        if (!prevByCpf || getRowSortTimestamp(prevByCpf) <= ts) {
+          latestByCpf.set(keyCpf, backendRow)
+        }
+      }
+
+      previewRows = (Array.isArray(entry?.validRows) ? entry.validRows : []).map((row) => {
+        const cpf = normalizeCpf11(row?.cpf ?? row?.cliente_cpf)
+        const nome = normalizeClientName(row?.nome ?? row?.cliente_nome)
+        const keyCpfNome = `${cpf}|${normalizeNameToken(nome)}`
+        const matched = latestByCpfNome.get(keyCpfNome) || latestByCpf.get(cpf)
+
+        return {
+          ...row,
+          cpf,
+          nome,
+          telefone: normalizeProvidedPhone(row?.telefone ?? row?.phone ?? row?.celular),
+          status: String(matched?.status ?? row?.status ?? '').trim(),
+          status_consulta_v8: getV8RowStatus(matched || row)
+        }
+      })
     } else {
       const sourceRows = Array.isArray(entry?.apiRows) ? entry.apiRows : []
       previewRows = sourceRows
         .map((row) => ({
           cpf: normalizeCpf11(row?.cliente_cpf ?? row?.cpf),
           nome: normalizeClientName(row?.cliente_nome ?? row?.nome),
-          telefone: normalizeProvidedPhone(row?.telefone ?? row?.phone ?? row?.celular)
+          telefone: normalizeProvidedPhone(row?.telefone ?? row?.phone ?? row?.celular),
+          status: String(row?.status ?? '').trim(),
+          status_consulta_v8: getV8RowStatus(row)
+          ,
+          descricao: String(row?.descricao ?? row?.descricao_v8 ?? row?.mensagem ?? '').trim()
         }))
         .filter((row) => row.cpf && row.nome)
     }
@@ -1413,6 +1639,7 @@ export default function ConsultasV8() {
   }, [])
 
   const handleRefresh = useCallback(() => {
+    fetchLimites(undefined, { silent: true })
     const normalizedCpf = normalizeCpf11(consultaCpf)
     const normalizedNome = normalizeClientName(consultaNome)
     if (normalizedCpf && normalizedNome) {
@@ -1423,7 +1650,7 @@ export default function ConsultasV8() {
       return
     }
     fetchConsultas()
-  }, [consultaCpf, consultaNome, fetchConsultas])
+  }, [consultaCpf, consultaNome, fetchConsultas, fetchLimites])
 
   const visibleRows = useMemo(() => {
     const userId = toNumberOrNull(user?.id)
@@ -1623,21 +1850,23 @@ export default function ConsultasV8() {
   const statusCounts = useMemo(() => {
     const map = new Map()
     for (const row of preStatusFilteredRows) {
-      const label = getV8RowStatus(row)
-      if (!label) continue
-      const key = label.toLowerCase()
+      const rawLabel = getV8RowStatus(row)
+      if (!rawLabel) continue
+      const key = rawLabel.toLowerCase()
       const prev = map.get(key)
       if (prev) prev.count += 1
-      else map.set(key, { key, label, count: 1 })
+      else map.set(key, { key, label: rawLabel, displayLabel: translateV8StatusLabel(rawLabel), count: 1 })
     }
-    return Array.from(map.values()).sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label, 'pt-BR'))
+    return Array.from(map.values()).sort((a, b) => (b.count - a.count) || a.displayLabel.localeCompare(b.displayLabel, 'pt-BR'))
   }, [preStatusFilteredRows])
 
   const apiBatchRows = useMemo(() => {
     return sortedRows.filter((row) => {
-      const tipoConsulta = String(pickRowValue(row, ['tipoConsulta', 'tipo_consulta', 'tipoConsultaV8', 'tipo_consulta_v8'], '')).trim()
-      const tipoToken = normalizeHeaderToken(tipoConsulta)
-      return Boolean(tipoToken) && tipoToken !== 'individual'
+      const tipoConsulta = getTipoConsultaFromRow(row)
+      const batchName = getBatchFileNameFromRow(row)
+      if (!tipoConsulta && !batchName) return false
+      if (isIndividualBatchToken(tipoConsulta || batchName)) return false
+      return true
     })
   }, [sortedRows])
 
@@ -1659,7 +1888,7 @@ export default function ConsultasV8() {
       const quantity = rowsList.length
       const okCount = rowsList.filter((r) => isSuccessV8Status(getV8RowStatus(r))).length
       const pendingCount = rowsList.filter((r) => isPendingV8Status(getV8RowStatus(r))).length
-      const errCount = Math.max(0, quantity - okCount)
+      const errCount = Math.max(0, quantity - okCount - pendingCount)
       const durationCandidates = rowsList
         .map((r) => getRowDurationMs(r))
         .filter((v) => Number.isFinite(v) && v >= 0)
@@ -1679,6 +1908,9 @@ export default function ConsultasV8() {
         totalRows: quantity,
         okCount,
         errCount,
+        pendingCount,
+        successCount: okCount,
+        errorCount: errCount,
         avgDurationMs,
         status,
         createdAt: latestTs > 0 ? new Date(latestTs).toISOString() : '',
@@ -1690,7 +1922,31 @@ export default function ConsultasV8() {
   const batchTableRows = useMemo(() => {
     const localEntries = Array.isArray(batchUploads) ? batchUploads : []
     const combined = [...localEntries, ...apiBatchGroups]
-    return combined.sort((a, b) => {
+    const byFile = new Map()
+
+    for (const entry of combined) {
+      const fileKey = normalizeHeaderToken(entry?.fileName || `sem-nome-${entry?.id || ''}`)
+      const prev = byFile.get(fileKey)
+      if (!prev) {
+        byFile.set(fileKey, entry)
+        continue
+      }
+
+      // Quando a API ja retornou o lote, prioriza a linha derivada da API em vez da linha local temporaria.
+      if (prev?.source === 'local' && entry?.source === 'api') {
+        byFile.set(fileKey, entry)
+        continue
+      }
+      if (prev?.source === 'api' && entry?.source === 'local') {
+        continue
+      }
+
+      const prevTs = new Date(prev?.createdAt || 0).getTime()
+      const nextTs = new Date(entry?.createdAt || 0).getTime()
+      if (nextTs >= prevTs) byFile.set(fileKey, entry)
+    }
+
+    return Array.from(byFile.values()).sort((a, b) => {
       const ta = new Date(a?.createdAt || 0).getTime()
       const tb = new Date(b?.createdAt || 0).getTime()
       return tb - ta
@@ -1724,25 +1980,25 @@ export default function ConsultasV8() {
   const startIndex = filteredRows.length === 0 ? 0 : ((currentIndividualPage - 1) * pageSize + 1)
   const endIndex = filteredRows.length === 0 ? 0 : Math.min(currentIndividualPage * pageSize, filteredRows.length)
 
-  const currentLoginSummary = loginSummaries[selectedLoginIndex] || null
   const currentLimitSummary = {
-    total: displayOrFallback(currentLoginSummary?.total, limitSummary.total),
-    usado: displayOrFallback(currentLoginSummary?.usado, limitSummary.usado),
-    restantes: displayOrFallback(currentLoginSummary?.restantes, limitSummary.restantes)
+    total: displayOrFallback(limitSummary.total),
+    usado: displayOrFallback(limitSummary.usado),
+    restantes: displayOrFallback(limitSummary.restantes)
   }
 
   const exportCSV = useCallback(() => {
-    const headers = [
-      'cliente_cpf',
-      'cliente_nome',
-      'telefone',
-      'mensagem',
-      'tipoConsulta',
-      'status_consulta_v8',
-      'valor_liberado',
-      'created_at',
-      'updated_at'
-    ]
+  const headers = [
+    'cliente_cpf',
+    'cliente_nome',
+    'telefone',
+    'mensagem',
+    'descricao',
+    'tipoConsulta',
+    'status_consulta_v8',
+    'valor_liberado',
+    'created_at',
+    'updated_at'
+  ]
     const outRows = dedupeV8CsvRows(
       filteredRows
       .map((row) => mapRowToV8CsvPayload(row))
@@ -1753,6 +2009,7 @@ export default function ConsultasV8() {
         item?.cliente_nome ?? '',
         item?.telefone ?? '',
         item?.mensagem ?? '',
+        item?.descricao ?? '',
         item?.tipoConsulta ?? '',
         item?.status_consulta_v8 ?? '',
         item?.valor_liberado ?? '',
@@ -1795,10 +2052,9 @@ export default function ConsultasV8() {
                 <h2 className="fw-bold mb-0">Consulta V8</h2>
               </div>
               <div className="small opacity-75">
-                {lastSyncAt ? `Última atualização: ${formatDate(lastSyncAt)}` : 'Carregando dados...'}
-              </div>
-              <div className="small opacity-75">
-                {latestTableUpdatedAt ? `Mais recente da tabela: ${formatDate(latestTableUpdatedAt)}` : 'Mais recente da tabela: -'}
+                {latestTableUpdatedAt
+                  ? `Última atualização: ${formatDate(latestTableUpdatedAt)}`
+                  : 'Carregando dados...'}
               </div>
             </div>
           </div>
@@ -1817,47 +2073,36 @@ export default function ConsultasV8() {
           <div className="row g-3">
             <div className="col-12 col-xxl-3">
               <div className="neo-card neo-lg p-3 p-md-4 h-100">
-                <div className="opacity-75 small text-uppercase mb-2">Limite</div>
-                <div className="mb-3">
-                  <label className="form-label small opacity-75 mb-1">Login</label>
-                  <select
-                    className="form-select form-select-sm"
-                    value={selectedLoginIndex}
-                    onChange={(event) => setSelectedLoginIndex(Number(event.target.value))}
-                    disabled={loginSummaries.length === 0}
-                  >
-                    {loginSummaries.length === 0 ? (
-                      <option value={0}>Sem login</option>
-                    ) : (
-                      loginSummaries.map((item, idx) => (
-                        <option key={`${item.login || item.email}-${idx}`} value={idx}>
-                          {loginOptionLabel(item, idx)}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-outline-info btn-sm w-100 mb-3"
-                  onClick={openAddLoginModal}
-                >
-                  Adicionar login
-                </button>
-                <div className="d-flex flex-column gap-3">
+                <div className="d-flex flex-column align-items-start gap-3 mb-3">
                   <div>
-                    <div className="small opacity-75">Total</div>
-                    <div className="h4 fw-bold mb-0">{currentLimitSummary.total}</div>
+                    <div className="opacity-75 small text-uppercase mb-1">Limites V8</div>
                   </div>
-                  <div>
-                    <div className="small opacity-75">Usado</div>
-                    <div className="h4 fw-bold mb-0">{currentLimitSummary.usado}</div>
-                  </div>
-                  <div>
-                    <div className="small opacity-75">Restantes</div>
-                    <div className="h4 fw-bold mb-0">{currentLimitSummary.restantes}</div>
+                  <div className="d-flex flex-column gap-3">
+                    <div>
+                      <div className="small opacity-75">Total</div>
+                      <div className="h5 fw-bold mb-0">{currentLimitSummary.total}</div>
+                    </div>
+                    <div>
+                      <div className="small opacity-75">Usado</div>
+                      <div className="h5 fw-bold mb-0">{currentLimitSummary.usado}</div>
+                    </div>
+                    <div>
+                      <div className="small opacity-75">Restantes</div>
+                      <div className="h5 fw-bold mb-0">{currentLimitSummary.restantes}</div>
+                    </div>
                   </div>
                 </div>
+
+                {limitesError && (
+                  <div className="small text-danger mb-2">{limitesError}</div>
+                )}
+
+                {loadingLimites && (
+                  <div className="small opacity-75 d-flex align-items-center gap-2">
+                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Carregando limites...
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2160,7 +2405,7 @@ export default function ConsultasV8() {
                             type="button"
                             className={`btn btn-sm ${selected ? 'btn-primary' : 'btn-outline-light'} w-100 text-start p-3`}
                             onClick={() => (selected ? removeStatusFilter(item.label) : addStatusFilter(item.label))}
-                            title={item.label}
+                            title={item.displayLabel || item.label}
                             style={{ aspectRatio: '1 / 1', whiteSpace: 'normal' }}
                           >
                             <div className="d-flex flex-column h-100">
@@ -2174,7 +2419,7 @@ export default function ConsultasV8() {
                                   overflow: 'hidden'
                                 }}
                               >
-                                {item.label}
+                                {item.displayLabel || item.label}
                               </div>
                               <div className="mt-auto d-flex justify-content-end pt-2">
                                 <span className={`badge ${selected ? 'text-bg-light' : 'text-bg-secondary'}`}>{item.count}</span>
@@ -2246,6 +2491,27 @@ export default function ConsultasV8() {
                   {pagedBatchRows.map((entry) => {
                     const statusTxt = String(entry?.status || '-')
                     const statusToken = normalizeHeaderToken(statusTxt)
+                    const totalRowsNum = Math.max(0, Number(entry?.totalRows ?? 0) || 0)
+                    const successCount = Math.max(
+                      0,
+                      Number(
+                        entry?.successCount
+                        ?? (entry?.source === 'local' ? 0 : (entry?.okCount ?? 0))
+                      ) || 0
+                    )
+                    const errorCount = Math.max(
+                      0,
+                      Number(entry?.errorCount ?? entry?.errCount ?? 0) || 0
+                    )
+                    const pendingCount = Math.max(
+                      0,
+                      Number(
+                        entry?.pendingCount
+                        ?? (entry?.source === 'local'
+                          ? (entry?.okCount ?? 0)
+                          : Math.max(0, totalRowsNum - successCount - errorCount))
+                      ) || 0
+                    )
                     const statusClass = statusToken.includes('process')
                       ? 'text-bg-warning'
                       : (statusToken.includes('conclu') || statusToken.includes('sucesso'))
@@ -2264,9 +2530,19 @@ export default function ConsultasV8() {
                         </td>
                         <td>{Number(entry?.totalRows ?? 0)}</td>
                         <td>
-                          <div className="d-flex flex-wrap gap-2">
-                            <span className="badge text-bg-success">{Number(entry?.okCount ?? 0)}</span>
-                            <span className="badge text-bg-danger">{Number(entry?.errCount ?? 0)}</span>
+                          <div className="d-inline-flex align-items-center gap-2 flex-nowrap" style={{ whiteSpace: 'nowrap' }}>
+                            <span className="badge text-bg-warning d-inline-flex align-items-center gap-1" title="Falta consultar">
+                              <FiClock size={12} />
+                              <span>{pendingCount}</span>
+                            </span>
+                            <span className="badge text-bg-success d-inline-flex align-items-center gap-1" title="Sem erro">
+                              <FiCheckCircle size={12} />
+                              <span>{successCount}</span>
+                            </span>
+                            <span className="badge text-bg-danger d-inline-flex align-items-center gap-1" title="Com erro">
+                              <FiAlertCircle size={12} />
+                              <span>{errorCount}</span>
+                            </span>
                           </div>
                         </td>
                         <td>{formatAvgDuration(entry?.avgDurationMs)}</td>
@@ -2412,6 +2688,7 @@ export default function ConsultasV8() {
 
                 {!loading && !error && pageRows.map((row, idx) => {
                   const resolvedStatus = getV8RowStatus(row)
+                  const translatedStatus = translateV8StatusLabel(resolvedStatus)
                   return (
                     <tr key={String(row?.id ?? `${row?.cliente_cpf ?? 'sem-cpf'}-${row?.created_at ?? idx}`)}>
                       <td>{row?.id ?? '-'}</td>
@@ -2422,7 +2699,7 @@ export default function ConsultasV8() {
                       <td>{formatDate(row?.created_at)}</td>
                       <td>
                         <span className={`badge ${statusClassName(resolvedStatus)}`}>
-                          {resolvedStatus || '-'}
+                          {translatedStatus || resolvedStatus || '-'}
                         </span>
                       </td>
                       <td>{formatCurrency(row?.valor_liberado)}</td>
@@ -2592,7 +2869,7 @@ export default function ConsultasV8() {
                     <div className="small opacity-75">Status Consulta V8</div>
                     <div className="fw-semibold">
                       <span className={`badge ${statusClassName(getV8RowStatus(selectedRow))}`}>
-                        {getV8RowStatus(selectedRow) || '-'}
+                        {translateV8StatusLabel(getV8RowStatus(selectedRow)) || getV8RowStatus(selectedRow) || '-'}
                       </span>
                     </div>
                   </div>
@@ -2617,7 +2894,7 @@ export default function ConsultasV8() {
         >
           <div
             className="modal-dialog modal-dialog-centered"
-            style={{ maxWidth: 'min(92vw, 760px)' }}
+            style={{ maxWidth: 'min(96vw, 1040px)' }}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="modal-content modal-dark">
@@ -2648,28 +2925,36 @@ export default function ConsultasV8() {
                   </div>
                 </div>
 
-                <div className="table-responsive" style={{ maxHeight: 360 }}>
-                  <table className="table table-dark table-sm align-middle mb-0">
+                <div className="table-responsive" style={{ maxHeight: 360, overflowY: 'auto', overflowX: 'hidden' }}>
+                  <table className="table table-dark table-sm align-middle mb-0" style={{ minWidth: 0, tableLayout: 'auto' }}>
                     <thead>
                       <tr>
                         <th>#</th>
                         <th>CPF</th>
                         <th>Nome</th>
                         <th>Telefone</th>
+                        <th>status</th>
+                        <th>Resposta V8</th>
+                        <th>Descrição</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(batchPreviewRow?.previewRows?.length ?? 0) === 0 && (
                         <tr>
-                          <td colSpan={4} className="text-center py-3 opacity-75">Sem linhas para visualizar.</td>
+                          <td colSpan={6} className="text-center py-3 opacity-75">Sem linhas para visualizar.</td>
                         </tr>
                       )}
                       {(batchPreviewRow?.previewRows ?? []).map((item, idx) => (
                         <tr key={`${item?.cpf || 'cpf'}-${idx}`}>
                           <td>{idx + 1}</td>
-                          <td>{formatCpf(item?.cpf)}</td>
-                          <td className="text-wrap">{item?.nome || '-'}</td>
-                          <td>{formatPhone(item?.telefone)}</td>
+                          <td className="text-nowrap">{formatCpf(item?.cpf)}</td>
+                          <td className="text-nowrap">{item?.nome || '-'}</td>
+                          <td className="text-nowrap">{formatPhone(item?.telefone)}</td>
+                          <td>{translateV8StatusLabel(item?.status) || item?.status || '-'}</td>
+                          <td>{translateV8StatusLabel(item?.status_consulta_v8) || item?.status_consulta_v8 || '-'}</td>
+                          <td style={{ maxWidth: 320, whiteSpace: 'normal' }}>
+                            {item?.descricao ? <span>{item.descricao}</span> : '-'}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
