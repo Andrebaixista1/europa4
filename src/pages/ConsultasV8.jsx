@@ -8,7 +8,8 @@ import { consultarImportacaoCsvV8Status } from '../services/v8Client.js'
 import { notify } from '../utils/notify.js'
 
 const V8_LARAVEL_BASE_PATH = '/api/consulta-v8'
-const V8_CONSULTAS_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
+const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
+const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
 const V8_LIMITES_API_URL = `${V8_LARAVEL_BASE_PATH}/limites`
 const V8_INDIVIDUAL_API_URL = V8_LARAVEL_BASE_PATH
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
@@ -1033,8 +1034,10 @@ export default function ConsultasV8() {
         return []
       }
 
-      const requestUrl = new URL(V8_CONSULTAS_API_URL, window.location.origin)
+      const requestUrl = new URL(V8_CONSULTAS_GET_API_URL)
       requestUrl.searchParams.set('id_user', String(userId))
+      const equipeId = resolveUserEquipeId(user)
+      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
       if (userId === 1) requestUrl.searchParams.set('all', '1')
 
       const normalizedCpf = normalizeCpf11(query?.cpf)
@@ -1594,7 +1597,7 @@ export default function ConsultasV8() {
     try {
       setDeletingBatch(true)
 
-      const requestUrl = new URL(V8_CONSULTAS_API_URL, window.location.origin)
+      const requestUrl = new URL(V8_CONSULTAS_DELETE_API_URL, window.location.origin)
       requestUrl.searchParams.set('id_user', String(userId))
       requestUrl.searchParams.set('id_equipe', String(equipeId))
       requestUrl.searchParams.set('tipoConsulta', tipoConsulta)
