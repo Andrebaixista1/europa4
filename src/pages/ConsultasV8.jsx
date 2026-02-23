@@ -10,7 +10,7 @@ import { notify } from '../utils/notify.js'
 const V8_LARAVEL_BASE_PATH = '/api/consulta-v8'
 const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
 const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
-const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook-test/api/getconsulta-v8/'
+const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
 const V8_INDIVIDUAL_API_URL = V8_LARAVEL_BASE_PATH
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
@@ -81,19 +81,40 @@ const buildLimitSummaryFromRows = (rows) => {
   const list = Array.isArray(rows) ? rows : []
   if (list.length === 0) return DEFAULT_LIMIT_SUMMARY
 
+  const parseTotal = (row) => toNumberOrNull(row?.total ?? row?.limite)
+  const parseUsado = (row) => toNumberOrNull(row?.consultados ?? row?.usado)
+
+  const totalRow = list.find((row) => {
+    const id = String(row?.id ?? '').trim()
+    const email = String(row?.email ?? row?.login ?? '').trim().toUpperCase()
+    const isAggregate = id === '0' || email === 'TOTAL'
+    if (!isAggregate) return false
+    return parseTotal(row) !== null || parseUsado(row) !== null
+  })
+
+  if (totalRow) {
+    const total = parseTotal(totalRow) ?? 0
+    const usado = parseUsado(totalRow) ?? 0
+    return {
+      total,
+      usado,
+      restantes: Math.max(0, total - usado),
+    }
+  }
+
   let total = 0
   let usado = 0
   let hasAnyNumeric = false
 
   for (const row of list) {
-    const totalRow = toNumberOrNull(row?.total)
-    const consultadosRow = toNumberOrNull(row?.consultados ?? row?.usado)
-    if (totalRow !== null) {
-      total += totalRow
+    const totalValue = parseTotal(row)
+    const usadoValue = parseUsado(row)
+    if (totalValue !== null) {
+      total += totalValue
       hasAnyNumeric = true
     }
-    if (consultadosRow !== null) {
-      usado += consultadosRow
+    if (usadoValue !== null) {
+      usado += usadoValue
       hasAnyNumeric = true
     }
   }
