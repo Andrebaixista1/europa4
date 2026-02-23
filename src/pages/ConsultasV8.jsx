@@ -13,20 +13,11 @@ const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
 const V8_CONSULTAS_RELEASE_API_URL = `${V8_LARAVEL_BASE_PATH}/liberar-pendentes`
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
 const V8_INDIVIDUAL_API_URL = `${V8_LARAVEL_BASE_PATH}/individual`
-const V8_BATCH_API_URL = V8_LARAVEL_BASE_PATH
+const V8_BATCH_UPLOAD_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-lote'
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
 const DISABLE_V8_AUTO_POLLING = true
-const BATCH_POST_INTERVAL_MS = 2000
-const DEFAULT_BATCH_POST_PROGRESS = {
-  fileName: '',
-  total: 0,
-  processed: 0,
-  ok: 0,
-  error: 0,
-  phase: 'idle'
-}
 
 const toNumberOrNull = (value) => {
   if (value === undefined || value === null || value === '') return null
@@ -697,6 +688,15 @@ const normalizeHeaderToken = (value) => {
     .toLowerCase()
 }
 
+const normalizeBatchFileToken = (value) => {
+  let token = normalizeHeaderToken(value)
+  if (!token) return ''
+  token = token.replace(/^"+|"+$/g, '').trim()
+  token = token.replace(/\.csv$/i, '').trim()
+  token = token.replace(/\s+/g, ' ')
+  return token
+}
+
 const parseSemicolonCsvLine = (line) => {
   const src = String(line ?? '')
   const out = []
@@ -992,23 +992,6 @@ const buildNormalizedBatchCsv = (rows) => {
   return lines.join('\r\n')
 }
 
-const formatElapsedTimer = (totalSeconds) => {
-  const safe = Math.max(0, Number(totalSeconds) || 0)
-  const mm = String(Math.floor(safe / 60)).padStart(2, '0')
-  const ss = String(safe % 60).padStart(2, '0')
-  return `${mm}:${ss}`
-}
-
-const formatEtaMinutesOrHours = (totalSeconds) => {
-  const safe = Math.max(0, Number(totalSeconds) || 0)
-  const totalMinutes = Math.max(0, Math.ceil(safe / 60))
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-
-  if (hours > 0) return `${hours}h ${minutes}min`
-  return `${totalMinutes}min`
-}
-
 export default function ConsultasV8() {
   const { user } = useAuth()
   const [rows, setRows] = useState([])
@@ -1043,9 +1026,6 @@ export default function ConsultasV8() {
   const [batchPreviewRow, setBatchPreviewRow] = useState(null)
   const [batchDeleteTarget, setBatchDeleteTarget] = useState(null)
   const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
-  const [batchPostProgress, setBatchPostProgress] = useState(DEFAULT_BATCH_POST_PROGRESS)
-  const [batchPostStartedAt, setBatchPostStartedAt] = useState(null)
-  const [batchPostElapsedSeconds, setBatchPostElapsedSeconds] = useState(0)
   const [deletingBatch, setDeletingBatch] = useState(false)
   const [batchPollingTarget, setBatchPollingTarget] = useState(null)
   const [batchImportJob, setBatchImportJob] = useState(null)
@@ -1066,44 +1046,6 @@ export default function ConsultasV8() {
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
   const canDeleteBatchByUser = toNumberOrNull(user?.id) === 1
-  const batchPostTotal = Math.max(0, Number(batchPostProgress?.total ?? 0))
-  const batchPostProcessed = Math.max(0, Number(batchPostProgress?.processed ?? 0))
-  const batchPostPercent = batchPostTotal > 0
-    ? Math.min(100, Math.round((batchPostProcessed / batchPostTotal) * 100))
-    : 0
-  const batchPostEtaSeconds = useMemo(() => {
-    if (!uploadingBatchFile || batchPostTotal <= 0) return 0
-    if (batchPostProgress?.phase === 'liberando') return 0
-
-    const processed = Math.min(batchPostTotal, Math.max(0, Number(batchPostProcessed) || 0))
-    const remaining = Math.max(0, batchPostTotal - processed)
-    if (remaining === 0) return 0
-
-    if (processed <= 0) {
-      const intervalSeconds = Math.max(1, Math.ceil(BATCH_POST_INTERVAL_MS / 1000))
-      return remaining * intervalSeconds
-    }
-
-    const elapsed = Math.max(1, Number(batchPostElapsedSeconds) || 0)
-    const avgSecondsPerItem = elapsed / processed
-    return Math.ceil(remaining * avgSecondsPerItem)
-  }, [uploadingBatchFile, batchPostTotal, batchPostProcessed, batchPostElapsedSeconds, batchPostProgress?.phase])
-
-  useEffect(() => {
-    if (!uploadingBatchFile || !batchPostStartedAt) {
-      setBatchPostElapsedSeconds(0)
-      return undefined
-    }
-
-    const updateElapsed = () => {
-      const elapsed = Math.floor((Date.now() - Number(batchPostStartedAt)) / 1000)
-      setBatchPostElapsedSeconds(Math.max(0, elapsed))
-    }
-
-    updateElapsed()
-    const intervalId = setInterval(updateElapsed, 1000)
-    return () => clearInterval(intervalId)
-  }, [uploadingBatchFile, batchPostStartedAt])
 
   const fetchLimites = useCallback(async (signal, options = {}) => {
     const silent = options?.silent === true
@@ -1298,7 +1240,7 @@ export default function ConsultasV8() {
     if (!fileName) return undefined
 
     let cancelled = false
-    const normalizedTarget = normalizeHeaderToken(fileName)
+    const normalizedTarget = normalizeBatchFileToken(fileName)
 
     const tick = async () => {
       if (cancelled || batchPollInFlightRef.current) return
@@ -1309,7 +1251,7 @@ export default function ConsultasV8() {
 
         const scopedRows = (Array.isArray(latestRows) ? latestRows : []).filter((row) => {
           const rowBatchName = getBatchFileNameFromRow(row)
-          return normalizeHeaderToken(rowBatchName) === normalizedTarget
+          return normalizeBatchFileToken(rowBatchName) === normalizedTarget
         })
 
         // Enquanto o lote ainda não aparece no retorno, continua polling.
@@ -1562,6 +1504,7 @@ export default function ConsultasV8() {
         totalRows: parsed.totalRows,
         validRows: parsed.validRows,
         invalidRows: parsed.invalidRows,
+        file,
         status: 'Pronto',
         createdAt: new Date().toISOString()
       })
@@ -1598,164 +1541,81 @@ export default function ConsultasV8() {
       return
     }
 
-    const roleId = resolveUserRoleId(user)
-    if (roleId === null) {
-      notify.error('Usuario sem id_role para envio do lote.', { autoClose: 2600 })
-      return
-    }
-
     const nomeArquivo = String(pendingBatchUpload?.fileName || `lote_${Date.now()}.csv`).trim()
     const validRows = Array.isArray(pendingBatchUpload?.validRows) ? pendingBatchUpload.validRows : []
     if (validRows.length === 0) {
       notify.error('CSV sem linhas validas para envio.', { autoClose: 2600 })
       return
     }
-
     const startedAtIso = new Date().toISOString()
-    let insertedIds = []
     let okCount = 0
     let errCount = 0
-    let releasedToPending = false
 
     batchUploadInFlightRef.current = true
     try {
       setUploadingBatchFile(true)
       setBatchUploadError('')
-      setBatchPostStartedAt(Date.now())
-      setBatchPostElapsedSeconds(0)
-      setBatchPostProgress({
-        fileName: nomeArquivo,
-        total: validRows.length,
-        processed: 0,
-        ok: 0,
-        error: 0,
-        phase: 'enviando'
-      })
 
-      const batchRowsPayload = validRows
-        .map((row) => ({
-          cliente_cpf: normalizeCpf11(row?.cpf),
-          cliente_nome: normalizeClientName(row?.nome),
-          telefone: normalizeOrGenerateBatchPhone(row?.telefone),
-        }))
-        .filter((row) => row.cliente_cpf && row.cliente_nome)
-
-      if (batchRowsPayload.length === 0) {
+      const normalizedCsv = buildNormalizedBatchCsv(validRows)
+      if (!normalizedCsv || !normalizedCsv.trim()) {
         notify.error('CSV sem linhas validas para envio.', { autoClose: 2600 })
         return
       }
 
+      const uploadName = String(nomeArquivo || `lote_${Date.now()}.csv`).trim().toLowerCase().endsWith('.csv')
+        ? String(nomeArquivo || `lote_${Date.now()}.csv`).trim()
+        : `${String(nomeArquivo || `lote_${Date.now()}`).trim()}.csv`
+
+      const csvBlob = new Blob([normalizedCsv], { type: 'text/csv;charset=utf-8' })
+      const formData = new FormData()
+      formData.append('id_user', String(userId))
+      formData.append('equipe_id', String(equipeId))
+      formData.append('id_equipe', String(equipeId))
+      formData.append('nome_arquivo', uploadName)
+      formData.append('file', csvBlob, uploadName)
+
       const bulkStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-      const response = await fetch(V8_BATCH_API_URL, {
+      const response = await fetch(V8_BATCH_UPLOAD_API_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          id_user: userId,
-          id_equipe: equipeId,
-          id_role: roleId,
-          tipoConsulta: nomeArquivo,
-          hold_pending: true,
-          rows: batchRowsPayload
-        })
+        body: formData
       })
       const responsePayload = await parseResponseBody(response)
       const responseData = (responsePayload && typeof responsePayload === 'object')
         ? (responsePayload?.data && typeof responsePayload.data === 'object' ? responsePayload.data : responsePayload)
         : {}
-      const rawIds = Array.isArray(responseData?.ids) ? responseData.ids : []
-      insertedIds = rawIds
-        .map((id) => toNumberOrNull(id))
-        .filter((id) => Number.isInteger(id) && id > 0)
 
       const insertedCountFromApi = toNumberOrNull(
         responseData?.inserted_count
         ?? responseData?.insertedCount
         ?? responseData?.total_inserted
         ?? responseData?.count
+        ?? responseData?.total
+        ?? responseData?.total_enviados
+        ?? responseData?.enviados
       )
-      const inferredInserted = insertedIds.length > 0 ? insertedIds.length : batchRowsPayload.length
-      okCount = Math.max(0, Math.min(batchRowsPayload.length, insertedCountFromApi ?? inferredInserted))
-      errCount = Math.max(0, batchRowsPayload.length - okCount)
-
-      setBatchPostProgress((prev) => ({
-        ...prev,
-        total: batchRowsPayload.length,
-        processed: batchRowsPayload.length,
-        ok: okCount,
-        error: errCount
-      }))
+      const inferredInserted = validRows.length
+      okCount = Math.max(0, Math.min(validRows.length, insertedCountFromApi ?? inferredInserted))
+      errCount = Math.max(0, validRows.length - okCount)
 
       const bulkEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
       const bulkElapsedMs = Number(bulkEndedAt) - Number(bulkStartedAt)
-      const avgDurationMs = (Number.isFinite(bulkElapsedMs) && bulkElapsedMs >= 0 && batchRowsPayload.length > 0)
-        ? bulkElapsedMs / batchRowsPayload.length
+      const avgDurationMs = (Number.isFinite(bulkElapsedMs) && bulkElapsedMs >= 0 && validRows.length > 0)
+        ? bulkElapsedMs / validRows.length
         : null
 
       setPendingBatchUpload(null)
       if (okCount > 0) {
-        setBatchPostProgress((prev) => ({ ...prev, phase: 'liberando' }))
-        try {
-          const idsForRelease = insertedIds.length > 0 && insertedIds.length <= 1800
-            ? insertedIds
-            : []
-          await releasePendingConsultas({
-            idUser: userId,
-            idEquipe: equipeId,
-            tipoConsulta: nomeArquivo,
-            ids: idsForRelease
-          })
-          releasedToPending = true
-          setBatchPollingTarget({ fileName: nomeArquivo })
-        } catch (releaseErr) {
-          releasedToPending = false
-          setBatchPollingTarget(null)
-          const releaseMsg = releaseErr?.message || 'Lote inserido, mas nao foi possivel liberar para pendente.'
-          setBatchUploadError(releaseMsg)
-          notify.error(releaseMsg, { autoClose: 3600 })
-        }
+        setBatchPollingTarget({ fileName: nomeArquivo })
       } else {
         setBatchPollingTarget(null)
       }
       setBatchImportJob(null)
-      setBatchUploads((prev) => {
-        const next = (Array.isArray(prev) ? prev : []).filter((item) => {
-          const sameName = normalizeHeaderToken(item?.fileName) === normalizeHeaderToken(nomeArquivo)
-          const sameUser = toNumberOrNull(item?.idUser) === userId
-          const sameEquipe = toNumberOrNull(item?.idEquipe) === equipeId
-          return !(sameName && sameUser && sameEquipe)
-        })
-        const localStatus = okCount > 0
-          ? (releasedToPending ? 'Processando' : 'Aguardando liberacao')
-          : 'Erro'
-        return [{
-          id: `local-${Date.now()}`,
-          source: 'local',
-          fileName: nomeArquivo,
-          idUser: userId,
-          idEquipe: equipeId,
-          totalRows: batchRowsPayload.length,
-          okCount,
-          errCount,
-          pendingCount: okCount,
-          successCount: 0,
-          errorCount: errCount,
-          avgDurationMs,
-          status: localStatus,
-          createdAt: startedAtIso,
-          validRows,
-          invalidRows: Array.isArray(pendingBatchUpload?.invalidRows) ? pendingBatchUpload.invalidRows : []
-        }, ...next]
-      })
+      setBatchUploads([])
 
-      if (okCount > 0 && errCount === 0 && releasedToPending) {
+      if (okCount > 0 && errCount === 0) {
         notify.success('Lote enviado com sucesso.', { autoClose: 2200 })
-      } else if (okCount > 0 && releasedToPending) {
-        notify.warn(`${okCount} enviados e ${errCount} com erro.`, { autoClose: 3200 })
       } else if (okCount > 0) {
-        notify.warn(`Lote inserido (${okCount}), aguardando liberacao para pendente.`, { autoClose: 3600 })
+        notify.warn(`${okCount} enviados e ${errCount} com erro.`, { autoClose: 3200 })
       } else {
         notify.error('Nenhuma linha do lote foi enviada com sucesso.', { autoClose: 3200 })
       }
@@ -1767,9 +1627,6 @@ export default function ConsultasV8() {
       notify.error(msg, { autoClose: 3200 })
     } finally {
       setUploadingBatchFile(false)
-      setBatchPostProgress(DEFAULT_BATCH_POST_PROGRESS)
-      setBatchPostStartedAt(null)
-      setBatchPostElapsedSeconds(0)
       batchUploadInFlightRef.current = false
     }
   }, [uploadingBatchFile, pendingBatchUpload, user, fetchConsultas])
@@ -1860,23 +1717,23 @@ export default function ConsultasV8() {
         { autoClose: 2600 }
       )
 
-      const targetScopeKey = `${normalizeHeaderToken(tipoConsulta)}|${targetUserId ?? 'na'}|${targetEquipeId ?? 'na'}`
-      const fallbackFileKey = normalizeHeaderToken(tipoConsulta)
+      const targetScopeKey = `${normalizeBatchFileToken(tipoConsulta)}|${targetUserId ?? 'na'}|${targetEquipeId ?? 'na'}`
+      const fallbackFileKey = normalizeBatchFileToken(tipoConsulta)
       setBatchUploads((prev) => (Array.isArray(prev) ? prev : []).filter((entry) => {
-        const entryScopeKey = `${normalizeHeaderToken(entry?.fileName || '')}|${toNumberOrNull(entry?.idUser) ?? 'na'}|${toNumberOrNull(entry?.idEquipe) ?? 'na'}`
+        const entryScopeKey = `${normalizeBatchFileToken(entry?.fileName || '')}|${toNumberOrNull(entry?.idUser) ?? 'na'}|${toNumberOrNull(entry?.idEquipe) ?? 'na'}`
         if (targetUserId !== null || targetEquipeId !== null) return entryScopeKey !== targetScopeKey
-        return normalizeHeaderToken(entry?.fileName) !== fallbackFileKey
+        return normalizeBatchFileToken(entry?.fileName) !== fallbackFileKey
       }))
       setBatchPreviewRow((prev) => {
         if (!prev) return prev
-        const prevScopeKey = `${normalizeHeaderToken(prev?.fileName || '')}|${toNumberOrNull(prev?.idUser) ?? 'na'}|${toNumberOrNull(prev?.idEquipe) ?? 'na'}`
+        const prevScopeKey = `${normalizeBatchFileToken(prev?.fileName || '')}|${toNumberOrNull(prev?.idUser) ?? 'na'}|${toNumberOrNull(prev?.idEquipe) ?? 'na'}`
         if (targetUserId !== null || targetEquipeId !== null) {
           return prevScopeKey === targetScopeKey ? null : prev
         }
-        return normalizeHeaderToken(prev?.fileName) === fallbackFileKey ? null : prev
+        return normalizeBatchFileToken(prev?.fileName) === fallbackFileKey ? null : prev
       })
       setBatchDeleteTarget(null)
-      if (normalizeHeaderToken(batchPollingTarget?.fileName) === fallbackFileKey) {
+      if (normalizeBatchFileToken(batchPollingTarget?.fileName) === fallbackFileKey) {
         setBatchPollingTarget(null)
       }
 
@@ -1900,7 +1757,7 @@ export default function ConsultasV8() {
 
       for (const backendRow of backendRows) {
         const backendBatchName = getBatchFileNameFromRow(backendRow)
-        if (entryBatchName && backendBatchName && normalizeHeaderToken(backendBatchName) !== normalizeHeaderToken(entryBatchName)) {
+        if (entryBatchName && backendBatchName && normalizeBatchFileToken(backendBatchName) !== normalizeBatchFileToken(entryBatchName)) {
           continue
         }
         const cpf = normalizeCpf11(backendRow?.cliente_cpf ?? backendRow?.cpf)
@@ -2262,7 +2119,7 @@ export default function ConsultasV8() {
       const fileName = getBatchFileNameFromRow(row) || 'Lote sem nome'
       const rowUserId = resolveRowUserId(row)
       const rowEquipeId = resolveRowEquipeId(row)
-      const groupKey = `${normalizeHeaderToken(fileName)}|${rowUserId ?? 'na'}|${rowEquipeId ?? 'na'}`
+      const groupKey = `${normalizeBatchFileToken(fileName)}|${rowUserId ?? 'na'}|${rowEquipeId ?? 'na'}`
 
       const prev = grouped.get(groupKey)
       if (prev) {
@@ -2317,12 +2174,11 @@ export default function ConsultasV8() {
   }, [apiBatchRows])
 
   const batchTableRows = useMemo(() => {
-    const localEntries = Array.isArray(batchUploads) ? batchUploads : []
-    const combined = [...localEntries, ...apiBatchGroups]
+    const combined = [...apiBatchGroups]
     const byFile = new Map()
 
     for (const entry of combined) {
-      const baseName = normalizeHeaderToken(entry?.fileName || `sem-nome-${entry?.id || ''}`)
+      const baseName = normalizeBatchFileToken(entry?.fileName || `sem-nome-${entry?.id || ''}`)
       const entryUserId = toNumberOrNull(entry?.idUser)
       const entryEquipeId = toNumberOrNull(entry?.idEquipe)
       const hasScope = entryUserId !== null || entryEquipeId !== null
@@ -2796,33 +2652,6 @@ export default function ConsultasV8() {
                       </div>
                     )}
 
-                    {uploadingBatchFile && (
-                      <div className="mt-2">
-                        <div className="d-flex justify-content-between align-items-center small mb-1">
-                          <span>
-                            {batchPostProgress.phase === 'liberando'
-                              ? 'Liberando pendentes...'
-                              : 'Enviando lote...'}
-                          </span>
-                          <span>{batchPostProcessed}/{batchPostTotal} ({batchPostPercent}%)</span>
-                        </div>
-                        <div className="progress" style={{ height: 8 }}>
-                          <div
-                            className={`progress-bar ${batchPostProgress.phase === 'liberando' ? 'bg-warning' : 'bg-info'} progress-bar-striped progress-bar-animated`}
-                            role="progressbar"
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={batchPostPercent}
-                            style={{ width: `${batchPostPercent}%` }}
-                          />
-                        </div>
-                        <div className="small opacity-75 mt-1">
-                          {batchPostProgress.fileName ? `${batchPostProgress.fileName} | ` : ''}
-                          Sucesso: {Number(batchPostProgress.ok || 0)} | Erro: {Number(batchPostProgress.error || 0)} | ETA: {batchPostProgress.phase === 'liberando' ? 'finalizando...' : formatEtaMinutesOrHours(batchPostEtaSeconds)}
-                        </div>
-                      </div>
-                    )}
-
                     {!pendingBatchUpload && (
                       <div className="small opacity-75">Nenhum CSV selecionado.</div>
                     )}
@@ -2990,7 +2819,7 @@ export default function ConsultasV8() {
                           ? 'text-bg-danger'
                           : 'text-bg-secondary'
                     const canDelete = canDeleteBatchByUser
-                    const isTargetPolling = normalizeHeaderToken(entry?.fileName) === normalizeHeaderToken(batchPollingTarget?.fileName)
+                    const isTargetPolling = normalizeBatchFileToken(entry?.fileName) === normalizeBatchFileToken(batchPollingTarget?.fileName)
 
                     return (
                       <tr key={String(entry?.id ?? entry?.fileName)}>
