@@ -1721,7 +1721,12 @@ export default function ConsultasV8() {
       }
       setBatchImportJob(null)
       setBatchUploads((prev) => {
-        const next = (Array.isArray(prev) ? prev : []).filter((item) => item?.fileName !== nomeArquivo)
+        const next = (Array.isArray(prev) ? prev : []).filter((item) => {
+          const sameName = normalizeHeaderToken(item?.fileName) === normalizeHeaderToken(nomeArquivo)
+          const sameUser = toNumberOrNull(item?.idUser) === userId
+          const sameEquipe = toNumberOrNull(item?.idEquipe) === equipeId
+          return !(sameName && sameUser && sameEquipe)
+        })
         const localStatus = okCount > 0
           ? (releasedToPending ? 'Processando' : 'Aguardando liberacao')
           : 'Erro'
@@ -1729,6 +1734,8 @@ export default function ConsultasV8() {
           id: `local-${Date.now()}`,
           source: 'local',
           fileName: nomeArquivo,
+          idUser: userId,
+          idEquipe: equipeId,
           totalRows: batchRowsPayload.length,
           okCount,
           errCount,
@@ -2316,8 +2323,11 @@ export default function ConsultasV8() {
 
     for (const entry of combined) {
       const baseName = normalizeHeaderToken(entry?.fileName || `sem-nome-${entry?.id || ''}`)
-      const fileKey = entry?.source === 'api'
-        ? `${baseName}|${toNumberOrNull(entry?.idUser) ?? 'na'}|${toNumberOrNull(entry?.idEquipe) ?? 'na'}`
+      const entryUserId = toNumberOrNull(entry?.idUser)
+      const entryEquipeId = toNumberOrNull(entry?.idEquipe)
+      const hasScope = entryUserId !== null || entryEquipeId !== null
+      const fileKey = hasScope
+        ? `${baseName}|${entryUserId ?? 'na'}|${entryEquipeId ?? 'na'}`
         : baseName
       const prev = byFile.get(fileKey)
       if (!prev) {
