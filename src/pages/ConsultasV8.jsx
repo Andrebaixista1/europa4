@@ -12,7 +12,7 @@ const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/co
 const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
 const V8_CONSULTAS_RELEASE_API_URL = `${V8_LARAVEL_BASE_PATH}/liberar-pendentes`
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
-const V8_INDIVIDUAL_API_URL = `${V8_LARAVEL_BASE_PATH}/individual`
+const V8_INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-individual'
 const V8_BATCH_UPLOAD_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-lote'
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
@@ -68,6 +68,45 @@ const parseResponseBody = async (response) => {
   }
 
   return payload
+}
+
+const resolveInsertedId = (payload) => {
+  const candidates = []
+  const stack = [payload]
+
+  while (stack.length > 0) {
+    const current = stack.shift()
+    if (!current) continue
+
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item)
+      continue
+    }
+
+    if (typeof current === 'object') {
+      candidates.push(
+        current?.id,
+        current?.insertedId,
+        current?.consulta_id,
+        current?.consultaId,
+        current?.data?.id,
+        current?.data?.insertedId
+      )
+
+      for (const value of Object.values(current)) {
+        if (value && (Array.isArray(value) || typeof value === 'object')) {
+          stack.push(value)
+        }
+      }
+    }
+  }
+
+  for (const value of candidates) {
+    const parsed = toNumberOrNull(value)
+    if (parsed && parsed > 0) return parsed
+  }
+
+  return null
 }
 
 const releasePendingConsultas = async ({ idUser, idEquipe, tipoConsulta, ids = [] }) => {
@@ -1426,16 +1465,15 @@ export default function ConsultasV8() {
       })
 
       const responsePayload = await parseResponseBody(response)
-      const insertedId = toNumberOrNull(responsePayload?.data?.id)
-      if (!insertedId) {
-        throw new Error('Nao foi possivel identificar o ID da consulta adicionada.')
+      const insertedId = resolveInsertedId(responsePayload)
+      if (insertedId) {
+        await releasePendingConsultas({
+          idUser: userId,
+          idEquipe: equipeId,
+          tipoConsulta: 'Individual',
+          ids: [insertedId]
+        })
       }
-      await releasePendingConsultas({
-        idUser: userId,
-        idEquipe: equipeId,
-        tipoConsulta: 'Individual',
-        ids: [insertedId]
-      })
 
       if ([200, 201].includes(response.status)) {
         notify.success('Consulta iniciada.', { autoClose: 2200 })
