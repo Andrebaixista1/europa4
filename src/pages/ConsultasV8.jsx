@@ -944,7 +944,9 @@ export default function ConsultasV8() {
   const [batchUploads, setBatchUploads] = useState([])
   const [batchUploadError, setBatchUploadError] = useState('')
   const [batchPreviewRow, setBatchPreviewRow] = useState(null)
+  const [batchDeleteTarget, setBatchDeleteTarget] = useState(null)
   const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
+  const [deletingBatch, setDeletingBatch] = useState(false)
   const [batchPollingTarget, setBatchPollingTarget] = useState(null)
   const [batchImportJob, setBatchImportJob] = useState(null)
   const [showAddLoginModal, setShowAddLoginModal] = useState(false)
@@ -1540,6 +1542,77 @@ export default function ConsultasV8() {
   const removeLocalBatchEntry = useCallback((id) => {
     setBatchUploads((prev) => prev.filter((entry) => entry?.id !== id))
   }, [])
+
+  const openDeleteBatchModal = useCallback((entry) => {
+    if (!entry || entry?.source === 'local') return
+    setBatchDeleteTarget(entry)
+  }, [])
+
+  const closeDeleteBatchModal = useCallback(() => {
+    if (deletingBatch) return
+    setBatchDeleteTarget(null)
+  }, [deletingBatch])
+
+  const confirmDeleteBatch = useCallback(async () => {
+    if (deletingBatch || !batchDeleteTarget) return
+
+    const tipoConsulta = String(batchDeleteTarget?.fileName || '').trim()
+    if (!tipoConsulta) {
+      notify.error('Nao foi possivel identificar o nome do lote.', { autoClose: 2600 })
+      return
+    }
+
+    const userId = toNumberOrNull(user?.id)
+    if (userId === null) {
+      notify.error('Usuario sem ID para excluir lote.', { autoClose: 2600 })
+      return
+    }
+
+    const equipeId = resolveUserEquipeId(user)
+    if (equipeId === null) {
+      notify.error('Usuario sem id_equipe para excluir lote.', { autoClose: 2600 })
+      return
+    }
+
+    try {
+      setDeletingBatch(true)
+
+      const requestUrl = new URL(V8_CONSULTAS_API_URL, window.location.origin)
+      requestUrl.searchParams.set('id_user', String(userId))
+      requestUrl.searchParams.set('id_equipe', String(equipeId))
+      requestUrl.searchParams.set('tipoConsulta', tipoConsulta)
+
+      const response = await fetch(requestUrl.toString(), {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' }
+      })
+
+      const payload = await parseResponseBody(response)
+      const deletedCount = Math.max(0, Number(payload?.deleted_count ?? payload?.deletedCount ?? 0) || 0)
+
+      notify.success(
+        deletedCount > 0
+          ? `Lote removido (${deletedCount} registro${deletedCount === 1 ? '' : 's'}).`
+          : 'Nenhum registro encontrado para remover.',
+        { autoClose: 2600 }
+      )
+
+      const targetKey = normalizeHeaderToken(tipoConsulta)
+      setBatchUploads((prev) => (Array.isArray(prev) ? prev : []).filter((entry) => normalizeHeaderToken(entry?.fileName) !== targetKey))
+      setBatchPreviewRow((prev) => (normalizeHeaderToken(prev?.fileName) === targetKey ? null : prev))
+      setBatchDeleteTarget(null)
+      if (normalizeHeaderToken(batchPollingTarget?.fileName) === targetKey) {
+        setBatchPollingTarget(null)
+      }
+
+      fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+      fetchLimites(undefined, { silent: true })
+    } catch (err) {
+      notify.error(err?.message || 'Falha ao excluir lote.', { autoClose: 3000 })
+    } finally {
+      setDeletingBatch(false)
+    }
+  }, [deletingBatch, batchDeleteTarget, user, batchPollingTarget?.fileName, fetchConsultas, fetchLimites])
 
   const openBatchPreviewModal = useCallback((entry) => {
     if (!entry) return
@@ -2557,7 +2630,7 @@ export default function ConsultasV8() {
                         : statusToken.includes('erro')
                           ? 'text-bg-danger'
                           : 'text-bg-secondary'
-                    const canDelete = entry?.source === 'local'
+                    const canDelete = true
                     const isTargetPolling = normalizeHeaderToken(entry?.fileName) === normalizeHeaderToken(batchPollingTarget?.fileName)
 
                     return (
@@ -2612,10 +2685,16 @@ export default function ConsultasV8() {
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
-                              title={canDelete ? 'Excluir lote local' : 'Disponivel apenas para lote local'}
+                              title={entry?.source === 'local' ? 'Excluir lote local' : 'Excluir lote da tabela'}
                               aria-label="Excluir"
                               disabled={!canDelete}
-                              onClick={() => removeLocalBatchEntry(entry?.id)}
+                              onClick={() => {
+                                if (entry?.source === 'local') {
+                                  removeLocalBatchEntry(entry?.id)
+                                  return
+                                }
+                                openDeleteBatchModal(entry)
+                              }}
                             >
                               <FiTrash2 />
                             </button>
@@ -2998,6 +3077,64 @@ export default function ConsultasV8() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {batchDeleteTarget && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1062 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={closeDeleteBatchModal}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: 'min(92vw, 560px)' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-content modal-dark">
+              <div className="modal-header">
+                <h5 className="modal-title mb-0">Excluir lote</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Close"
+                  disabled={deletingBatch}
+                  onClick={closeDeleteBatchModal}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="small opacity-75 mb-1">Lote selecionado</div>
+                <div className="fw-semibold text-break mb-3">{batchDeleteTarget?.fileName || '-'}</div>
+                <div className="small">
+                  Esta acao remove os registros da tabela <code>consulta_v8</code> usando os filtros:
+                </div>
+                <div className="small mt-2">
+                  <div><code>id_user</code>: {toNumberOrNull(user?.id) ?? '-'}</div>
+                  <div><code>id_equipe</code>: {resolveUserEquipeId(user) ?? '-'}</div>
+                  <div><code>tipoConsulta</code>: {batchDeleteTarget?.fileName || '-'}</div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-light"
+                  disabled={deletingBatch}
+                  onClick={closeDeleteBatchModal}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  disabled={deletingBatch}
+                  onClick={confirmDeleteBatch}
+                >
+                  {deletingBatch ? 'Excluindo...' : 'Confirmar exclusao'}
+                </button>
               </div>
             </div>
           </div>
