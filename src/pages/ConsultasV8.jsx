@@ -964,6 +964,7 @@ export default function ConsultasV8() {
   const batchFileInputRef = useRef(null)
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
+  const canDeleteBatchByUser = toNumberOrNull(user?.id) === 1
 
   const fetchLimites = useCallback(async (signal, options = {}) => {
     const silent = options?.silent === true
@@ -974,8 +975,13 @@ export default function ConsultasV8() {
 
     try {
       let requestUrl = V8_LIMITES_API_URL
+      const equipeId = resolveUserEquipeId(user)
       if (user?.id && user.id !== 1) {
         requestUrl = `${V8_LIMITES_API_URL}?id_user=${encodeURIComponent(String(user.id))}`
+      }
+      if (equipeId !== null) {
+        const separator = requestUrl.includes('?') ? '&' : '?'
+        requestUrl = `${requestUrl}${separator}id_equipe=${encodeURIComponent(String(equipeId))}`
       }
       const response = await fetch(requestUrl, { method: 'GET', signal })
       const payload = await parseResponseBody(response)
@@ -993,7 +999,7 @@ export default function ConsultasV8() {
     } finally {
       if (!silent && !signal?.aborted) setLoadingLimites(false)
     }
-  }, [user?.id])
+  }, [user])
 
   const fetchConsultas = useCallback(async (signal, query = {}, options = {}) => {
     const requestSeq = ++fetchSeqRef.current
@@ -1544,9 +1550,10 @@ export default function ConsultasV8() {
   }, [])
 
   const openDeleteBatchModal = useCallback((entry) => {
+    if (!canDeleteBatchByUser) return
     if (!entry || entry?.source === 'local') return
     setBatchDeleteTarget(entry)
-  }, [])
+  }, [canDeleteBatchByUser])
 
   const closeDeleteBatchModal = useCallback(() => {
     if (deletingBatch) return
@@ -1555,6 +1562,10 @@ export default function ConsultasV8() {
 
   const confirmDeleteBatch = useCallback(async () => {
     if (deletingBatch || !batchDeleteTarget) return
+    if (!canDeleteBatchByUser) {
+      notify.warn('Somente o usuario Master (ID 1) pode excluir lote.', { autoClose: 2600 })
+      return
+    }
 
     const tipoConsulta = String(batchDeleteTarget?.fileName || '').trim()
     if (!tipoConsulta) {
@@ -1612,7 +1623,7 @@ export default function ConsultasV8() {
     } finally {
       setDeletingBatch(false)
     }
-  }, [deletingBatch, batchDeleteTarget, user, batchPollingTarget?.fileName, fetchConsultas, fetchLimites])
+  }, [deletingBatch, batchDeleteTarget, canDeleteBatchByUser, user, batchPollingTarget?.fileName, fetchConsultas, fetchLimites])
 
   const openBatchPreviewModal = useCallback((entry) => {
     if (!entry) return
@@ -2630,7 +2641,7 @@ export default function ConsultasV8() {
                         : statusToken.includes('erro')
                           ? 'text-bg-danger'
                           : 'text-bg-secondary'
-                    const canDelete = true
+                    const canDelete = canDeleteBatchByUser
                     const isTargetPolling = normalizeHeaderToken(entry?.fileName) === normalizeHeaderToken(batchPollingTarget?.fileName)
 
                     return (
@@ -2685,7 +2696,11 @@ export default function ConsultasV8() {
                             <button
                               type="button"
                               className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
-                              title={entry?.source === 'local' ? 'Excluir lote local' : 'Excluir lote da tabela'}
+                              title={
+                                canDelete
+                                  ? (entry?.source === 'local' ? 'Excluir lote local' : 'Excluir lote da tabela')
+                                  : 'Disponivel apenas para usuario Master (ID 1)'
+                              }
                               aria-label="Excluir"
                               disabled={!canDelete}
                               onClick={() => {
