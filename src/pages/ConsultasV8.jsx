@@ -571,6 +571,38 @@ const mergeRowsKeepingSuccessStatus = (previousRows, nextRows) => {
   })
 }
 
+const mergeRowsPreservingPreviousById = (previousRows, nextRows) => {
+  const prevList = Array.isArray(previousRows) ? previousRows : []
+  const nextList = Array.isArray(nextRows) ? nextRows : []
+  if (prevList.length === 0) return nextList
+  if (nextList.length === 0) return prevList
+
+  const byId = new Map()
+  const prevNoId = []
+  const nextNoId = []
+
+  for (const row of prevList) {
+    const id = String(row?.id ?? '').trim()
+    if (!id) {
+      prevNoId.push(row)
+      continue
+    }
+    byId.set(id, row)
+  }
+
+  for (const row of nextList) {
+    const id = String(row?.id ?? '').trim()
+    if (!id) {
+      nextNoId.push(row)
+      continue
+    }
+    byId.set(id, row)
+  }
+
+  const mergedNoId = dedupeRowsByIdentityLatest([...nextNoId, ...prevNoId])
+  return [...byId.values(), ...mergedNoId]
+}
+
 const normalizeDescricao = (value) => {
   const txt = String(value ?? '').trim()
   return txt || 'Sem descrição'
@@ -998,6 +1030,7 @@ export default function ConsultasV8() {
 
       const normalizedCpf = normalizeCpf11(query?.cpf)
       const normalizedNome = normalizeClientName(query?.nome)
+      const hasScopedQuery = Boolean(normalizedCpf || normalizedNome)
       if (normalizedCpf) requestUrl.searchParams.set('cpf', normalizedCpf)
       if (normalizedNome) requestUrl.searchParams.set('nome', normalizedNome)
 
@@ -1009,11 +1042,15 @@ export default function ConsultasV8() {
       }
 
       const mergedRows = mergeRowsKeepingSuccessStatus(rowsRef.current, normalizedRows)
-      rowsRef.current = mergedRows
-      setRows(mergedRows)
+      const nextRows = hasScopedQuery
+        ? mergeRowsPreservingPreviousById(rowsRef.current, mergedRows)
+        : mergedRows
+
+      rowsRef.current = nextRows
+      setRows(nextRows)
       setSelectedRow((prev) => {
         if (!prev) return prev
-        const synced = findBestRowForModal(mergedRows, prev)
+        const synced = findBestRowForModal(nextRows, prev)
         return synced || prev
       })
       setLastSyncAt(new Date())
@@ -1029,7 +1066,7 @@ export default function ConsultasV8() {
         })
       }
 
-      return mergedRows
+      return nextRows
     } catch (err) {
       if (err?.name === 'AbortError') return
       if (requestSeq !== fetchSeqRef.current) return rowsRef.current
@@ -1088,6 +1125,7 @@ export default function ConsultasV8() {
         setAutoPollingActive(false)
         setPollingQuery(null)
         fetchLimites(undefined, { silent: true })
+        fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
       } finally {
         pollInFlightRef.current = false
       }
@@ -1308,7 +1346,7 @@ export default function ConsultasV8() {
       pollSawPendingRef.current = false
       setPollingQuery({ cpf: normalizedCpf, nome: normalizedNome })
       setAutoPollingActive(true)
-      fetchConsultas(undefined, { cpf: normalizedCpf, nome: normalizedNome }, { silent: true, preservePosition: true })
+      fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
     } catch (err) {
       const msg = err?.message || 'Falha ao enviar consulta individual.'
       setConsultaError(msg)
