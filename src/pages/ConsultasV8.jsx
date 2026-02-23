@@ -1059,6 +1059,7 @@ export default function ConsultasV8() {
   const [pollingQuery, setPollingQuery] = useState(null)
   const pollInFlightRef = useRef(false)
   const batchPollInFlightRef = useRef(false)
+  const lotePollInFlightRef = useRef(false)
   const pollSawPendingRef = useRef(false)
   const tableScrollRef = useRef(null)
   const batchFileInputRef = useRef(null)
@@ -2344,6 +2345,46 @@ export default function ConsultasV8() {
       return tb - ta
     })
   }, [batchUploads, apiBatchGroups])
+
+  const hasLotePending = useMemo(() => {
+    const list = Array.isArray(batchTableRows) ? batchTableRows : []
+    return list.some((entry) => {
+      const statusToken = normalizeHeaderToken(entry?.status || '')
+      const pendingCount = Math.max(0, Number(entry?.pendingCount ?? 0) || 0)
+      if (pendingCount > 0) return true
+      return (
+        statusToken.includes('process') ||
+        statusToken.includes('aguard') ||
+        statusToken.includes('liber')
+      )
+    })
+  }, [batchTableRows])
+
+  useEffect(() => {
+    if (consultaMode !== 'lote') return undefined
+    if (!hasLotePending) return undefined
+
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled || lotePollInFlightRef.current) return
+      lotePollInFlightRef.current = true
+      try {
+        await fetchConsultas(undefined, {}, { silent: true, preservePosition: true })
+        if (!cancelled) {
+          await fetchLimites(undefined, { silent: true })
+        }
+      } finally {
+        lotePollInFlightRef.current = false
+      }
+    }
+
+    tick()
+    const interval = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [consultaMode, hasLotePending, fetchConsultas, fetchLimites])
 
   const pageSize = 50
   const individualPages = useMemo(() => Math.max(1, Math.ceil(filteredRows.length / pageSize)), [filteredRows.length])
