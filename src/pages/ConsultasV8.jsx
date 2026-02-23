@@ -12,7 +12,8 @@ const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/co
 const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
 const V8_CONSULTAS_RELEASE_API_URL = `${V8_LARAVEL_BASE_PATH}/liberar-pendentes`
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
-const V8_INDIVIDUAL_API_URL = V8_LARAVEL_BASE_PATH
+const V8_INDIVIDUAL_API_URL = `${V8_LARAVEL_BASE_PATH}/individual`
+const V8_BATCH_API_URL = V8_LARAVEL_BASE_PATH
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
@@ -1644,7 +1645,7 @@ export default function ConsultasV8() {
       }
 
       const bulkStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-      const response = await fetch(V8_INDIVIDUAL_API_URL, {
+      const response = await fetch(V8_BATCH_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
