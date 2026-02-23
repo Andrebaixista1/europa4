@@ -10,12 +10,12 @@ import { notify } from '../utils/notify.js'
 const V8_LARAVEL_BASE_PATH = '/api/consulta-v8'
 const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
 const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
-const V8_LIMITES_API_URL = `${V8_LARAVEL_BASE_PATH}/limites`
+const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook-test/api/getconsulta-v8/'
 const V8_INDIVIDUAL_API_URL = V8_LARAVEL_BASE_PATH
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
-const DISABLE_V8_AUTO_GET = true
+const DISABLE_V8_AUTO_POLLING = true
 
 const toNumberOrNull = (value) => {
   if (value === undefined || value === null || value === '') return null
@@ -976,16 +976,19 @@ export default function ConsultasV8() {
     }
 
     try {
-      let requestUrl = V8_LIMITES_API_URL
+      const userId = toNumberOrNull(user?.id)
       const equipeId = resolveUserEquipeId(user)
-      if (user?.id && user.id !== 1) {
-        requestUrl = `${V8_LIMITES_API_URL}?id_user=${encodeURIComponent(String(user.id))}`
+      if (userId === null || equipeId === null) {
+        setLimitRows([])
+        setLimitSummary(DEFAULT_LIMIT_SUMMARY)
+        return []
       }
-      if (equipeId !== null) {
-        const separator = requestUrl.includes('?') ? '&' : '?'
-        requestUrl = `${requestUrl}${separator}id_equipe=${encodeURIComponent(String(equipeId))}`
-      }
-      const response = await fetch(requestUrl, { method: 'GET', signal })
+
+      const requestUrl = new URL(V8_LIMITES_GET_API_URL)
+      requestUrl.searchParams.set('id_user', String(userId))
+      requestUrl.searchParams.set('equipe_id', String(equipeId))
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET', signal })
       const payload = await parseResponseBody(response)
       const normalized = normalizeRows(payload)
 
@@ -1092,21 +1095,19 @@ export default function ConsultasV8() {
   }, [user?.id])
 
   useEffect(() => {
-    if (DISABLE_V8_AUTO_GET) return undefined
     const controller = new AbortController()
     fetchLimites(controller.signal)
     return () => controller.abort()
   }, [fetchLimites])
 
   useEffect(() => {
-    if (DISABLE_V8_AUTO_GET) return undefined
     const controller = new AbortController()
     fetchConsultas(controller.signal)
     return () => controller.abort()
   }, [fetchConsultas])
 
   useEffect(() => {
-    if (DISABLE_V8_AUTO_GET) return undefined
+    if (DISABLE_V8_AUTO_POLLING) return undefined
     if (!autoPollingActive) return undefined
 
     let cancelled = false
@@ -1155,7 +1156,7 @@ export default function ConsultasV8() {
   }, [autoPollingActive, pollingQuery, fetchConsultas, fetchLimites])
 
   useEffect(() => {
-    if (DISABLE_V8_AUTO_GET) return undefined
+    if (DISABLE_V8_AUTO_POLLING) return undefined
     const fileName = String(batchPollingTarget?.fileName ?? '').trim()
     if (!fileName) return undefined
 
@@ -1196,7 +1197,7 @@ export default function ConsultasV8() {
   }, [batchPollingTarget, fetchConsultas, fetchLimites])
 
   useEffect(() => {
-    if (DISABLE_V8_AUTO_GET) return undefined
+    if (DISABLE_V8_AUTO_POLLING) return undefined
     const jobId = String(batchImportJob?.jobId ?? '').trim()
     if (!jobId) return undefined
 
