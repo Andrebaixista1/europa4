@@ -1,9 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/clientes-v8/import-csv.js": { "maxDuration": 60 },
-    "api/clientes-v8/import-status.js": { "maxDuration": 30 }
-  },
   "builds": [
     { "src": "api/**/*.js", "use": "@vercel/node" },
     { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
