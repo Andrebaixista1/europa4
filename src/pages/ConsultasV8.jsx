@@ -10,18 +10,30 @@ import { notify } from '../utils/notify.js'
 const V8_LARAVEL_BASE_PATH = '/api/consulta-v8'
 const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
 const V8_CONSULTAS_DELETE_API_URL = `${V8_LARAVEL_BASE_PATH}/consultas`
+const V8_CONSULTAS_RELEASE_API_URL = `${V8_LARAVEL_BASE_PATH}/liberar-pendentes`
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
 const V8_INDIVIDUAL_API_URL = V8_LARAVEL_BASE_PATH
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
 const DISABLE_V8_AUTO_POLLING = true
+const BATCH_POST_INTERVAL_MS = 2000
+const DEFAULT_BATCH_POST_PROGRESS = {
+  fileName: '',
+  total: 0,
+  processed: 0,
+  ok: 0,
+  error: 0,
+  phase: 'idle'
+}
 
 const toNumberOrNull = (value) => {
   if (value === undefined || value === null || value === '') return null
   const parsed = Number(value)
   return Number.isNaN(parsed) ? null : parsed
 }
+
+const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)))
 
 const canUser3347SeeRow = (row) => {
   const token = String(row?.token_usado ?? '').trim().toLowerCase()
@@ -64,6 +76,30 @@ const parseResponseBody = async (response) => {
   }
 
   return payload
+}
+
+const releasePendingConsultas = async ({ idUser, idEquipe, tipoConsulta, ids = [] }) => {
+  const requestPayload = {
+    id_user: Number(idUser),
+    id_equipe: Number(idEquipe),
+    tipoConsulta: String(tipoConsulta ?? '').trim(),
+  }
+  const parsedIds = Array.isArray(ids)
+    ? ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+    : []
+
+  if (parsedIds.length > 0) requestPayload.ids = parsedIds
+
+  const response = await fetch(V8_CONSULTAS_RELEASE_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify(requestPayload),
+  })
+
+  return parseResponseBody(response)
 }
 
 const filterConsultasByUser = (rows, userId) => {
@@ -912,6 +948,26 @@ const getTipoConsultaFromRow = (row) => {
   ], '')).trim()
 }
 
+const resolveRowUserId = (row) => {
+  return toNumberOrNull(
+    row?.id_user
+    ?? row?.idUser
+    ?? row?.user_id
+    ?? row?.userId
+  )
+}
+
+const resolveRowEquipeId = (row) => {
+  return toNumberOrNull(
+    row?.id_equipe
+    ?? row?.idEquipe
+    ?? row?.equipe_id
+    ?? row?.equipeId
+    ?? row?.team_id
+    ?? row?.teamId
+  )
+}
+
 const isIndividualBatchToken = (value) => {
   const token = normalizeHeaderToken(value).replace(/\s+/g, '')
   if (!token) return false
@@ -933,6 +989,23 @@ const buildNormalizedBatchCsv = (rows) => {
     lines.push(`${cpf};${nome};${telefone}`)
   }
   return lines.join('\r\n')
+}
+
+const formatElapsedTimer = (totalSeconds) => {
+  const safe = Math.max(0, Number(totalSeconds) || 0)
+  const mm = String(Math.floor(safe / 60)).padStart(2, '0')
+  const ss = String(safe % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
+const formatEtaMinutesOrHours = (totalSeconds) => {
+  const safe = Math.max(0, Number(totalSeconds) || 0)
+  const totalMinutes = Math.max(0, Math.ceil(safe / 60))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours > 0) return `${hours}h ${minutes}min`
+  return `${totalMinutes}min`
 }
 
 export default function ConsultasV8() {
@@ -969,6 +1042,9 @@ export default function ConsultasV8() {
   const [batchPreviewRow, setBatchPreviewRow] = useState(null)
   const [batchDeleteTarget, setBatchDeleteTarget] = useState(null)
   const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
+  const [batchPostProgress, setBatchPostProgress] = useState(DEFAULT_BATCH_POST_PROGRESS)
+  const [batchPostStartedAt, setBatchPostStartedAt] = useState(null)
+  const [batchPostElapsedSeconds, setBatchPostElapsedSeconds] = useState(0)
   const [deletingBatch, setDeletingBatch] = useState(false)
   const [batchPollingTarget, setBatchPollingTarget] = useState(null)
   const [batchImportJob, setBatchImportJob] = useState(null)
@@ -988,6 +1064,44 @@ export default function ConsultasV8() {
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
   const canDeleteBatchByUser = toNumberOrNull(user?.id) === 1
+  const batchPostTotal = Math.max(0, Number(batchPostProgress?.total ?? 0))
+  const batchPostProcessed = Math.max(0, Number(batchPostProgress?.processed ?? 0))
+  const batchPostPercent = batchPostTotal > 0
+    ? Math.min(100, Math.round((batchPostProcessed / batchPostTotal) * 100))
+    : 0
+  const batchPostEtaSeconds = useMemo(() => {
+    if (!uploadingBatchFile || batchPostTotal <= 0) return 0
+    if (batchPostProgress?.phase === 'liberando') return 0
+
+    const processed = Math.min(batchPostTotal, Math.max(0, Number(batchPostProcessed) || 0))
+    const remaining = Math.max(0, batchPostTotal - processed)
+    if (remaining === 0) return 0
+
+    if (processed <= 0) {
+      const intervalSeconds = Math.max(1, Math.ceil(BATCH_POST_INTERVAL_MS / 1000))
+      return remaining * intervalSeconds
+    }
+
+    const elapsed = Math.max(1, Number(batchPostElapsedSeconds) || 0)
+    const avgSecondsPerItem = elapsed / processed
+    return Math.ceil(remaining * avgSecondsPerItem)
+  }, [uploadingBatchFile, batchPostTotal, batchPostProcessed, batchPostElapsedSeconds, batchPostProgress?.phase])
+
+  useEffect(() => {
+    if (!uploadingBatchFile || !batchPostStartedAt) {
+      setBatchPostElapsedSeconds(0)
+      return undefined
+    }
+
+    const updateElapsed = () => {
+      const elapsed = Math.floor((Date.now() - Number(batchPostStartedAt)) / 1000)
+      setBatchPostElapsedSeconds(Math.max(0, elapsed))
+    }
+
+    updateElapsed()
+    const intervalId = setInterval(updateElapsed, 1000)
+    return () => clearInterval(intervalId)
+  }, [uploadingBatchFile, batchPostStartedAt])
 
   const fetchLimites = useCallback(async (signal, options = {}) => {
     const silent = options?.silent === true
@@ -1351,7 +1465,8 @@ export default function ConsultasV8() {
       tipoConsulta: 'Individual',
       id_user: userId,
       id_equipe: equipeId,
-      id_role: roleId
+      id_role: roleId,
+      hold_pending: true
     }
 
     try {
@@ -1359,11 +1474,24 @@ export default function ConsultasV8() {
       setConsultaError('')
       const response = await fetch(V8_INDIVIDUAL_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify(payload)
       })
 
-      await parseResponseBody(response)
+      const responsePayload = await parseResponseBody(response)
+      const insertedId = toNumberOrNull(responsePayload?.data?.id)
+      if (!insertedId) {
+        throw new Error('Nao foi possivel identificar o ID da consulta adicionada.')
+      }
+      await releasePendingConsultas({
+        idUser: userId,
+        idEquipe: equipeId,
+        tipoConsulta: 'Individual',
+        ids: [insertedId]
+      })
 
       if ([200, 201].includes(response.status)) {
         notify.success('Consulta iniciada.', { autoClose: 2200 })
@@ -1482,68 +1610,124 @@ export default function ConsultasV8() {
     }
 
     const startedAtIso = new Date().toISOString()
-    const durationSamples = []
+    let insertedIds = []
     let okCount = 0
     let errCount = 0
+    let releasedToPending = false
 
     batchUploadInFlightRef.current = true
     try {
       setUploadingBatchFile(true)
       setBatchUploadError('')
+      setBatchPostStartedAt(Date.now())
+      setBatchPostElapsedSeconds(0)
+      setBatchPostProgress({
+        fileName: nomeArquivo,
+        total: validRows.length,
+        processed: 0,
+        ok: 0,
+        error: 0,
+        phase: 'enviando'
+      })
 
-      for (const row of validRows) {
-        const rowPayload = {
+      const batchRowsPayload = validRows
+        .map((row) => ({
           cliente_cpf: normalizeCpf11(row?.cpf),
           cliente_nome: normalizeClientName(row?.nome),
           telefone: normalizeOrGenerateBatchPhone(row?.telefone),
-          tipoConsulta: nomeArquivo,
-          id_user: userId,
-          id_equipe: equipeId,
-          id_role: roleId
-        }
+        }))
+        .filter((row) => row.cliente_cpf && row.cliente_nome)
 
-        if (!rowPayload.cliente_cpf || !rowPayload.cliente_nome) {
-          errCount += 1
-          continue
-        }
-
-        const started = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-        try {
-          const response = await fetch(V8_INDIVIDUAL_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(rowPayload)
-          })
-          await parseResponseBody(response)
-          okCount += 1
-        } catch {
-          errCount += 1
-        } finally {
-          const ended = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-          const elapsed = Number(ended) - Number(started)
-          if (Number.isFinite(elapsed) && elapsed >= 0) durationSamples.push(elapsed)
-        }
+      if (batchRowsPayload.length === 0) {
+        notify.error('CSV sem linhas validas para envio.', { autoClose: 2600 })
+        return
       }
 
-      const avgDurationMs = durationSamples.length > 0
-        ? durationSamples.reduce((acc, ms) => acc + ms, 0) / durationSamples.length
+      const bulkStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
+      const response = await fetch(V8_INDIVIDUAL_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          id_user: userId,
+          id_equipe: equipeId,
+          id_role: roleId,
+          tipoConsulta: nomeArquivo,
+          hold_pending: true,
+          rows: batchRowsPayload
+        })
+      })
+      const responsePayload = await parseResponseBody(response)
+      const responseData = (responsePayload && typeof responsePayload === 'object')
+        ? (responsePayload?.data && typeof responsePayload.data === 'object' ? responsePayload.data : responsePayload)
+        : {}
+      const rawIds = Array.isArray(responseData?.ids) ? responseData.ids : []
+      insertedIds = rawIds
+        .map((id) => toNumberOrNull(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+
+      const insertedCountFromApi = toNumberOrNull(
+        responseData?.inserted_count
+        ?? responseData?.insertedCount
+        ?? responseData?.total_inserted
+        ?? responseData?.count
+      )
+      const inferredInserted = insertedIds.length > 0 ? insertedIds.length : batchRowsPayload.length
+      okCount = Math.max(0, Math.min(batchRowsPayload.length, insertedCountFromApi ?? inferredInserted))
+      errCount = Math.max(0, batchRowsPayload.length - okCount)
+
+      setBatchPostProgress((prev) => ({
+        ...prev,
+        total: batchRowsPayload.length,
+        processed: batchRowsPayload.length,
+        ok: okCount,
+        error: errCount
+      }))
+
+      const bulkEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
+      const bulkElapsedMs = Number(bulkEndedAt) - Number(bulkStartedAt)
+      const avgDurationMs = (Number.isFinite(bulkElapsedMs) && bulkElapsedMs >= 0 && batchRowsPayload.length > 0)
+        ? bulkElapsedMs / batchRowsPayload.length
         : null
 
       setPendingBatchUpload(null)
       if (okCount > 0) {
-        setBatchPollingTarget({ fileName: nomeArquivo })
+        setBatchPostProgress((prev) => ({ ...prev, phase: 'liberando' }))
+        try {
+          const idsForRelease = insertedIds.length > 0 && insertedIds.length <= 1800
+            ? insertedIds
+            : []
+          await releasePendingConsultas({
+            idUser: userId,
+            idEquipe: equipeId,
+            tipoConsulta: nomeArquivo,
+            ids: idsForRelease
+          })
+          releasedToPending = true
+          setBatchPollingTarget({ fileName: nomeArquivo })
+        } catch (releaseErr) {
+          releasedToPending = false
+          setBatchPollingTarget(null)
+          const releaseMsg = releaseErr?.message || 'Lote inserido, mas nao foi possivel liberar para pendente.'
+          setBatchUploadError(releaseMsg)
+          notify.error(releaseMsg, { autoClose: 3600 })
+        }
       } else {
         setBatchPollingTarget(null)
       }
       setBatchImportJob(null)
       setBatchUploads((prev) => {
         const next = (Array.isArray(prev) ? prev : []).filter((item) => item?.fileName !== nomeArquivo)
-        const localStatus = okCount > 0 ? 'Processando' : 'Erro'
+        const localStatus = okCount > 0
+          ? (releasedToPending ? 'Processando' : 'Aguardando liberacao')
+          : 'Erro'
         return [{
           id: `local-${Date.now()}`,
           source: 'local',
           fileName: nomeArquivo,
-          totalRows: validRows.length,
+          totalRows: batchRowsPayload.length,
           okCount,
           errCount,
           pendingCount: okCount,
@@ -1557,10 +1741,12 @@ export default function ConsultasV8() {
         }, ...next]
       })
 
-      if (okCount > 0 && errCount === 0) {
+      if (okCount > 0 && errCount === 0 && releasedToPending) {
         notify.success('Lote enviado com sucesso.', { autoClose: 2200 })
-      } else if (okCount > 0) {
+      } else if (okCount > 0 && releasedToPending) {
         notify.warn(`${okCount} enviados e ${errCount} com erro.`, { autoClose: 3200 })
+      } else if (okCount > 0) {
+        notify.warn(`Lote inserido (${okCount}), aguardando liberacao para pendente.`, { autoClose: 3600 })
       } else {
         notify.error('Nenhuma linha do lote foi enviada com sucesso.', { autoClose: 3200 })
       }
@@ -1572,6 +1758,9 @@ export default function ConsultasV8() {
       notify.error(msg, { autoClose: 3200 })
     } finally {
       setUploadingBatchFile(false)
+      setBatchPostProgress(DEFAULT_BATCH_POST_PROGRESS)
+      setBatchPostStartedAt(null)
+      setBatchPostElapsedSeconds(0)
       batchUploadInFlightRef.current = false
     }
   }, [uploadingBatchFile, pendingBatchUpload, user, fetchConsultas])
@@ -1604,14 +1793,25 @@ export default function ConsultasV8() {
       return
     }
 
-    const userId = toNumberOrNull(user?.id)
-    if (userId === null) {
+    const requesterUserId = toNumberOrNull(user?.id)
+    if (requesterUserId === null) {
       notify.error('Usuario sem ID para excluir lote.', { autoClose: 2600 })
       return
     }
 
-    const equipeId = resolveUserEquipeId(user)
-    if (equipeId === null) {
+    const targetUserId = toNumberOrNull(
+      batchDeleteTarget?.idUser
+      ?? resolveRowUserId(batchDeleteTarget?.apiRows?.[0])
+      ?? null
+    )
+    const targetEquipeId = toNumberOrNull(
+      batchDeleteTarget?.idEquipe
+      ?? resolveRowEquipeId(batchDeleteTarget?.apiRows?.[0])
+      ?? null
+    )
+    const requesterEquipeId = resolveUserEquipeId(user)
+
+    if (requesterUserId !== 1 && targetEquipeId === null) {
       notify.error('Usuario sem id_equipe para excluir lote.', { autoClose: 2600 })
       return
     }
@@ -1620,8 +1820,20 @@ export default function ConsultasV8() {
       setDeletingBatch(true)
 
       const requestUrl = new URL(V8_CONSULTAS_DELETE_API_URL, window.location.origin)
-      requestUrl.searchParams.set('id_user', String(userId))
-      requestUrl.searchParams.set('id_equipe', String(equipeId))
+      requestUrl.searchParams.set('id_user', String(requesterUserId))
+      // Backward-compat: alguns backends ainda validam id_equipe como obrigatorio.
+      const compatEquipeId = requesterUserId === 1
+        ? (requesterEquipeId ?? targetEquipeId ?? 1)
+        : targetEquipeId
+      if (compatEquipeId !== null) {
+        requestUrl.searchParams.set('id_equipe', String(compatEquipeId))
+      }
+      if (requesterUserId === 1) {
+        if (targetUserId !== null) requestUrl.searchParams.set('target_id_user', String(targetUserId))
+        if (targetEquipeId !== null) requestUrl.searchParams.set('target_id_equipe', String(targetEquipeId))
+      } else {
+        requestUrl.searchParams.set('id_equipe', String(targetEquipeId))
+      }
       requestUrl.searchParams.set('tipoConsulta', tipoConsulta)
 
       const response = await fetch(requestUrl.toString(), {
@@ -1639,11 +1851,23 @@ export default function ConsultasV8() {
         { autoClose: 2600 }
       )
 
-      const targetKey = normalizeHeaderToken(tipoConsulta)
-      setBatchUploads((prev) => (Array.isArray(prev) ? prev : []).filter((entry) => normalizeHeaderToken(entry?.fileName) !== targetKey))
-      setBatchPreviewRow((prev) => (normalizeHeaderToken(prev?.fileName) === targetKey ? null : prev))
+      const targetScopeKey = `${normalizeHeaderToken(tipoConsulta)}|${targetUserId ?? 'na'}|${targetEquipeId ?? 'na'}`
+      const fallbackFileKey = normalizeHeaderToken(tipoConsulta)
+      setBatchUploads((prev) => (Array.isArray(prev) ? prev : []).filter((entry) => {
+        const entryScopeKey = `${normalizeHeaderToken(entry?.fileName || '')}|${toNumberOrNull(entry?.idUser) ?? 'na'}|${toNumberOrNull(entry?.idEquipe) ?? 'na'}`
+        if (targetUserId !== null || targetEquipeId !== null) return entryScopeKey !== targetScopeKey
+        return normalizeHeaderToken(entry?.fileName) !== fallbackFileKey
+      }))
+      setBatchPreviewRow((prev) => {
+        if (!prev) return prev
+        const prevScopeKey = `${normalizeHeaderToken(prev?.fileName || '')}|${toNumberOrNull(prev?.idUser) ?? 'na'}|${toNumberOrNull(prev?.idEquipe) ?? 'na'}`
+        if (targetUserId !== null || targetEquipeId !== null) {
+          return prevScopeKey === targetScopeKey ? null : prev
+        }
+        return normalizeHeaderToken(prev?.fileName) === fallbackFileKey ? null : prev
+      })
       setBatchDeleteTarget(null)
-      if (normalizeHeaderToken(batchPollingTarget?.fileName) === targetKey) {
+      if (normalizeHeaderToken(batchPollingTarget?.fileName) === fallbackFileKey) {
         setBatchPollingTarget(null)
       }
 
@@ -2027,12 +2251,21 @@ export default function ConsultasV8() {
     const grouped = new Map()
     for (const row of apiBatchRows) {
       const fileName = getBatchFileNameFromRow(row) || 'Lote sem nome'
+      const rowUserId = resolveRowUserId(row)
+      const rowEquipeId = resolveRowEquipeId(row)
+      const groupKey = `${normalizeHeaderToken(fileName)}|${rowUserId ?? 'na'}|${rowEquipeId ?? 'na'}`
 
-      const prev = grouped.get(fileName)
+      const prev = grouped.get(groupKey)
       if (prev) {
         prev.apiRows.push(row)
       } else {
-        grouped.set(fileName, { fileName, source: 'api', apiRows: [row] })
+        grouped.set(groupKey, {
+          fileName,
+          source: 'api',
+          idUser: rowUserId,
+          idEquipe: rowEquipeId,
+          apiRows: [row]
+        })
       }
     }
 
@@ -2055,9 +2288,11 @@ export default function ConsultasV8() {
 
       const latestTs = rowsList.reduce((acc, row) => Math.max(acc, getRowSortTimestamp(row)), 0)
       return {
-        id: `api-${idx}-${group.fileName}`,
+        id: `api-${idx}-${group.fileName}-${group.idUser ?? 'na'}-${group.idEquipe ?? 'na'}`,
         source: 'api',
         fileName: group.fileName,
+        idUser: group.idUser,
+        idEquipe: group.idEquipe,
         totalRows: quantity,
         okCount,
         errCount,
@@ -2078,7 +2313,10 @@ export default function ConsultasV8() {
     const byFile = new Map()
 
     for (const entry of combined) {
-      const fileKey = normalizeHeaderToken(entry?.fileName || `sem-nome-${entry?.id || ''}`)
+      const baseName = normalizeHeaderToken(entry?.fileName || `sem-nome-${entry?.id || ''}`)
+      const fileKey = entry?.source === 'api'
+        ? `${baseName}|${toNumberOrNull(entry?.idUser) ?? 'na'}|${toNumberOrNull(entry?.idEquipe) ?? 'na'}`
+        : baseName
       const prev = byFile.get(fileKey)
       if (!prev) {
         byFile.set(fileKey, entry)
@@ -2503,6 +2741,33 @@ export default function ConsultasV8() {
                         >
                           {uploadingBatchFile ? 'Enviando...' : 'Enviar lote'}
                         </button>
+                      </div>
+                    )}
+
+                    {uploadingBatchFile && (
+                      <div className="mt-2">
+                        <div className="d-flex justify-content-between align-items-center small mb-1">
+                          <span>
+                            {batchPostProgress.phase === 'liberando'
+                              ? 'Liberando pendentes...'
+                              : 'Enviando lote...'}
+                          </span>
+                          <span>{batchPostProcessed}/{batchPostTotal} ({batchPostPercent}%)</span>
+                        </div>
+                        <div className="progress" style={{ height: 8 }}>
+                          <div
+                            className={`progress-bar ${batchPostProgress.phase === 'liberando' ? 'bg-warning' : 'bg-info'} progress-bar-striped progress-bar-animated`}
+                            role="progressbar"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={batchPostPercent}
+                            style={{ width: `${batchPostPercent}%` }}
+                          />
+                        </div>
+                        <div className="small opacity-75 mt-1">
+                          {batchPostProgress.fileName ? `${batchPostProgress.fileName} | ` : ''}
+                          Sucesso: {Number(batchPostProgress.ok || 0)} | Erro: {Number(batchPostProgress.error || 0)} | ETA: {batchPostProgress.phase === 'liberando' ? 'finalizando...' : formatEtaMinutesOrHours(batchPostEtaSeconds)}
+                        </div>
                       </div>
                     )}
 
@@ -3084,7 +3349,7 @@ export default function ConsultasV8() {
                   </div>
                   <div className="col-6 col-md-3">
                     <div className="small opacity-75">Origem</div>
-                    <div className="fw-semibold">{batchPreviewRow?.source === 'local' ? 'Local' : 'Tabela'}</div>
+                    <div className="fw-semibold">{batchPreviewRow?.fileName || '-'}</div>
                   </div>
                 </div>
 
@@ -3159,8 +3424,24 @@ export default function ConsultasV8() {
                   Esta acao remove os registros da tabela <code>consulta_v8</code> usando os filtros:
                 </div>
                 <div className="small mt-2">
-                  <div><code>id_user</code>: {toNumberOrNull(user?.id) ?? '-'}</div>
-                  <div><code>id_equipe</code>: {resolveUserEquipeId(user) ?? '-'}</div>
+                  <div>
+                    <code>id_user</code>: {
+                      toNumberOrNull(
+                        batchDeleteTarget?.idUser
+                        ?? resolveRowUserId(batchDeleteTarget?.apiRows?.[0])
+                        ?? user?.id
+                      ) ?? '-'
+                    }
+                  </div>
+                  <div>
+                    <code>id_equipe</code>: {
+                      toNumberOrNull(
+                        batchDeleteTarget?.idEquipe
+                        ?? resolveRowEquipeId(batchDeleteTarget?.apiRows?.[0])
+                        ?? resolveUserEquipeId(user)
+                      ) ?? '-'
+                    }
+                  </div>
                   <div><code>tipoConsulta</code>: {batchDeleteTarget?.fileName || '-'}</div>
                 </div>
               </div>
