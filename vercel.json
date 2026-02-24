@@ -1,9 +1,5 @@
 {
   "version": 2,
-  "functions": {
-    "api/consulta-v8/*.js": { "maxDuration": 300 },
-    "api/consulta-v8/**/*.js": { "maxDuration": 300 }
-  },
   "builds": [
     { "src": "api/**/*.js", "use": "@vercel/node" },
     { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
