@@ -1111,7 +1111,11 @@ export default function ConsultasV8() {
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
   const normalizedUserRole = normalizeRole(user?.role, user?.level)
-  const canAccessBatchMode = normalizedUserRole === Roles.Supervisor || Boolean(user?.is_supervisor)
+  const canAccessBatchMode = (
+    normalizedUserRole === Roles.Supervisor
+    || normalizedUserRole === Roles.Master
+    || Boolean(user?.is_supervisor)
+  )
   const canDeleteBatchByUser = toNumberOrNull(user?.id) === 1
 
   const fetchLimites = useCallback(async (signal, options = {}) => {
@@ -1627,7 +1631,7 @@ export default function ConsultasV8() {
 
   const addPendingBatchToList = useCallback(async () => {
     if (!canAccessBatchMode) {
-      notify.warn('Envio em lote disponivel apenas para a hierarquia Supervisor.', { autoClose: 2600 })
+      notify.warn('Envio em lote disponivel apenas para Supervisor ou Master.', { autoClose: 2600 })
       return
     }
     if (uploadingBatchFile) return

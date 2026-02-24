@@ -5,6 +5,13 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '24/02/2026',
+    titulo: 'Consulta V8 liberada no menu Consultas',
+    descricao:
+      'A Consulta V8 ja esta disponivel no menu Consultas, com modo individual e em lote conforme permissao de hierarquia.',
+    image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1600&q=80',
+  },
+  {
     data: '12/02/2026',
     titulo: 'Tema claro e escuro com alternancia',
     descricao:
