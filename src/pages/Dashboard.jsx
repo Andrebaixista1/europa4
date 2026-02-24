@@ -191,7 +191,10 @@ export default function Dashboard() {
   const card = news[current]
   const bgStyle = card?.image
     ? {
-        backgroundImage: `url(${card.image})`
+        backgroundImage: `url(${card.image})`,
+        backgroundSize: card?.imageFit === 'contain' ? 'contain' : 'cover',
+        backgroundRepeat: 'no-repeat',
+        backgroundColor: card?.imageBackground || 'rgba(255, 255, 255, 0.04)'
       }
     : {}
 
