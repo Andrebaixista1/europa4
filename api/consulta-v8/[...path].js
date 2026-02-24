@@ -13,6 +13,10 @@ const CORS_HEADERS = {
 }
 
 const BASE_URL = 'http://85.31.61.242:3002/api/consulta-v8'
+const UPSTREAM_TIMEOUT_MS = Math.max(
+  10000,
+  Number(process.env.CONSULTA_V8_PROXY_TIMEOUT_MS || 240000)
+)
 
 export default async function handler(req, res) {
   const origin = req.headers.origin || '*'
@@ -58,7 +62,7 @@ export default async function handler(req, res) {
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 25000)
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
 
   let upstream
   try {

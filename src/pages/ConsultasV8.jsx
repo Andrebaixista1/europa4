@@ -6,6 +6,7 @@ import { FiAlertCircle, FiArrowLeft, FiCheckCircle, FiChevronDown, FiClock, FiDo
 import { useAuth } from '../context/AuthContext.jsx'
 import { consultarImportacaoCsvV8Status } from '../services/v8Client.js'
 import { notify } from '../utils/notify.js'
+import { normalizeRole, Roles } from '../utils/roles.js'
 
 const V8_LARAVEL_BASE_PATH = '/api/consulta-v8'
 const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
@@ -133,14 +134,25 @@ const releasePendingConsultas = async ({ idUser, idEquipe, tipoConsulta, ids = [
   return parseResponseBody(response)
 }
 
-const filterConsultasByUser = (rows, userId) => {
+const filterConsultasByUser = (rows, userId, equipeId) => {
   const list = Array.isArray(rows) ? rows : []
   const parsedUserId = toNumberOrNull(userId)
+  const parsedEquipeId = toNumberOrNull(equipeId)
   if (parsedUserId === null || parsedUserId === 1) return list
 
   return list.filter((row) => {
     const rowUserId = toNumberOrNull(row?.id_user ?? row?.idUser)
-    return rowUserId !== null && rowUserId === parsedUserId
+    const rowEquipeId = toNumberOrNull(
+      row?.id_equipe
+      ?? row?.idEquipe
+      ?? row?.equipe_id
+      ?? row?.equipeId
+      ?? row?.team_id
+      ?? row?.teamId
+    )
+    const sameUser = rowUserId !== null && rowUserId === parsedUserId
+    const sameEquipe = parsedEquipeId !== null && rowEquipeId !== null && rowEquipeId === parsedEquipeId
+    return sameUser || sameEquipe
   })
 }
 
@@ -1098,6 +1110,8 @@ export default function ConsultasV8() {
   const batchFileInputRef = useRef(null)
   const rowsRef = useRef([])
   const fetchSeqRef = useRef(0)
+  const normalizedUserRole = normalizeRole(user?.role, user?.level)
+  const canAccessBatchMode = normalizedUserRole === Roles.Supervisor || Boolean(user?.is_supervisor)
   const canDeleteBatchByUser = toNumberOrNull(user?.id) === 1
 
   const fetchLimites = useCallback(async (signal, options = {}) => {
@@ -1119,6 +1133,25 @@ export default function ConsultasV8() {
       const requestUrl = new URL(V8_LIMITES_GET_API_URL)
       requestUrl.searchParams.set('id_user', String(userId))
       requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleId = resolveUserRoleId(user)
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = toNumberOrNull(
+        user?.nivel_hierarquia
+        ?? user?.NivelHierarquia
+        ?? user?.level
+        ?? roleId
+      )
+      if (roleId !== null) {
+        requestUrl.searchParams.set('id_role', String(roleId))
+        requestUrl.searchParams.set('role_id', String(roleId))
+      }
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null) {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
 
       const response = await fetch(requestUrl.toString(), { method: 'GET', signal })
       const payload = await parseResponseBody(response)
@@ -1173,6 +1206,25 @@ export default function ConsultasV8() {
       requestUrl.searchParams.set('id_user', String(userId))
       const equipeId = resolveUserEquipeId(user)
       if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleId = resolveUserRoleId(user)
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = toNumberOrNull(
+        user?.nivel_hierarquia
+        ?? user?.NivelHierarquia
+        ?? user?.level
+        ?? roleId
+      )
+      if (roleId !== null) {
+        requestUrl.searchParams.set('id_role', String(roleId))
+        requestUrl.searchParams.set('role_id', String(roleId))
+      }
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null) {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
       if (userId === 1) requestUrl.searchParams.set('all', '1')
 
       const normalizedCpf = normalizeCpf11(query?.cpf)
@@ -1183,7 +1235,7 @@ export default function ConsultasV8() {
 
       const response = await fetch(requestUrl.toString(), { method: 'GET', signal })
       const payload = await parseResponseBody(response)
-      const normalizedRows = filterConsultasByUser(normalizeRows(payload), userId)
+      const normalizedRows = filterConsultasByUser(normalizeRows(payload), userId, equipeId)
       if (requestSeq !== fetchSeqRef.current) {
         return rowsRef.current
       }
@@ -1574,6 +1626,10 @@ export default function ConsultasV8() {
   const batchUploadInFlightRef = useRef(false)
 
   const addPendingBatchToList = useCallback(async () => {
+    if (!canAccessBatchMode) {
+      notify.warn('Envio em lote disponivel apenas para a hierarquia Supervisor.', { autoClose: 2600 })
+      return
+    }
     if (uploadingBatchFile) return
     if (batchUploadInFlightRef.current) return
     if (!pendingBatchUpload) {
@@ -1681,7 +1737,7 @@ export default function ConsultasV8() {
       setUploadingBatchFile(false)
       batchUploadInFlightRef.current = false
     }
-  }, [uploadingBatchFile, pendingBatchUpload, user, fetchConsultas])
+  }, [canAccessBatchMode, uploadingBatchFile, pendingBatchUpload, user, fetchConsultas])
 
   const removeLocalBatchEntry = useCallback((id) => {
     setBatchUploads((prev) => prev.filter((entry) => entry?.id !== id))
@@ -2047,6 +2103,13 @@ export default function ConsultasV8() {
     setPage(1)
     if (consultaMode !== 'individual') setConsultaError('')
   }, [consultaMode])
+
+  useEffect(() => {
+    if (canAccessBatchMode) return
+    if (consultaMode === 'lote') {
+      setConsultaMode('individual')
+    }
+  }, [canAccessBatchMode, consultaMode])
 
   const selectedStatusSet = useMemo(() => {
     return new Set(statusFilters.map((s) => String(s ?? '').trim().toLowerCase()).filter(Boolean))
@@ -2611,18 +2674,20 @@ export default function ConsultasV8() {
                 <div className="btn-group btn-group-sm w-100 mb-3" role="group" aria-label="Modo de consulta">
                   <button
                     type="button"
-                    className={`btn ${consultaMode === 'individual' ? 'btn-info text-dark' : 'btn-outline-light'}`}
+                    className={`btn ${consultaMode === 'individual' ? 'btn-info text-dark' : 'btn-outline-light'} ${!canAccessBatchMode ? 'w-100' : ''}`}
                     onClick={() => setConsultaMode('individual')}
                   >
                     Individual
                   </button>
-                  <button
-                    type="button"
-                    className={`btn ${consultaMode === 'lote' ? 'btn-info text-dark' : 'btn-outline-light'}`}
-                    onClick={() => setConsultaMode('lote')}
-                  >
-                    Em lote
-                  </button>
+                  {canAccessBatchMode && (
+                    <button
+                      type="button"
+                      className={`btn ${consultaMode === 'lote' ? 'btn-info text-dark' : 'btn-outline-light'}`}
+                      onClick={() => setConsultaMode('lote')}
+                    >
+                      Em lote
+                    </button>
+                  )}
                 </div>
 
                 {consultaMode === 'individual' ? (

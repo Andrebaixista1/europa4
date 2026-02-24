@@ -8,8 +8,7 @@ import { notify } from '../utils/notify.js'
 
 const PRESENCA_API_BASE = import.meta.env.DEV ? '/api/presenca' : 'http://85.31.61.242:3011'
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
-const HIST_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-historico/'
-const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
+const LIMITES_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
 const INDIVIDUAL_RESPONSE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual-resposta/'
 const NOVO_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/novo-login'
@@ -372,6 +371,53 @@ const toNumberOrNull = (value) => {
   return Number.isNaN(num) ? null : num
 }
 
+const resolveUserEquipeId = (user) => {
+  return toNumberOrNull(user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId)
+}
+
+const normalizeLoginKey = (value) => String(value ?? '').trim().toLowerCase()
+
+const getSelectedLoginStorageKey = (userId) => `consulta-presenca:selected-login:${String(userId)}`
+
+const loadSelectedLoginFromStorage = (userId) => {
+  if (userId === null || userId === undefined) return ''
+  if (typeof window === 'undefined' || !window.localStorage) return ''
+  try {
+    return normalizeLoginKey(window.localStorage.getItem(getSelectedLoginStorageKey(userId)))
+  } catch {
+    return ''
+  }
+}
+
+const saveSelectedLoginToStorage = (userId, loginKey) => {
+  if (userId === null || userId === undefined) return
+  if (typeof window === 'undefined' || !window.localStorage) return
+  const storageKey = getSelectedLoginStorageKey(userId)
+  try {
+    if (!loginKey) {
+      window.localStorage.removeItem(storageKey)
+      return
+    }
+    window.localStorage.setItem(storageKey, String(loginKey))
+  } catch {
+    // ignore storage issues
+  }
+}
+
+const parseSummaryMetrics = (row) => {
+  const total = toNumberOrNull(pick(row, ['total', 'limite'], null))
+  const usado = toNumberOrNull(pick(row, ['usado', 'consultados'], null))
+  let restantes = toNumberOrNull(pick(row, ['restantes', 'restante', 'saldo'], null))
+  if (restantes === null && total !== null && usado !== null) {
+    restantes = Math.max(0, total - usado)
+  }
+  return {
+    total: total ?? '-',
+    usado: usado ?? '-',
+    restantes: restantes ?? '-'
+  }
+}
+
 const formatCurrency = (value) => {
   const num = toNumberOrNull(value)
   if (num === null) return '-'
@@ -629,97 +675,145 @@ export default function ConsultaPresenca() {
   const [consultaPauseReason, setConsultaPauseReason] = useState('')
   const [consultaPauseBusy, setConsultaPauseBusy] = useState(false)
   const consultaPauseSyncTimerRef = useRef(null)
+  const selectedLoginKeyRef = useRef('')
 
-  const fetchHistoricoRows = useCallback(async (loginP, signal) => {
-    const userId = user?.id
-    if (!userId || !loginP) {
-      setRows([])
-      return
-    }
+  const fetchHistoricoRows = useCallback(async () => {
+    // Histórico dedicado desativado: a grade usa os dados do endpoint principal.
+    return []
+  }, [])
 
-    setLoading(true)
-    setError('')
-    try {
-      const url = `${HIST_API_URL}?loginP=${encodeURIComponent(loginP)}&id_user=${encodeURIComponent(userId)}`
-      const response = await fetch(url, { method: 'GET', signal })
-      const rawText = await response.text()
-      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
-
-      let payload = null
-      try {
-        payload = rawText ? JSON.parse(rawText) : []
-      } catch {
-        throw new Error('Resposta da API de histórico inválida.')
-      }
-
-      const sourceRows = normalizeRows(payload)
-      const normalized = sourceRows.map(mapRow)
-      setRows(normalized)
-    } catch (err) {
-      if (err?.name === 'AbortError') return
-      setRows([])
-      setError(err?.message || 'Falha ao carregar histórico de consultas.')
-    } finally {
-      if (!signal?.aborted) setLoading(false)
-    }
-  }, [user?.id])
-
-  const fetchLoteRows = useCallback(async ({ loginP, nomeArquivo, signal } = {}) => {
-    const userId = user?.id
-    const login = String(loginP ?? '').trim()
-    if (!userId || !login || login === '-') return []
-
-    const params = new URLSearchParams()
-    params.set('loginP', login)
-    params.set('id_user', String(userId))
-    if (nomeArquivo) params.set('nomeArquivo', String(nomeArquivo))
-
-    const url = `${LOTE_API_URL}?${params.toString()}`
-    const response = await fetch(url, { method: 'GET', signal })
-    if (!response.ok) return []
-
-    const payload = await response.json().catch(() => [])
-    return Array.isArray(payload) ? payload : (Array.isArray(payload?.rows) ? payload.rows : [])
-  }, [user?.id])
+  const fetchLoteRows = useCallback(async () => {
+    // Endpoint presencabank-lote desativado por regra de negócio.
+    return []
+  }, [])
 
   const fetchSummary = useCallback(async (signal) => {
-    const userId = user?.id
-    if (!userId) {
+    const userId = toNumberOrNull(user?.id)
+    const equipeId = resolveUserEquipeId(user)
+    if (userId === null) {
       setRows([])
       setSummaryRows([])
       setLoteGroups([])
       loteSawPendingRef.current = false
       setLoteAutoPollingEnabled(false)
       setSelectedLoginIndex(0)
+      selectedLoginKeyRef.current = ''
       setError('Usuário sem ID para consulta.')
+      return
+    }
+    if (equipeId === null) {
+      setRows([])
+      setSummaryRows([])
+      setLoteGroups([])
+      loteSawPendingRef.current = false
+      setLoteAutoPollingEnabled(false)
+      setSelectedLoginIndex(0)
+      selectedLoginKeyRef.current = ''
+      setError('Usuário sem equipe para consulta.')
       return
     }
 
     setError('')
     try {
-      const url = `${CRED_API_URL}?login_id=${encodeURIComponent(userId)}`
-      const response = await fetch(url, { method: 'GET', signal })
-      const rawText = await response.text()
-      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+      const requestUrl = new URL(CRED_API_URL)
+      requestUrl.searchParams.set('id_user', String(userId))
+      requestUrl.searchParams.set('equipe_id', String(equipeId))
 
-      let payload = null
+      const limitesUrl = new URL(LIMITES_API_URL)
+      limitesUrl.searchParams.set('id_user', String(userId))
+      limitesUrl.searchParams.set('equipe_id', String(equipeId))
+
+      const [credResponse, limitesResponse] = await Promise.all([
+        fetch(requestUrl.toString(), { method: 'GET', signal }),
+        fetch(limitesUrl.toString(), { method: 'GET', signal })
+      ])
+      const [credRawText, limitesRawText] = await Promise.all([
+        credResponse.text(),
+        limitesResponse.text()
+      ])
+      if (!credResponse.ok) throw new Error(credRawText || `HTTP ${credResponse.status}`)
+      if (!limitesResponse.ok) throw new Error(limitesRawText || `HTTP ${limitesResponse.status}`)
+
+      let credPayload = null
+      let limitesPayload = null
       try {
-        payload = rawText ? JSON.parse(rawText) : []
+        credPayload = credRawText ? JSON.parse(credRawText) : []
       } catch {
-        throw new Error('Resposta da API inválida.')
+        throw new Error('Resposta da API de consultas inválida.')
+      }
+      try {
+        limitesPayload = limitesRawText ? JSON.parse(limitesRawText) : []
+      } catch {
+        throw new Error('Resposta da API de limites inválida.')
       }
 
-      const sourceRows = normalizeRows(payload)
-      const summaries = sourceRows.map((row) => ({
-        loginP: pick(row, ['loginP', 'login', 'usuario_login'], '-'),
-        senhaP: pick(row, ['senhaP', 'senha', 'password'], ''),
-        total: pick(row, ['total'], '-'),
-        usado: pick(row, ['usado'], '-'),
-        restantes: pick(row, ['restantes'], '-')
-      }))
+      const sourceRows = normalizeRows(credPayload).filter((row) => row && Object.keys(row).length > 0)
+      const limitRows = normalizeRows(limitesPayload).filter((row) => row && Object.keys(row).length > 0)
+      setRows(sourceRows.map(mapRow))
+
+      const sourceByLogin = new Map()
+      for (const row of sourceRows) {
+        const login = normalizeLoginKey(pick(row, ['loginP', 'login', 'usuario_login'], ''))
+        if (!login || login === 'total') continue
+        if (!sourceByLogin.has(login)) sourceByLogin.set(login, row)
+      }
+
+      const limitByLogin = new Map()
+      for (const row of limitRows) {
+        const id = String(row?.id ?? '').trim()
+        const login = normalizeLoginKey(pick(row, ['loginP', 'login', 'usuario_login'], ''))
+        if (!login || login === 'total' || id === '0') continue
+        if (!limitByLogin.has(login)) limitByLogin.set(login, row)
+      }
+
+      let summaries = Array.from(limitByLogin.entries()).map(([loginKey, limitRow]) => {
+        const sourceRow = sourceByLogin.get(loginKey)
+        const metrics = parseSummaryMetrics(limitRow)
+
+        return {
+          loginP: pick(limitRow, ['loginP', 'login', 'usuario_login'], pick(sourceRow, ['loginP', 'login', 'usuario_login'], '-')),
+          senhaP: pick(limitRow, ['senhaP', 'senha', 'password'], pick(sourceRow, ['senhaP', 'senha', 'password'], '')),
+          total: metrics.total,
+          usado: metrics.usado,
+          restantes: metrics.restantes
+        }
+      })
+
+      if (summaries.length === 0) {
+        summaries = sourceRows
+          .map((row) => {
+            const id = String(row?.id ?? '').trim()
+            const loginP = pick(row, ['loginP', 'login', 'usuario_login'], '-')
+            const loginKey = normalizeLoginKey(loginP)
+            if (!loginKey || loginKey === 'total' || id === '0') return null
+            const metrics = parseSummaryMetrics(row)
+            return {
+              loginP,
+              senhaP: pick(row, ['senhaP', 'senha', 'password'], ''),
+              total: metrics.total,
+              usado: metrics.usado,
+              restantes: metrics.restantes
+            }
+          })
+          .filter(Boolean)
+      }
+
+      const storedLoginKey = loadSelectedLoginFromStorage(userId)
+      const preferredLoginKey = selectedLoginKeyRef.current || storedLoginKey
+      const preservedIndex = preferredLoginKey
+        ? summaries.findIndex((row) => normalizeLoginKey(row?.loginP) === preferredLoginKey)
+        : -1
+      const nextSelectedIndex = preservedIndex >= 0 ? preservedIndex : 0
+
       setSummaryRows(summaries)
-      setSelectedLoginIndex(0)
-      const firstLogin = summaries[0]?.loginP
+      setSelectedLoginIndex(nextSelectedIndex)
+
+      const selectedLogin = summaries[nextSelectedIndex]?.loginP
+      const nextLoginKey = normalizeLoginKey(selectedLogin)
+      selectedLoginKeyRef.current = nextLoginKey
+      saveSelectedLoginToStorage(userId, nextLoginKey)
+
+      const firstLogin = selectedLogin
       if (firstLogin && firstLogin !== '-' && !uploadingBatchFile) {
         const loteRows = await fetchLoteRows({ loginP: firstLogin, signal })
         const grouped = groupLoteRows(loteRows)
@@ -733,7 +827,7 @@ export default function ConsultaPresenca() {
         setLoteAutoPollingEnabled(false)
       }
 
-      const updatedCandidates = sourceRows
+      const updatedCandidates = [...sourceRows, ...limitRows]
         .map((row) => pick(row, ['updated_at', 'updatedAt', 'data_update', 'updated'], ''))
         .filter(Boolean)
       const latestUpdated = updatedCandidates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null
@@ -748,7 +842,25 @@ export default function ConsultaPresenca() {
       setSelectedLoginIndex(0)
       setError(err?.message || 'Falha ao carregar consulta de presença.')
     }
-  }, [fetchLoteRows, uploadingBatchFile, user?.id])
+  }, [fetchLoteRows, uploadingBatchFile, user?.id, user?.equipe_id, user?.team_id, user?.equipeId, user?.teamId])
+
+  useEffect(() => {
+    const userId = toNumberOrNull(user?.id)
+    if (userId === null) {
+      selectedLoginKeyRef.current = ''
+      return
+    }
+    selectedLoginKeyRef.current = loadSelectedLoginFromStorage(userId)
+  }, [user?.id])
+
+  useEffect(() => {
+    const userId = toNumberOrNull(user?.id)
+    if (userId === null || summaryRows.length === 0) return
+    const currentKey = normalizeLoginKey(summaryRows[selectedLoginIndex]?.loginP)
+    if (!currentKey) return
+    selectedLoginKeyRef.current = currentKey
+    saveSelectedLoginToStorage(userId, currentKey)
+  }, [summaryRows, selectedLoginIndex, user?.id])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1142,7 +1254,7 @@ export default function ConsultaPresenca() {
     }
 
     if (!currentSummary?.loginP || currentSummary.loginP === '-') {
-      setConsultaMsg('Selecione um login válido no card Resumo.')
+      setConsultaMsg('Selecione um login válido no card Limites API.')
       return
     }
     if (!user?.id) {
@@ -1503,7 +1615,7 @@ export default function ConsultaPresenca() {
       return
     }
     if (!currentSummary?.loginP || currentSummary.loginP === '-') {
-      setConsultaMsg('Selecione um login válido no card Resumo.')
+      setConsultaMsg('Selecione um login válido no card Limites API.')
       return
     }
 
@@ -1618,7 +1730,7 @@ export default function ConsultaPresenca() {
       return
     }
     if (!currentSummary?.loginP || currentSummary.loginP === '-') {
-      notify.error('Selecione um login válido no card Resumo.', { autoClose: 2000 })
+      notify.error('Selecione um login válido no card Limites API.', { autoClose: 2000 })
       return
     }
     if (!job?.fileName) {
@@ -1815,7 +1927,7 @@ export default function ConsultaPresenca() {
     setConsultaMsg('')
 
     if (!currentSummary?.loginP || currentSummary.loginP === '-') {
-      setConsultaMsg('Selecione um login válido no card Resumo.')
+      setConsultaMsg('Selecione um login válido no card Limites API.')
       return
     }
     if (!currentSummary?.senhaP) {
@@ -1900,9 +2012,9 @@ export default function ConsultaPresenca() {
 
         <section className="mb-3">
           <div className="row g-3">
-            <div className="col-12 col-lg-3">
+            <div className="col-12 col-lg-4">
               <div className="neo-card neo-lg p-3 p-md-4 h-100">
-                <div className="opacity-75 small text-uppercase mb-2">Resumo</div>
+                <div className="opacity-75 small text-uppercase mb-2">Limites API</div>
                 <div className="mb-3">
                   <label className="form-label small opacity-75 mb-1">Login</label>
                   <select
@@ -1946,11 +2058,11 @@ export default function ConsultaPresenca() {
               </div>
             </div>
 
-            <div className="col-12 col-lg-9">
-              <div className="neo-card neo-lg p-3 p-md-4">
+            <div className="col-12 col-lg-4">
+              <div className="neo-card neo-lg p-3 p-md-4 h-100">
                 <div className="opacity-75 small mb-2 text-uppercase">Filtros</div>
-                <div className="d-flex flex-wrap gap-2 align-items-end">
-                  <div style={{ minWidth: 260, flex: '1 1 320px' }}>
+                <div className="row g-2">
+                  <div className="col-12">
                     <label className="form-label small opacity-75 mb-1">Buscar</label>
                     <div className="input-group input-group-sm">
                       <span className="input-group-text"><FiSearch size={14} /></span>
@@ -1962,7 +2074,7 @@ export default function ConsultaPresenca() {
                       />
                     </div>
                   </div>
-                  <div style={{ minWidth: 160 }}>
+                  <div className="col-6">
                     <label className="form-label small opacity-75 mb-1">De</label>
                     <input
                       type="date"
@@ -1971,7 +2083,7 @@ export default function ConsultaPresenca() {
                       onChange={(e) => setDateFrom(e.target.value)}
                     />
                   </div>
-                  <div style={{ minWidth: 160 }}>
+                  <div className="col-6">
                     <label className="form-label small opacity-75 mb-1">Até</label>
                     <input
                       type="date"
@@ -1980,7 +2092,7 @@ export default function ConsultaPresenca() {
                       onChange={(e) => setDateTo(e.target.value)}
                     />
                   </div>
-                  <div className="ms-auto d-flex gap-2">
+                  <div className="col-12 d-flex gap-2">
                     <button
                       type="button"
                       className="btn btn-outline-info btn-sm d-flex align-items-center gap-2"
@@ -1997,7 +2109,10 @@ export default function ConsultaPresenca() {
                   </div>
                 </div>
               </div>
-              <div className="neo-card neo-lg p-3 p-md-4 mt-3">
+            </div>
+
+            <div className="col-12 col-lg-4">
+              <div className="neo-card neo-lg p-3 p-md-4 h-100">
                 <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
                   <div className="opacity-75 small text-uppercase">Consulta</div>
                   <div className="btn-group btn-group-sm" role="group" aria-label="Tipo de consulta">
@@ -2022,8 +2137,8 @@ export default function ConsultaPresenca() {
 
                 {consultaTab === 'individual' ? (
                   <form onSubmit={handleConsultarIndividual}>
-                    <div className="row g-2 align-items-end">
-                      <div className="col-12 col-md-3">
+                    <div className="row g-2">
+                      <div className="col-12">
                         <label className="form-label small opacity-75 mb-1">CPF</label>
                         <input
                           className="form-control form-control-sm"
@@ -2033,7 +2148,7 @@ export default function ConsultaPresenca() {
                           maxLength={11}
                         />
                       </div>
-                      <div className="col-12 col-md-3">
+                      <div className="col-12">
                         <label className="form-label small opacity-75 mb-1">Telefone</label>
                         <input
                           className="form-control form-control-sm"
@@ -2043,7 +2158,7 @@ export default function ConsultaPresenca() {
                           maxLength={11}
                         />
                       </div>
-                      <div className="col-12 col-md-4">
+                      <div className="col-12">
                         <label className="form-label small opacity-75 mb-1">Nome</label>
                         <input
                           className="form-control form-control-sm"
@@ -2052,7 +2167,7 @@ export default function ConsultaPresenca() {
                           onChange={(e) => setNomeConsulta(e.target.value)}
                         />
                       </div>
-                      <div className="col-12 col-md-2 d-grid">
+                      <div className="col-12 d-grid">
                         <button type="submit" className="btn btn-primary btn-sm" disabled={consultando}>
                           {consultando ? 'Consultando...' : 'Consultar'}
                         </button>
@@ -2061,8 +2176,8 @@ export default function ConsultaPresenca() {
                   </form>
                 ) : (
                   <div>
-                    <div className="row g-2 align-items-end">
-                      <div className="col-12 col-md-6">
+                    <div className="row g-2">
+                      <div className="col-12">
                         <label className="form-label small opacity-75 mb-1">Arquivo (CSV separado por ;)</label>
                         <input
                           ref={batchFileInputRef}
