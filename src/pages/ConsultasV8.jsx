@@ -427,25 +427,39 @@ const V8_STATUS_PT_BR_MAP = {
   NO_OFFERS: 'Sem ofertas',
 }
 
+const toCamelCaseStatusLabel = (value) => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+
+  return raw
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => {
+      if (/^\d+$/.test(word)) return word
+      const lower = word.toLocaleLowerCase('pt-BR')
+      return lower.charAt(0).toLocaleUpperCase('pt-BR') + lower.slice(1)
+    })
+    .join(' ')
+}
+
 const formatUnknownV8StatusLabel = (status) => {
   const raw = String(status ?? '').trim()
   if (!raw) return ''
   if (!/[a-z]/.test(raw) && /[_-]/.test(raw)) {
-    return raw
-      .toLowerCase()
-      .split(/[_-]+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(' ')
+    return toCamelCaseStatusLabel(raw.toLowerCase())
   }
-  return raw
+  return toCamelCaseStatusLabel(raw)
 }
 
 const translateV8StatusLabel = (status) => {
   const raw = String(status ?? '').trim()
   if (!raw) return ''
   const token = normalizeStatusToken(raw).replace(/\s+/g, '_')
-  return V8_STATUS_PT_BR_MAP[token] || formatUnknownV8StatusLabel(raw)
+  const translated = V8_STATUS_PT_BR_MAP[token] || formatUnknownV8StatusLabel(raw)
+  return toCamelCaseStatusLabel(translated)
 }
 
 const getV8RowStatus = (row) => {
