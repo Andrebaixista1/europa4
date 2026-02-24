@@ -1128,7 +1128,7 @@ export default function ConsultasV8() {
     try {
       const userId = toNumberOrNull(user?.id)
       const equipeId = resolveUserEquipeId(user)
-      if (userId === null || equipeId === null) {
+      if (userId === null) {
         setLimitRows([])
         setLimitSummary(DEFAULT_LIMIT_SUMMARY)
         return []
@@ -1136,7 +1136,9 @@ export default function ConsultasV8() {
 
       const requestUrl = new URL(V8_LIMITES_GET_API_URL)
       requestUrl.searchParams.set('id_user', String(userId))
-      requestUrl.searchParams.set('equipe_id', String(equipeId))
+      if (equipeId !== null) {
+        requestUrl.searchParams.set('equipe_id', String(equipeId))
+      }
       const roleId = resolveUserRoleId(user)
       const roleLabel = String(user?.role ?? '').trim()
       const hierarchyLevel = toNumberOrNull(
@@ -3355,8 +3357,8 @@ export default function ConsultasV8() {
                   </div>
                 </div>
 
-                <div className="table-responsive" style={{ maxHeight: 360, overflowY: 'auto', overflowX: 'hidden' }}>
-                  <table className="table table-dark table-sm align-middle mb-0" style={{ minWidth: 0, tableLayout: 'auto' }}>
+                <div className="table-responsive" style={{ maxHeight: 360, overflowY: 'auto', overflowX: 'auto' }}>
+                  <table className="table table-dark table-sm align-middle mb-0" style={{ minWidth: 960, tableLayout: 'auto' }}>
                     <thead>
                       <tr>
                         <th>#</th>
@@ -3371,7 +3373,7 @@ export default function ConsultasV8() {
                     <tbody>
                       {(batchPreviewRow?.previewRows?.length ?? 0) === 0 && (
                         <tr>
-                          <td colSpan={6} className="text-center py-3 opacity-75">Sem linhas para visualizar.</td>
+                          <td colSpan={7} className="text-center py-3 opacity-75">Sem linhas para visualizar.</td>
                         </tr>
                       )}
                       {(batchPreviewRow?.previewRows ?? []).map((item, idx) => (

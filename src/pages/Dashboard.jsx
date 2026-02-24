@@ -7,6 +7,8 @@ import { novidadesList } from '../components/NovidadesModal.jsx'
 import { Roles } from '../utils/roles.js'
 import { notify } from '../utils/notify.js'
 
+const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
+
 export default function Dashboard() {
   const { user } = useAuth()
   const role = user?.role ?? 'Operador'
@@ -14,6 +16,8 @@ export default function Dashboard() {
   const [current, setCurrent] = useState(0)
   const [saldo, setSaldo] = useState({ carregado: 0, disponivel: 0, realizadas: 0 })
   const [loadingSaldo, setLoadingSaldo] = useState(false)
+  const [saldoV8, setSaldoV8] = useState({ total: '-', usado: '-', restantes: '-' })
+  const [loadingSaldoV8, setLoadingSaldoV8] = useState(false)
   const [logs, setLogs] = useState([])
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [logsError, setLogsError] = useState('')
@@ -93,6 +97,98 @@ export default function Dashboard() {
     }
   }
 
+  const toNumberOrNull = (value) => {
+    if (value === undefined || value === null || value === '') return null
+    const parsed = Number(value)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  const normalizeRows = (payload) => {
+    if (Array.isArray(payload)) return payload
+    if (Array.isArray(payload?.data)) return payload.data
+    if (Array.isArray(payload?.rows)) return payload.rows
+    if (payload && typeof payload === 'object') return [payload]
+    return []
+  }
+
+  const buildV8SummaryFromRows = (rows) => {
+    const list = Array.isArray(rows) ? rows : []
+    if (list.length === 0) return { total: '-', usado: '-', restantes: '-' }
+
+    const parseTotal = (row) => toNumberOrNull(row?.total ?? row?.limite)
+    const parseUsado = (row) => toNumberOrNull(row?.consultados ?? row?.usado)
+
+    const totalRow = list.find((row) => {
+      const id = String(row?.id ?? '').trim()
+      const email = String(row?.email ?? row?.login ?? '').trim().toUpperCase()
+      return (id === '0' || email === 'TOTAL') && (parseTotal(row) !== null || parseUsado(row) !== null)
+    })
+
+    if (totalRow) {
+      const total = parseTotal(totalRow) ?? 0
+      const usado = parseUsado(totalRow) ?? 0
+      return { total, usado, restantes: Math.max(0, total - usado) }
+    }
+
+    let total = 0
+    let usado = 0
+    let hasAnyNumeric = false
+    for (const row of list) {
+      const totalValue = parseTotal(row)
+      const usadoValue = parseUsado(row)
+      if (totalValue !== null) {
+        total += totalValue
+        hasAnyNumeric = true
+      }
+      if (usadoValue !== null) {
+        usado += usadoValue
+        hasAnyNumeric = true
+      }
+    }
+
+    if (!hasAnyNumeric) return { total: '-', usado: '-', restantes: '-' }
+    return { total, usado, restantes: Math.max(0, total - usado) }
+  }
+
+  const fetchSaldoV8 = async () => {
+    if (!user?.id) return
+    setLoadingSaldoV8(true)
+    try {
+      const requestUrl = new URL(V8_LIMITES_GET_API_URL)
+      requestUrl.searchParams.set('id_user', String(user?.id))
+      const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
+      if (equipeId !== null && equipeId !== undefined && equipeId !== '') {
+        requestUrl.searchParams.set('equipe_id', String(equipeId))
+      }
+
+      const roleId = user?.id_role ?? user?.role_id ?? user?.roleId ?? user?.level ?? null
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
+
+      if (roleId !== null && roleId !== undefined && roleId !== '') {
+        requestUrl.searchParams.set('id_role', String(roleId))
+        requestUrl.searchParams.set('role_id', String(roleId))
+      }
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const payload = await response.json().catch(() => ({}))
+      const rows = normalizeRows(payload)
+      setSaldoV8(buildV8SummaryFromRows(rows))
+    } catch (_) {
+      setSaldoV8({ total: '-', usado: '-', restantes: '-' })
+    } finally {
+      setLoadingSaldoV8(false)
+    }
+  }
+
   const mapNivel = (r) => {
     if (r === Roles.Master) return 'master'
     if (r === Roles.Administrador) return 'adm'
@@ -167,6 +263,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchSaldo()
+    fetchSaldoV8()
     fetchLogs()
   }, [user])
 
@@ -259,22 +356,46 @@ export default function Dashboard() {
 
         <section className="row g-3 mt-4 align-items-start">
           <div className="col-12 col-lg-4">
-            <div className="neo-card neo-lg p-4">
-              <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuário)</div>
-              <div className="d-flex align-items-center gap-2">
-                <div className="display-5 fw-bold mb-0">{Number(saldo.disponivel ?? 0)}</div>
-                {loadingSaldo && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
-              </div>
-              <div className="small opacity-75">Disponível para consultas IN100.</div>
-              <div className="mt-2 d-flex gap-3 flex-wrap">
-                <div>
-                  <div className="small text-uppercase opacity-75">Realizadas</div>
-                  <div className="fw-semibold">{saldo.realizadas}</div>
+            <div className="d-flex flex-column gap-3">
+              <div className="neo-card neo-lg p-4">
+                <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuário)</div>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="display-5 fw-bold mb-0">{Number(saldo.disponivel ?? 0)}</div>
+                  {loadingSaldo && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
                 </div>
+                <div className="small opacity-75">Disponível para consultas IN100.</div>
+                <div className="mt-2 d-flex gap-3 flex-wrap">
+                  <div>
+                    <div className="small text-uppercase opacity-75">Realizadas</div>
+                    <div className="fw-semibold">{saldo.realizadas}</div>
+                  </div>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={fetchSaldo} disabled={loadingSaldo}>
+                  Atualizar saldo
+                </button>
               </div>
-              <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={fetchSaldo} disabled={loadingSaldo}>
-                Atualizar saldo
-              </button>
+
+              <div className="neo-card neo-lg p-4">
+                <div className="small text-uppercase opacity-75">Saldo V8</div>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="display-5 fw-bold mb-0">{saldoV8.total}</div>
+                  {loadingSaldoV8 && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+                </div>
+                <div className="small opacity-75">Limite total disponível para consultas V8.</div>
+                <div className="mt-2 d-flex gap-3 flex-wrap">
+                  <div>
+                    <div className="small text-uppercase opacity-75">Usado</div>
+                    <div className="fw-semibold">{saldoV8.usado}</div>
+                  </div>
+                  <div>
+                    <div className="small text-uppercase opacity-75">Restante</div>
+                    <div className="fw-semibold">{saldoV8.restantes}</div>
+                  </div>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={fetchSaldoV8} disabled={loadingSaldoV8}>
+                  Atualizar saldo V8
+                </button>
+              </div>
             </div>
           </div>
 
