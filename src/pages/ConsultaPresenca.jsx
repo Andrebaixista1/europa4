@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FiArrowLeft, FiDownload, FiPause, FiPlay, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi'
+import { FiAlertCircle, FiArrowLeft, FiCheckCircle, FiClock, FiDownload, FiFileText, FiPause, FiPlay, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -8,14 +8,18 @@ import { notify } from '../utils/notify.js'
 import { Roles, normalizeRole } from '../utils/roles.js'
 
 const PRESENCA_API_BASE = import.meta.env.DEV ? '/api/presenca' : 'http://85.31.61.242:3011'
+const PRESENCA_LARAVEL_BASE_PATH = String(
+  import.meta.env.VITE_PRESENCA_LARAVEL_BASE_PATH || 'http://85.31.61.242:3002/api/consulta-presenca'
+).trim()
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const LIMITES_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
 const NOVO_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/novo-login'
 const CONSULTA_PAUSE_URL = `${PRESENCA_API_BASE}/api/consulta/pause`
 const CONSULTA_RESUME_URL = `${PRESENCA_API_BASE}/api/consulta/resume`
-const LOTE_CSV_API_URL = 'https://apivieiracred.store/api/presencabank-lotecsv'
-const LOTE_DELETE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote-delete/'
+const LOTE_CSV_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote'
+const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
+const PRESENCA_CONSULTAS_DELETE_API_URL = `${PRESENCA_LARAVEL_BASE_PATH}/consultas`
 const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
 
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '')
@@ -124,6 +128,25 @@ const toCsvCommaDecimalValue = (columnName, value) => {
   return txt
 }
 
+const PRESENCA_EXPORT_COLUMNS = [
+  { header: 'cpf', keys: ['cpf', 'cliente_cpf', 'numero_documento', 'documento'] },
+  { header: 'nome', keys: ['nome', 'cliente_nome', 'name', 'usuario_nome', 'nome_cliente', 'nome_cliente_consulta'] },
+  { header: 'elegivel', keys: ['elegivel', 'isElegivel'] },
+  { header: 'status', keys: ['status', 'final_status', 'situacao', 'status_presenca'] },
+  { header: 'mensagem', keys: ['mensagem', 'message', 'erro', 'error', 'motivo', 'descricao'] },
+  { header: 'tipoConsulta', keys: ['tipoConsulta', 'tipo_consulta', 'tipo'] },
+  { header: 'created_at', keys: ['created_at', 'createdAt', 'data', 'data_hora', 'timestamp'] },
+  { header: 'updated_at', keys: ['updated_at', 'updatedAt'] },
+  { header: 'valorLiberado', keys: ['valorLiberado', 'valor_liberado', 'valor'] },
+  { header: 'valorMargemBase', keys: ['valorMargemBase', 'valor_margem_base'] },
+  { header: 'valorMargemDisponivel', keys: ['valorMargemDisponivel', 'valor_margem_disponivel'] },
+  { header: 'prazo', keys: ['prazo', 'prazo_meses'] },
+  { header: 'taxaJuros', keys: ['taxaJuros', 'taxa_juros'] },
+  { header: 'valorParcela', keys: ['valorParcela', 'valor_parcela'] },
+  { header: 'valorSeguro', keys: ['valorSeguro', 'valor_seguro'] },
+  { header: 'valorTotalDevido', keys: ['valorTotalDevido', 'valor_total_devido'] }
+]
+
 const parseMoneyValue = (value) => {
   if (value === null || value === undefined || value === '') return 0
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0
@@ -162,6 +185,8 @@ const groupLoteRows = (rows) => {
 
     const created = String(pick(row, ['created_at', 'createdAt', 'data', 'data_hora'], '')).trim()
     const loginP = String(pick(row, ['loginP', 'login', 'usuario_login'], '')).trim()
+    const idUser = toNumberOrNull(pick(row, ['id_user', 'idUser', 'user_id'], null))
+    const idEquipe = toNumberOrNull(pick(row, ['equipe_id', 'equipeId', 'id_equipe', 'idEquipe'], null))
     const status = String(pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], 'Pendente')).trim()
     const pending = isPendingLoteStatus(status) ? 1 : 0
     const success = isDoneLoteStatus(status) ? 1 : 0
@@ -170,12 +195,14 @@ const groupLoteRows = (rows) => {
     const okByValue = valorLiberado > 0 ? 1 : 0
     const durationMs = getRowDurationMs(row)
 
-    const key = file.toLowerCase()
+    const key = `${String(loginP || '').trim().toLowerCase()}|${file.toLowerCase()}`
     const prev = byFile.get(key) || {
       id: key,
       file,
       created: '',
       loginP: '',
+      idUser: null,
+      idEquipe: null,
       total: 0,
       totalRows: 0,
       pending: 0,
@@ -190,6 +217,8 @@ const groupLoteRows = (rows) => {
     }
 
     if (!prev.loginP && loginP) prev.loginP = loginP
+    if (prev.idUser === null && idUser !== null) prev.idUser = idUser
+    if (prev.idEquipe === null && idEquipe !== null) prev.idEquipe = idEquipe
     const prevTs = new Date(prev.created || 0).getTime()
     const currTs = new Date(created || 0).getTime()
     if (created && (!Number.isFinite(prevTs) || currTs > prevTs)) prev.created = created
@@ -224,6 +253,8 @@ const groupLoteRows = (rows) => {
     file: entry.file,
     created: entry.created,
     loginP: entry.loginP,
+    idUser: entry.idUser,
+    idEquipe: entry.idEquipe,
     total: entry.total,
     totalRows: entry.totalRows,
     pending: entry.pending,
@@ -238,6 +269,9 @@ const groupLoteRows = (rows) => {
 
 const toCsvCell = (value) => {
   const s = String(value ?? '')
+    .replace(/\r\n/g, ' | ')
+    .replace(/[\r\n]+/g, ' | ')
+    .replace(/\t/g, ' ')
   if (/[\";\r\n]/.test(s)) return `"${s.replace(/\"/g, '""')}"`
   return s
 }
@@ -317,7 +351,7 @@ const normalizeCpfBatch = (value) => {
 
 const normalizeBatchRow = (obj, index1Based) => {
   const cpf = normalizeCpfBatch(obj?.cpf ?? obj?.CPF ?? obj?.Cpf ?? '')
-  const nome = String(obj?.nome ?? obj?.Nome ?? obj?.NOME ?? '').trim()
+  const nome = String(obj?.nome ?? obj?.Nome ?? obj?.NOME ?? '').trim().toLocaleUpperCase('pt-BR')
   const telefoneRaw = onlyDigits(obj?.telefone ?? obj?.Telefone ?? obj?.TELEFONE ?? '')
 
   if (cpf.length !== 11) return { ok: false, idx: index1Based, error: 'CPF inválido (normalizado precisa ter 11 dígitos).' }
@@ -468,6 +502,7 @@ const statusClassName = (status) => {
   const token = String(status ?? '').trim().toLowerCase()
   if (token === 'concluído' || token === 'concluido' || token === 'ok' || token === 'presente') return 'text-bg-success'
   if (token.includes('pendente') || token.includes('process')) return 'text-bg-warning'
+  if (token.includes('erro') || token === 'error') return 'text-bg-danger'
   if (token === 'ausente') return 'text-bg-danger'
   return 'text-bg-secondary'
 }
@@ -534,6 +569,16 @@ const pick = (row, keys, fallback = '') => {
     if (value !== undefined && value !== null && String(value).trim() !== '') return value
   }
   return fallback
+}
+
+const mapPresencaRowToExportShape = (row) => {
+  const src = (row && typeof row === 'object') ? row : {}
+  const out = {}
+  for (const col of PRESENCA_EXPORT_COLUMNS) {
+    const value = pick(src, col.keys, '')
+    out[col.header] = value
+  }
+  return out
 }
 
 const mapRow = (row, idx) => ({
@@ -665,6 +710,7 @@ export default function ConsultaPresenca() {
     || normalizedUserRole === Roles.Master
     || Boolean(user?.is_supervisor)
   )
+  const canDeleteLoteByUser = toNumberOrNull(user?.id) === 1
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -683,6 +729,7 @@ export default function ConsultaPresenca() {
   const [batchJobs, setBatchJobs] = useState([])
   const [loteGroups, setLoteGroups] = useState([])
   const batchPollers = useRef(new Map())
+  const sourceRowsRef = useRef([])
   const lotePollInFlightRef = useRef(false)
   const loteSawPendingRef = useRef(false)
   const loteCsvUploadInFlightRef = useRef(false)
@@ -691,7 +738,7 @@ export default function ConsultaPresenca() {
   const [selectedBatchUpload, setSelectedBatchUpload] = useState(null)
   const [uploadingBatchFile, setUploadingBatchFile] = useState(false)
   const [deleteLoteModal, setDeleteLoteModal] = useState(null)
-  const [downloadLoteModal, setDownloadLoteModal] = useState(null)
+  const [lotePreviewModal, setLotePreviewModal] = useState(null)
   const [deletingLote, setDeletingLote] = useState(false)
   const [consultaMsg, setConsultaMsg] = useState('')
   const [consultando, setConsultando] = useState(false)
@@ -711,15 +758,40 @@ export default function ConsultaPresenca() {
     return []
   }, [])
 
-  const fetchLoteRows = useCallback(async () => {
-    // Endpoint presencabank-lote desativado por regra de negócio.
-    return []
+  const fetchLoteRows = useCallback(async ({ loginP, nomeArquivo, signal } = {}) => {
+    if (signal?.aborted) {
+      const abortErr = new Error('Aborted')
+      abortErr.name = 'AbortError'
+      throw abortErr
+    }
+
+    const targetLogin = normalizeLoginKey(loginP)
+    const targetFile = String(nomeArquivo ?? '').trim().toLowerCase()
+    const list = Array.isArray(sourceRowsRef.current) ? sourceRowsRef.current : []
+
+    return list.filter((row) => {
+      const tipo = String(pick(row, ['tipoConsulta', 'tipo_consulta', 'tipo'], '')).trim().toLowerCase()
+      if (tipo === 'individual') return false
+
+      if (targetLogin) {
+        const rowLogin = normalizeLoginKey(pick(row, ['loginP', 'login', 'usuario_login'], ''))
+        if (rowLogin && rowLogin !== targetLogin) return false
+      }
+
+      if (targetFile) {
+        const rowFile = String(pick(row, ['nomeArquivo', 'nome_arquivo', 'tipoConsulta', 'name', 'fileName'], '')).trim().toLowerCase()
+        if (rowFile && rowFile !== targetFile) return false
+      }
+
+      return true
+    })
   }, [])
 
   const fetchSummary = useCallback(async (signal) => {
     const userId = toNumberOrNull(user?.id)
     const equipeId = resolveUserEquipeId(user)
     if (userId === null) {
+      sourceRowsRef.current = []
       setRows([])
       setSummaryRows([])
       setLoteGroups([])
@@ -731,6 +803,7 @@ export default function ConsultaPresenca() {
       return
     }
     if (equipeId === null) {
+      sourceRowsRef.current = []
       setRows([])
       setSummaryRows([])
       setLoteGroups([])
@@ -806,6 +879,7 @@ export default function ConsultaPresenca() {
       }
 
       const sourceRows = normalizeRows(credPayload).filter((row) => row && Object.keys(row).length > 0)
+      sourceRowsRef.current = sourceRows
       setRows(sourceRows.filter(hasConsultaDisplayData).map(mapRow))
 
       const sourceByLogin = new Map()
@@ -894,6 +968,7 @@ export default function ConsultaPresenca() {
       setLastSyncAt(latestUpdated)
     } catch (err) {
       if (err?.name === 'AbortError') return
+      sourceRowsRef.current = []
       setRows([])
       setSummaryRows([])
       setLoteGroups([])
@@ -1041,6 +1116,65 @@ export default function ConsultaPresenca() {
       return !itemLogin || itemLogin === selectedLoginToken
     })
   }, [batchJobs, selectedLoginToken])
+  const loteTableRows = useMemo(() => {
+    const normalizeFileKey = (value) => String(value ?? '').trim().toLowerCase()
+    const normalizeLogin = (value) => String(value ?? '').trim().toLowerCase()
+    const byKey = new Map()
+
+    for (const job of batchJobsByLogin) {
+      const fileName = String(job?.fileName ?? job?.file ?? '').trim()
+      if (!fileName) continue
+      const loginP = String(job?.loginP ?? currentSummary?.loginP ?? '').trim()
+      const key = `${normalizeLogin(loginP)}|${normalizeFileKey(fileName)}`
+      byKey.set(key, {
+        source: 'job',
+        key,
+        fileName,
+        loginP,
+        createdAt: String(job?.createdAt ?? job?.finishedAt ?? '').trim(),
+        raw: job
+      })
+    }
+
+    for (const group of loteGroupsByLogin) {
+      const fileName = String(group?.file ?? group?.fileName ?? '').trim()
+      if (!fileName) continue
+      const loginP = String(group?.loginP ?? '').trim()
+      const key = `${normalizeLogin(loginP)}|${normalizeFileKey(fileName)}`
+      const prev = byKey.get(key)
+      const next = {
+        source: 'group',
+        key,
+        fileName,
+        loginP,
+        createdAt: String(group?.created ?? '').trim(),
+        raw: group
+      }
+
+      if (!prev) {
+        byKey.set(key, next)
+        continue
+      }
+
+      // Prioriza lote agrupado vindo da API quando ja existir correspondente local.
+      if (prev.source === 'job') {
+        byKey.set(key, next)
+        continue
+      }
+
+      const prevTs = new Date(prev.createdAt || 0).getTime()
+      const nextTs = new Date(next.createdAt || 0).getTime()
+      if ((Number.isFinite(nextTs) ? nextTs : 0) >= (Number.isFinite(prevTs) ? prevTs : 0)) {
+        byKey.set(key, next)
+      }
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      const ta = new Date(a?.createdAt || 0).getTime()
+      const tb = new Date(b?.createdAt || 0).getTime()
+      return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0)
+    })
+  }, [batchJobsByLogin, loteGroupsByLogin, currentSummary?.loginP])
   const pageSize = 50
   const pages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const currentPage = Math.min(page, pages)
@@ -1050,20 +1184,16 @@ export default function ConsultaPresenca() {
     const start = (currentPage - 1) * pageSize
     return filteredRows.slice(start, start + pageSize)
   }, [filteredRows, currentPage])
-  const loteSourceRows = batchJobsByLogin.length > 0 ? batchJobsByLogin : loteGroupsByLogin
+  const loteSourceRows = loteTableRows
   const lotePageSize = 10
   const lotePages = Math.max(1, Math.ceil(loteSourceRows.length / lotePageSize))
   const currentLotePage = Math.min(lotePage, lotePages)
   const loteStartIndex = loteSourceRows.length === 0 ? 0 : ((currentLotePage - 1) * lotePageSize) + 1
   const loteEndIndex = Math.min(loteSourceRows.length, currentLotePage * lotePageSize)
-  const pagedBatchJobs = useMemo(() => {
+  const pagedLoteRows = useMemo(() => {
     const start = (currentLotePage - 1) * lotePageSize
-    return batchJobsByLogin.slice(start, start + lotePageSize)
-  }, [batchJobsByLogin, currentLotePage])
-  const pagedLoteGroups = useMemo(() => {
-    const start = (currentLotePage - 1) * lotePageSize
-    return loteGroupsByLogin.slice(start, start + lotePageSize)
-  }, [loteGroupsByLogin, currentLotePage])
+    return loteSourceRows.slice(start, start + lotePageSize)
+  }, [loteSourceRows, currentLotePage])
   const sortedTabelasBody = useMemo(() => {
     const list = Array.isArray(consultaResultModal?.tabelasBody) ? [...consultaResultModal.tabelasBody] : []
     const sorted = list.sort((a, b) => {
@@ -1166,26 +1296,12 @@ export default function ConsultaPresenca() {
       return
     }
 
-    const exportRows = filteredRowsForExport.map((row) => {
+    const exportRowsRaw = filteredRowsForExport.map((row) => {
       const raw = row?.raw
       return (raw && typeof raw === 'object') ? raw : row
     })
-
-    const header = []
-    const seenHeader = new Set()
-    for (const row of exportRows) {
-      for (const key of Object.keys(row || {})) {
-        const norm = String(key || '').trim().toLowerCase()
-        if (!norm || norm === 'loginp' || seenHeader.has(norm)) continue
-        seenHeader.add(norm)
-        header.push(key)
-      }
-    }
-
-    if (header.length === 0) {
-      notify.info('Nenhuma coluna disponível para exportação.', { autoClose: 2000 })
-      return
-    }
+    const exportRows = exportRowsRaw.map(mapPresencaRowToExportShape)
+    const header = PRESENCA_EXPORT_COLUMNS.map((col) => col.header)
 
     const lines = [header.join(';')]
     for (const row of exportRows) {
@@ -1341,13 +1457,15 @@ export default function ConsultaPresenca() {
       return
     }
 
+    const nomeUpper = nome.toLocaleUpperCase('pt-BR')
+
     const payload = {
       id_consulta_presenca: String(currentSummary.idConsultaPresenca),
       id_user: user.id,
       equipe_id: equipeId,
       cpf: cpfDigits,
       telefone: phoneDigits,
-      nome
+      nome: nomeUpper
     }
 
     setConsultando(true)
@@ -1463,8 +1581,12 @@ export default function ConsultaPresenca() {
   }, [currentSummary?.restantes])
 
   const deleteBatchJob = useCallback((jobId) => {
+    if (!canDeleteLoteByUser) {
+      notify.warn('Somente o usuário Master (ID 1) pode excluir lote.', { autoClose: 2200 })
+      return
+    }
     setBatchJobs((prev) => prev.filter((j) => j.id !== jobId))
-  }, [])
+  }, [canDeleteLoteByUser])
 
   const stopBatchPolling = useCallback((jobId) => {
     const timer = batchPollers.current.get(jobId)
@@ -1606,6 +1728,15 @@ export default function ConsultaPresenca() {
       setConsultaMsg('Selecione um login válido no card Limites API.')
       return
     }
+    if (!currentSummary?.idConsultaPresenca) {
+      setConsultaMsg('Não foi possível identificar o ID do login selecionado.')
+      return
+    }
+    const equipeId = resolveUserEquipeId(user)
+    if (equipeId === null) {
+      setConsultaMsg('Usuário sem equipe para envio do lote.')
+      return
+    }
 
     const validData = Array.isArray(selectedBatchUpload.validData) ? selectedBatchUpload.validData : []
     if (!validData.length) {
@@ -1649,8 +1780,9 @@ export default function ConsultaPresenca() {
 
       const formData = new FormData()
       formData.append('file', csvBlob, selectedBatchUpload.fileName)
-      formData.append('loginP', String(currentSummary.loginP))
       formData.append('id_user', String(user.id))
+      formData.append('equipe_id', String(equipeId))
+      formData.append('id_consulta_presenca', String(currentSummary.idConsultaPresenca))
 
       const response = await fetch(LOTE_CSV_API_URL, {
         method: 'POST',
@@ -1712,7 +1844,7 @@ export default function ConsultaPresenca() {
     }
   }, [consultaPaused, fetchLoteGroups, loteAutoPollingEnabled, summaryRows, selectedLoginIndex, uploadingBatchFile, user?.id])
 
-  const downloadBatchJobCsv = useCallback(async (job, mode = 'all') => {
+  const downloadBatchJobCsv = useCallback(async (job) => {
     if (!user?.id) {
       notify.error('Usuário sem ID.', { autoClose: 2000 })
       return
@@ -1774,44 +1906,15 @@ export default function ConsultaPresenca() {
         if (chosenKey) rowsToExport = groups.get(chosenKey) || list
       }
 
-      const nonPendingRows = rowsToExport.filter((row) => {
-        const status = pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')
-        return !isPendingLoteStatus(status)
-      })
-
-      if (!nonPendingRows.length) {
-        notify.info('Nenhum registro concluído para exportação (pendentes foram ignorados).', { autoClose: 2200 })
-        return
-      }
-
-      const onlyWithTabelas = String(mode || 'all') === 'tabelas'
-      rowsToExport = onlyWithTabelas
-        ? nonPendingRows.filter((row) => hasTabelaDisponivel(row))
-        : nonPendingRows
-
       if (!rowsToExport.length) {
-        notify.info('Nenhum registro com tabelas disponíveis para exportação.', { autoClose: 2200 })
+        notify.info('Nenhum registro encontrado para exportação.', { autoClose: 2200 })
         return
       }
-
-      const header = []
-      const seenHeader = new Set()
-      for (const row of rowsToExport) {
-        for (const key of Object.keys(row || {})) {
-          const norm = String(key || '').trim().toLowerCase()
-          if (!norm || norm === 'loginp' || seenHeader.has(norm)) continue
-          seenHeader.add(norm)
-          header.push(key)
-        }
-      }
-
-      if (header.length === 0) {
-        notify.info('Nenhuma coluna disponível para exportação.', { autoClose: 2000 })
-        return
-      }
+      const exportRows = rowsToExport.map(mapPresencaRowToExportShape)
+      const header = PRESENCA_EXPORT_COLUMNS.map((col) => col.header)
 
       const lines = [header.join(';')]
-      for (const r of rowsToExport) {
+      for (const r of exportRows) {
         const values = header.map((col) => {
           const rawValue = r?.[col]
           const safeValue = (rawValue && typeof rawValue === 'object')
@@ -1824,8 +1927,7 @@ export default function ConsultaPresenca() {
 
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const safeBase = String(job.fileName || 'lote').replace(/[^\w.\-]+/g, '_')
-      const modeSuffix = onlyWithTabelas ? 'tabelas' : 'all'
-      const fileName = `lote_${safeBase}_${modeSuffix}_${stamp}.csv`
+      const fileName = `lote_${safeBase}_all_${stamp}.csv`
 
       const content = `\ufeff${lines.join('\r\n')}\r\n`
       const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
@@ -1848,21 +1950,76 @@ export default function ConsultaPresenca() {
       notify.error('Nome do arquivo não encontrado.', { autoClose: 2000 })
       return
     }
-    setDownloadLoteModal({
+    downloadBatchJobCsv({
       fileName: String(job.fileName),
       createdAt: String(job?.createdAt || ''),
       totalRows: Number(job?.totalRows ?? 0)
     })
-  }, [])
+  }, [downloadBatchJobCsv])
 
-  const handleConfirmDownloadBatch = useCallback((mode) => {
-    if (!downloadLoteModal) return
-    const job = { fileName: downloadLoteModal.fileName, createdAt: downloadLoteModal.createdAt }
-    setDownloadLoteModal(null)
-    downloadBatchJobCsv(job, mode)
-  }, [downloadLoteModal, downloadBatchJobCsv])
+  const openLotePreview = useCallback((entry) => {
+    if (!entry) return
+
+    if (entry?.source === 'job') {
+      const job = entry.raw || {}
+      const rows = (Array.isArray(job?.validData) ? job.validData : []).map((row, idx) => ({
+        id: `${job?.id || 'job'}-${idx}`,
+        cpf: normalizeCpfBatch(row?.cpf ?? ''),
+        nome: String(row?.nome ?? '').trim(),
+        mensagem: '',
+        status: 'Pendente',
+        data: ''
+      }))
+
+      setLotePreviewModal({
+        fileName: String(job?.fileName || ''),
+        loginP: String(job?.loginP || currentSummary?.loginP || ''),
+        totalRows: Number(job?.totalRows ?? rows.length ?? 0),
+        previewRows: rows.slice(0, 120),
+        previewTotal: rows.length
+      })
+      return
+    }
+
+    const group = entry.raw || {}
+    const targetFile = String(group?.file || '').trim().toLowerCase()
+    const targetLogin = normalizeLoginKey(group?.loginP || currentSummary?.loginP || '')
+    const sourceList = Array.isArray(sourceRowsRef.current) ? sourceRowsRef.current : []
+
+    const rows = sourceList
+      .filter((row) => {
+        const tipo = String(pick(row, ['tipoConsulta', 'tipo_consulta', 'tipo'], '')).trim().toLowerCase()
+        if (tipo === 'individual') return false
+        const rowFile = String(pick(row, ['nomeArquivo', 'nome_arquivo', 'tipoConsulta', 'name', 'fileName'], '')).trim().toLowerCase()
+        const rowLogin = normalizeLoginKey(pick(row, ['loginP', 'login', 'usuario_login'], ''))
+        if (targetFile && rowFile && rowFile !== targetFile) return false
+        if (targetLogin && rowLogin && rowLogin !== targetLogin) return false
+        return true
+      })
+      .sort((a, b) => new Date(pick(b, ['updated_at', 'created_at', 'data'], 0)).getTime() - new Date(pick(a, ['updated_at', 'created_at', 'data'], 0)).getTime())
+      .map((row, idx) => ({
+        id: String(pick(row, ['id', 'ID'], idx + 1)),
+        cpf: normalizeCpfBatch(pick(row, ['cpf', 'cliente_cpf', 'documento'], '')),
+        nome: String(pick(row, ['nome', 'cliente_nome', 'name'], '')).trim(),
+        mensagem: String(pick(row, ['mensagem', 'message', 'erro', 'error', 'motivo'], '')).trim(),
+        status: String(pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '-')).trim() || '-',
+        data: String(pick(row, ['updated_at', 'created_at', 'data'], '')).trim()
+      }))
+
+    setLotePreviewModal({
+      fileName: String(group?.file || ''),
+      loginP: String(group?.loginP || currentSummary?.loginP || ''),
+      totalRows: Number(group?.totalRows ?? group?.total ?? rows.length ?? 0),
+      previewRows: rows.slice(0, 120),
+      previewTotal: rows.length
+    })
+  }, [currentSummary?.loginP])
 
   const askDeleteLoteGroup = useCallback((group) => {
+    if (!canDeleteLoteByUser) {
+      notify.warn('Somente o usuário Master (ID 1) pode excluir lote.', { autoClose: 2200 })
+      return
+    }
     const login = String(group?.loginP || currentSummary?.loginP || '').trim()
     if (!login || login === '-') {
       notify.error('Login inválido para exclusão.', { autoClose: 2000 })
@@ -1871,18 +2028,28 @@ export default function ConsultaPresenca() {
     setDeleteLoteModal({
       loginP: login,
       fileName: String(group?.file || '-'),
+      idUser: toNumberOrNull(group?.idUser),
+      idEquipe: toNumberOrNull(group?.idEquipe),
+      idConsultaPresenca: String(currentSummary?.idConsultaPresenca || '').trim(),
       totalRows: Number(group?.totalRows ?? group?.total ?? 0),
       eligibleCount: Number(group?.okByValue || 0),
       notEligibleCount: Number(group?.statusOtherCount ?? group?.error ?? 0)
     })
-  }, [currentSummary?.loginP])
+  }, [canDeleteLoteByUser, currentSummary?.idConsultaPresenca, currentSummary?.loginP])
 
   const deleteLoteGroup = useCallback(async () => {
     if (!deleteLoteModal) return
-    const userId = user?.id
+    if (!canDeleteLoteByUser) {
+      notify.warn('Somente o usuário Master (ID 1) pode excluir lote.', { autoClose: 2200 })
+      return
+    }
+    const requesterUserId = toNumberOrNull(user?.id)
     const login = String(deleteLoteModal?.loginP || currentSummary?.loginP || '').trim()
     const fileName = String(deleteLoteModal?.fileName || '').trim()
-    if (!userId) {
+    const targetUserId = toNumberOrNull(deleteLoteModal?.idUser)
+    const targetEquipeId = toNumberOrNull(deleteLoteModal?.idEquipe)
+    const idConsultaPresenca = String(deleteLoteModal?.idConsultaPresenca || currentSummary?.idConsultaPresenca || '').trim()
+    if (requesterUserId === null) {
       notify.error('Usuário sem ID.', { autoClose: 2000 })
       return
     }
@@ -1894,22 +2061,54 @@ export default function ConsultaPresenca() {
       notify.error('Nome do arquivo inválido para exclusão.', { autoClose: 2000 })
       return
     }
+    if (targetUserId === null) {
+      notify.error('Lote sem id_user para exclusão.', { autoClose: 2200 })
+      return
+    }
+    if (targetEquipeId === null) {
+      notify.error('Lote sem equipe_id para exclusão.', { autoClose: 2200 })
+      return
+    }
+    if (!idConsultaPresenca) {
+      notify.error('ID do login (id_consulta_presenca) não identificado.', { autoClose: 2200 })
+      return
+    }
     try {
       setDeletingLote(true)
-      const url = `${LOTE_DELETE_API_URL}?loginP=${encodeURIComponent(login)}&id_user=${encodeURIComponent(userId)}&nomeArquivo=${encodeURIComponent(fileName)}`
-      const response = await fetch(url, { method: 'DELETE' })
+      const requestUrl = new URL(PRESENCA_CONSULTAS_DELETE_API_URL, window.location.origin)
+      requestUrl.searchParams.set('id_user', String(targetUserId))
+      requestUrl.searchParams.set('equipe_id', String(targetEquipeId))
+      requestUrl.searchParams.set('id_consulta_presenca', idConsultaPresenca)
+      requestUrl.searchParams.set('tipoConsulta', fileName)
+      const controller = new AbortController()
+      const deleteTimeoutId = setTimeout(() => controller.abort('DELETE_TIMEOUT'), 15000)
+      const response = await fetch(requestUrl.toString(), {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
+      })
+      clearTimeout(deleteTimeoutId)
       const rawText = await response.text()
-      if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
+      let payload = {}
+      try { payload = rawText ? JSON.parse(rawText) : {} } catch { payload = {} }
+      if (!response.ok) {
+        throw new Error(payload?.message || rawText || `HTTP ${response.status}`)
+      }
 
-      notify.success('Lotes excluídos com sucesso.', { autoClose: 2000 })
+      const deletedCount = Math.max(0, Number(payload?.deleted_count ?? payload?.deletedCount ?? 0) || 0)
+      notify.success(
+        deletedCount > 0 ? `Lote removido (${deletedCount} registro${deletedCount === 1 ? '' : 's'}).` : 'Nenhum registro encontrado para remover.',
+        { autoClose: 2200 }
+      )
       await fetchLoteGroups(undefined, login)
       setDeleteLoteModal(null)
     } catch (err) {
-      notify.error(err?.message || 'Falha ao excluir lotes.', { autoClose: 2500 })
+      const isTimeout = err?.name === 'AbortError' || String(err?.message || '').includes('DELETE_TIMEOUT')
+      notify.error(isTimeout ? 'Tempo limite ao excluir lote (backend sem resposta).' : (err?.message || 'Falha ao excluir lotes.'), { autoClose: 3000 })
     } finally {
       setDeletingLote(false)
     }
-  }, [currentSummary?.loginP, deleteLoteModal, fetchLoteGroups, user?.id])
+  }, [canDeleteLoteByUser, currentSummary?.idConsultaPresenca, currentSummary?.loginP, deleteLoteModal, fetchLoteGroups, user])
 
   const startBatchJob = useCallback(async (jobId) => {
     setConsultaMsg('')
@@ -2368,13 +2567,10 @@ export default function ConsultaPresenca() {
           </section>
         ) : (
           <section className="neo-card neo-lg p-0">
-            <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
-              <div className="d-flex align-items-center gap-2">
-                <div className="small opacity-75">Lotes: {loteSourceRows.length}</div>
-              </div>
-              {loteSourceRows.length > 0 && (
+            {loteSourceRows.length > 0 && (
+              <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
+                <div className="small opacity-75">Exibindo {loteStartIndex}-{loteEndIndex} de {loteSourceRows.length}</div>
                 <div className="d-flex align-items-center gap-2">
-                  <div className="small opacity-75 d-none d-md-block">Exibindo {loteStartIndex}-{loteEndIndex} de {loteSourceRows.length}</div>
                   <button
                     type="button"
                     className="btn btn-outline-light btn-sm"
@@ -2393,8 +2589,8 @@ export default function ConsultaPresenca() {
                     {'\u203A'}
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <div className="table-responsive">
               <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
                 <thead>
@@ -2402,107 +2598,116 @@ export default function ConsultaPresenca() {
                     <th>Nome do arquivo</th>
                     <th>Quantidade de nomes</th>
                     <th>Resultado</th>
-                    <th>Tempo médio</th>
+                    <th>Tempo Estimado</th>
                     <th>Status</th>
                     <th className="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {batchJobs.length === 0 && loteGroups.length === 0 ? (
+                  {loteSourceRows.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="text-center py-4 opacity-75">Nenhum lote carregado.</td>
                     </tr>
-                  ) : batchJobs.length > 0 ? (
-                    pagedBatchJobs.map((job) => {
-                      const statusTxt = String(job.status || 'Pronto')
-                      const cls = batchStatusClassName(statusTxt)
-
-                      const canRun = !consultando && statusTxt !== 'Processando'
-                      const canDelete = statusTxt !== 'Processando'
-                      const canDownload = (job?.validRows?.length ?? 0) > 0
-                      const qty = Number(job?.totalRows ?? 0)
-
-                      return (
-                        <tr key={job.id}>
-                          <td className="text-wrap">{job.fileName}</td>
-                          <td title={`${job.validRows?.length ?? 0} válido(s), ${job.invalidRows?.length ?? 0} inválido(s)`}>
-                            {qty}
-                          </td>
-                          <td>
-                            <div className="d-flex flex-wrap gap-2">
-                              <span
-                                className="badge text-bg-success"
-                                title={`Elegível: ${Number(job?.okCount ?? 0)}`}
-                                aria-label={`Elegível: ${Number(job?.okCount ?? 0)}`}
-                              >
-                                {Number(job?.okCount ?? 0)}
-                              </span>
-                              <span
-                                className="badge text-bg-danger"
-                                title={`Não elegível: ${Number(job?.errCount ?? 0)}`}
-                                aria-label={`Não elegível: ${Number(job?.errCount ?? 0)}`}
-                              >
-                                {Number(job?.errCount ?? 0)}
-                              </span>
-                            </div>
-                          </td>
-                          <td>{formatAvgDuration(job?.avgDurationMs)}</td>
-                          <td>
-                            <span className={`badge ${cls}`}>
-                              {statusTxt}{statusTxt === 'Processando' ? ` (${job.progress ?? 0}%)` : ''}
-                            </span>
-                          </td>
-                          <td className="text-center">
-                            <div className="d-inline-flex align-items-center gap-2">
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm btn-icon btn-ghost-success"
-                                title="Iniciar"
-                                aria-label="Iniciar"
-                                onClick={() => startBatchJob(job.id)}
-                                disabled={!canRun}
-                              >
-                                <FiPlay />
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
-                                title="Excluir"
-                                aria-label="Excluir"
-                                onClick={() => deleteBatchJob(job.id)}
-                                disabled={!canDelete}
-                              >
-                                <FiTrash2 />
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
-                                title="Baixar"
-                                aria-label="Baixar"
-                                onClick={() => askDownloadBatchJobCsv({ fileName: job.fileName, createdAt: job.createdAt, totalRows: qty })}
-                                disabled={!canDownload}
-                              >
-                                <FiDownload />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })
                   ) : (
-                    pagedLoteGroups.map((group) => {
-                      const hasPending = Number(group?.pending ?? 0) > 0
-                      const hasError = Number(group?.error ?? 0) > 0
-                      const hasSuccess = Number(group?.success ?? 0) > 0
-                      const statusTxt = hasPending
-                        ? 'Processando'
-                        : hasError
-                          ? (hasSuccess ? 'Concluído com erros' : 'Erro')
+                    pagedLoteRows.map((entry) => {
+                      if (entry?.source === 'job') {
+                        const job = entry.raw || {}
+                        const rawStatusTxt = String(job.status || 'Pronto')
+
+                        const canDownload = (job?.validRows?.length ?? 0) > 0
+                        const qty = Number(job?.totalRows ?? 0)
+                        const okCount = Math.max(0, Number(job?.okCount ?? 0) || 0)
+                        const errCount = Math.max(0, Number(job?.errCount ?? 0) || 0)
+                        const pendingCount = rawStatusTxt === 'Processando'
+                          ? Math.max(0, qty - okCount - errCount)
+                          : 0
+                        const statusTxt = pendingCount > 0 || rawStatusTxt === 'Processando'
+                          ? 'Processando'
                           : 'Concluído'
-                      const cls = batchStatusClassName(statusTxt)
+                        const cls = batchStatusClassName(statusTxt)
+                        const canRun = !consultando && rawStatusTxt !== 'Processando'
+                        const canDelete = rawStatusTxt !== 'Processando'
+
+                        return (
+                          <tr key={String(entry?.key ?? job.id)}>
+                            <td className="text-wrap">
+                              <div className="fw-semibold">{job.fileName}</div>
+                              <div className="small opacity-75">{job?.createdAt ? formatDate(job.createdAt) : '-'}</div>
+                            </td>
+                            <td title={`${job.validRows?.length ?? 0} válido(s), ${job.invalidRows?.length ?? 0} inválido(s)`}>
+                              {qty}
+                            </td>
+                            <td>
+                              <div className="d-inline-flex align-items-center gap-2 flex-nowrap" style={{ whiteSpace: 'nowrap' }}>
+                                <span className="badge text-bg-warning d-inline-flex align-items-center gap-1" title="Pendente">
+                                  <FiClock size={12} />
+                                  <span>{pendingCount}</span>
+                                </span>
+                                <span className="badge text-bg-success d-inline-flex align-items-center gap-1" title="Elegível">
+                                  <FiCheckCircle size={12} />
+                                  <span>{okCount}</span>
+                                </span>
+                                <span className="badge text-bg-danger d-inline-flex align-items-center gap-1" title="Não elegível">
+                                  <FiAlertCircle size={12} />
+                                  <span>{errCount}</span>
+                                </span>
+                              </div>
+                            </td>
+                            <td>{formatAvgDuration(job?.avgDurationMs)}</td>
+                            <td>
+                              <span className={`badge ${cls}`}>
+                                {statusTxt}{rawStatusTxt === 'Processando' ? ` (${job.progress ?? 0}%)` : ''}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <div className="d-inline-flex align-items-center gap-2">
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
+                                  title="Vizualizar"
+                                  aria-label="Vizualizar"
+                                  onClick={() => openLotePreview(entry)}
+                                >
+                                  <FiFileText />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
+                                  title="Baixar"
+                                  aria-label="Baixar"
+                                  onClick={() => askDownloadBatchJobCsv({ fileName: job.fileName, createdAt: job.createdAt, totalRows: qty })}
+                                  disabled={!canDownload}
+                                >
+                                  <FiDownload />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
+                                  title={canDeleteLoteByUser ? 'Excluir' : 'Disponível apenas para usuário Master (ID 1)'}
+                                  aria-label="Excluir"
+                                  onClick={() => deleteBatchJob(job.id)}
+                                  disabled={!canDelete || !canDeleteLoteByUser}
+                                >
+                                  <FiTrash2 />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
+
+                      const group = entry.raw || {}
+                      const hasPending = Number(group?.pending ?? 0) > 0
+                      const statusGroupTxt = hasPending
+                        ? 'Processando'
+                        : 'Concluído'
+                      const cls = batchStatusClassName(statusGroupTxt)
                       const qty = Number(group?.total ?? 0)
+                      const pendingCount = Math.max(0, Number(group?.pending ?? 0) || 0)
+                      const successCount = Math.max(0, Number(group?.okByValue ?? 0) || 0)
+                      const errorCount = Math.max(0, Number(group?.statusOtherCount ?? group?.error ?? 0) || 0)
                       return (
-                        <tr key={String(group?.id ?? `${group.file}-${group.created}`)}>
+                        <tr key={String(entry?.key ?? group?.id ?? `${group.file}-${group.created}`)}>
                           <td className="text-wrap">
                             <div>{group.file}</div>
                             <div className="small opacity-75">{formatDate(group.created)}</div>
@@ -2511,39 +2716,37 @@ export default function ConsultaPresenca() {
                             {qty}
                           </td>
                           <td>
-                            <div className="d-flex flex-wrap gap-2">
-                              <span
-                                className="badge text-bg-success"
-                                title={`Elegível: ${Number(group?.okByValue ?? 0)}`}
-                                aria-label={`Elegível: ${Number(group?.okByValue ?? 0)}`}
-                              >
-                                {Number(group?.okByValue ?? 0)}
+                            <div className="d-inline-flex align-items-center gap-2 flex-nowrap" style={{ whiteSpace: 'nowrap' }}>
+                              <span className="badge text-bg-warning d-inline-flex align-items-center gap-1" title="Pendente">
+                                <FiClock size={12} />
+                                <span>{pendingCount}</span>
                               </span>
-                              <span
-                                className="badge text-bg-danger"
-                                title={`Fora de Pendente/Concluído: ${Number(group?.statusOtherCount ?? group?.error ?? 0)}`}
-                                aria-label={`Fora de Pendente/Concluído: ${Number(group?.statusOtherCount ?? group?.error ?? 0)}`}
-                              >
-                                {Number(group?.statusOtherCount ?? group?.error ?? 0)}
+                              <span className="badge text-bg-success d-inline-flex align-items-center gap-1" title="Elegível">
+                                <FiCheckCircle size={12} />
+                                <span>{successCount}</span>
+                              </span>
+                              <span className="badge text-bg-danger d-inline-flex align-items-center gap-1" title="Não elegível/erro">
+                                <FiAlertCircle size={12} />
+                                <span>{errorCount}</span>
                               </span>
                             </div>
                           </td>
                           <td>{formatAvgDuration(group?.avgDurationMs)}</td>
                           <td>
                             <span className={`badge ${cls}`}>
-                              {statusTxt}
+                              {statusGroupTxt}
                             </span>
                           </td>
                           <td className="text-center">
                             <div className="d-inline-flex align-items-center gap-2">
                               <button
                                 type="button"
-                                className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
-                                title="Excluir"
-                                aria-label="Excluir"
-                                onClick={() => askDeleteLoteGroup(group)}
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-info"
+                                title="Vizualizar"
+                                aria-label="Vizualizar"
+                                onClick={() => openLotePreview(entry)}
                               >
-                                <FiTrash2 />
+                                <FiFileText />
                               </button>
                               <button
                                 type="button"
@@ -2553,6 +2756,16 @@ export default function ConsultaPresenca() {
                                 onClick={() => askDownloadBatchJobCsv({ fileName: group.file, createdAt: group.created, totalRows: qty })}
                               >
                                 <FiDownload />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm btn-icon btn-ghost-danger"
+                                title={canDeleteLoteByUser ? 'Excluir' : 'Disponível apenas para usuário Master (ID 1)'}
+                                aria-label="Excluir"
+                                onClick={() => askDeleteLoteGroup(group)}
+                                disabled={!canDeleteLoteByUser}
+                              >
+                                <FiTrash2 />
                               </button>
                             </div>
                           </td>
@@ -2797,6 +3010,94 @@ export default function ConsultaPresenca() {
         </div>
       )}
 
+      {lotePreviewModal && (
+        <div
+          className="modal fade show"
+          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1068 }}
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setLotePreviewModal(null)}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered modal-xl"
+            style={{ maxWidth: 'min(96vw, 1200px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content modal-dark">
+              <div className="modal-header">
+                <h5 className="modal-title">Vizualizar lote</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Close"
+                  onClick={() => setLotePreviewModal(null)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="row g-2 mb-3">
+                  <div className="col-12 col-md-8">
+                    <div className="small opacity-75">Arquivo</div>
+                    <div className="fw-semibold text-break">{lotePreviewModal.fileName || '-'}</div>
+                  </div>
+                  <div className="col-6 col-md-2">
+                    <div className="small opacity-75">Linhas</div>
+                    <div className="fw-semibold">{Number(lotePreviewModal.totalRows || 0)}</div>
+                  </div>
+                  <div className="col-6 col-md-2">
+                    <div className="small opacity-75">Prévia</div>
+                    <div className="fw-semibold">{Number(lotePreviewModal.previewRows?.length || 0)} / {Number(lotePreviewModal.previewTotal || 0)}</div>
+                  </div>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="table table-dark table-hover align-middle mb-0 text-nowrap">
+                    <thead>
+                      <tr>
+                        <th>CPF</th>
+                        <th>Nome</th>
+                        <th>Mensagem</th>
+                        <th>Status</th>
+                        <th>Data</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(Array.isArray(lotePreviewModal.previewRows) ? lotePreviewModal.previewRows : []).length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="text-center py-4 opacity-75">Nenhuma linha para visualizar.</td>
+                        </tr>
+                      ) : (
+                        lotePreviewModal.previewRows.map((row, idx) => (
+                          <tr key={String(row?.id ?? idx)}>
+                            <td>{formatCpf(row?.cpf)}</td>
+                            <td className="text-wrap">{row?.nome || '-'}</td>
+                            <td className="text-wrap" style={{ whiteSpace: 'normal', minWidth: 280 }}>
+                              {row?.mensagem || '-'}
+                            </td>
+                            <td>
+                              <span className={`badge ${statusClassName(row?.status)}`}>{row?.status || '-'}</span>
+                            </td>
+                            <td>{formatDate(row?.data)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-light"
+                  onClick={() => setLotePreviewModal(null)}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteLoteModal && (
         <div
           className="modal fade show"
@@ -2861,68 +3162,6 @@ export default function ConsultaPresenca() {
                   onClick={deleteLoteGroup}
                 >
                   {deletingLote ? 'Excluindo...' : 'Excluir'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {downloadLoteModal && (
-        <div
-          className="modal fade show"
-          style={{ display: 'block', background: 'rgba(0,0,0,0.6)', position: 'fixed', inset: 0, zIndex: 1068 }}
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setDownloadLoteModal(null)}
-        >
-          <div
-            className="modal-dialog modal-dialog-centered"
-            style={{ maxWidth: 'min(92vw, 560px)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-content modal-dark">
-              <div className="modal-header">
-                <h5 className="modal-title">Download em lote</h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  aria-label="Close"
-                  onClick={() => setDownloadLoteModal(null)}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <div className="small opacity-75 mb-1">Arquivo</div>
-                <div className="mb-3 text-break">{downloadLoteModal.fileName}</div>
-                {downloadLoteModal.totalRows > 0 && (
-                  <>
-                    <div className="small opacity-75 mb-1">Quantidade de linhas</div>
-                    <div className="mb-3">{downloadLoteModal.totalRows}</div>
-                  </>
-                )}
-                <div className="small opacity-75">Pendentes serão ignorados em ambas as opções.</div>
-              </div>
-              <div className="modal-footer d-flex flex-wrap gap-2 justify-content-end">
-                <button
-                  type="button"
-                  className="btn btn-outline-light"
-                  onClick={() => setDownloadLoteModal(null)}
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-info"
-                  onClick={() => handleConfirmDownloadBatch('all')}
-                >
-                  Todas as linhas
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-success"
-                  onClick={() => handleConfirmDownloadBatch('tabelas')}
-                >
-                  Só tabelas disponíveis
                 </button>
               </div>
             </div>
