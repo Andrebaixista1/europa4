@@ -5,14 +5,13 @@ import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
+import { Roles, normalizeRole } from '../utils/roles.js'
 
 const PRESENCA_API_BASE = import.meta.env.DEV ? '/api/presenca' : 'http://85.31.61.242:3011'
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const LIMITES_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'
-const INDIVIDUAL_RESPONSE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual-resposta/'
 const NOVO_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/novo-login'
-const CONSULTA_PAUSE_STATUS_URL = `${PRESENCA_API_BASE}/api/consulta/pause-status`
 const CONSULTA_PAUSE_URL = `${PRESENCA_API_BASE}/api/consulta/pause`
 const CONSULTA_RESUME_URL = `${PRESENCA_API_BASE}/api/consulta/resume`
 const LOTE_CSV_API_URL = 'https://apivieiracred.store/api/presencabank-lotecsv'
@@ -22,7 +21,8 @@ const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '')
 
 const formatCpf = (value) => {
-  const cpf = onlyDigits(value)
+  const raw = onlyDigits(value)
+  const cpf = raw && raw.length < 11 ? raw.padStart(11, '0') : raw
   if (cpf.length !== 11) return cpf || '-'
   return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`
 }
@@ -492,6 +492,11 @@ const isPendingLoteStatus = (status) => {
   return s.includes('pendente')
 }
 
+const isPendingConsultaStatus = (status) => {
+  const s = String(status ?? '').trim().toLowerCase()
+  return s.includes('pendente') || s.includes('processando')
+}
+
 const isDoneIndividualStatus = (status) => {
   const s = String(status ?? '').trim().toLowerCase()
   return s === 'concluido' || s === 'concluído'
@@ -514,6 +519,15 @@ const normalizeRows = (payload) => {
   return []
 }
 
+const hasConsultaDisplayData = (row) => {
+  const raw = row || {}
+  const cpf = onlyDigits(pick(raw, ['cpf', 'cliente_cpf', 'numero_documento', 'documento'], ''))
+  const nome = String(pick(raw, ['nome', 'name', 'cliente_nome', 'usuario_nome', 'nome_cliente', 'nome_cliente_consulta'], '')).trim()
+  const data = String(pick(raw, ['updated_at', 'data', 'created_at', 'data_hora', 'data_hora_registro', 'timestamp', 'createdAt'], '')).trim()
+  const status = String(pick(raw, ['status', 'presenca_status', 'situacao', 'status_presenca'], '')).trim()
+  return Boolean(cpf || nome || data || status)
+}
+
 const pick = (row, keys, fallback = '') => {
   for (const key of keys) {
     const value = row?.[key]
@@ -529,7 +543,7 @@ const mapRow = (row, idx) => ({
   equipe: pick(row, ['equipe', 'equipe_nome', 'team_name', 'nome_equipe', 'id_user', 'loginP'], '-'),
   data: pick(row, ['updated_at', 'data', 'created_at', 'data_hora', 'data_hora_registro', 'timestamp', 'createdAt'], ''),
   dataNascimento: pick(row, ['dataNascimento', 'data_nascimento', 'nascimento'], ''),
-  elegivel: parseBoolean(pick(row, ['elegivel', 'isElegivel'], false)),
+  elegivel: parseNullableBoolean(pick(row, ['elegivel', 'isElegivel'], null)),
   status: pick(row, ['status', 'presenca_status', 'situacao', 'status_presenca'], 'Ativo'),
   origem: pick(row, ['origem', 'fonte', 'source', 'origem_dado'], 'PresencaBank'),
   raw: row
@@ -541,6 +555,15 @@ const parseBoolean = (value) => {
   if (token === 'true' || token === '1' || token === 'sim') return true
   if (token === 'false' || token === '0' || token === 'nao' || token === 'não') return false
   return false
+}
+
+const parseNullableBoolean = (value) => {
+  if (value === null || value === undefined) return null
+  const token = String(value).trim().toLowerCase()
+  if (!token) return null
+  if (token === 'true' || token === '1' || token === 'sim') return true
+  if (token === 'false' || token === '0' || token === 'nao' || token === 'não') return false
+  return null
 }
 
 const parsePauseStatusPayload = (rawText) => {
@@ -636,6 +659,12 @@ const hasTabelaDisponivel = (row) => {
 
 export default function ConsultaPresenca() {
   const { user } = useAuth()
+  const normalizedUserRole = normalizeRole(user?.role, user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia)
+  const canAccessBatchMode = (
+    normalizedUserRole === Roles.Supervisor
+    || normalizedUserRole === Roles.Master
+    || Boolean(user?.is_supervisor)
+  )
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -674,8 +703,8 @@ export default function ConsultaPresenca() {
   const [consultaPaused, setConsultaPaused] = useState(false)
   const [consultaPauseReason, setConsultaPauseReason] = useState('')
   const [consultaPauseBusy, setConsultaPauseBusy] = useState(false)
-  const consultaPauseSyncTimerRef = useRef(null)
   const selectedLoginKeyRef = useRef('')
+  const summaryAutoPollInFlightRef = useRef(false)
 
   const fetchHistoricoRows = useCallback(async () => {
     // Histórico dedicado desativado: a grade usa os dados do endpoint principal.
@@ -718,38 +747,66 @@ export default function ConsultaPresenca() {
       const requestUrl = new URL(CRED_API_URL)
       requestUrl.searchParams.set('id_user', String(userId))
       requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleLabel = String(user?.role ?? normalizedUserRole ?? '').trim()
+      const hierarchyLevel = toNumberOrNull(user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level)
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null) {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
 
       const limitesUrl = new URL(LIMITES_API_URL)
       limitesUrl.searchParams.set('id_user', String(userId))
       limitesUrl.searchParams.set('equipe_id', String(equipeId))
 
-      const [credResponse, limitesResponse] = await Promise.all([
-        fetch(requestUrl.toString(), { method: 'GET', signal }),
-        fetch(limitesUrl.toString(), { method: 'GET', signal })
-      ])
-      const [credRawText, limitesRawText] = await Promise.all([
-        credResponse.text(),
-        limitesResponse.text()
-      ])
-      if (!credResponse.ok) throw new Error(credRawText || `HTTP ${credResponse.status}`)
+      const limitesResponse = await fetch(limitesUrl.toString(), { method: 'GET', signal })
+      const limitesRawText = await limitesResponse.text()
       if (!limitesResponse.ok) throw new Error(limitesRawText || `HTTP ${limitesResponse.status}`)
 
-      let credPayload = null
       let limitesPayload = null
-      try {
-        credPayload = credRawText ? JSON.parse(credRawText) : []
-      } catch {
-        throw new Error('Resposta da API de consultas inválida.')
-      }
       try {
         limitesPayload = limitesRawText ? JSON.parse(limitesRawText) : []
       } catch {
         throw new Error('Resposta da API de limites inválida.')
       }
 
-      const sourceRows = normalizeRows(credPayload).filter((row) => row && Object.keys(row).length > 0)
       const limitRows = normalizeRows(limitesPayload).filter((row) => row && Object.keys(row).length > 0)
-      setRows(sourceRows.map(mapRow))
+      const limitCandidates = limitRows
+        .map((row) => {
+          const id = String(row?.id ?? '').trim()
+          const loginP = pick(row, ['loginP', 'login', 'usuario_login'], '')
+          const loginKey = normalizeLoginKey(loginP)
+          if (!id || id === '0' || !loginKey || loginKey === 'total') return null
+          return { id, loginKey }
+        })
+        .filter(Boolean)
+
+      const storedLoginKeyForCred = loadSelectedLoginFromStorage(userId)
+      const preferredLoginKeyFromState = selectedLoginKeyRef.current || storedLoginKeyForCred
+      const selectedLimitCandidate = (preferredLoginKeyFromState
+        ? limitCandidates.find((row) => row.loginKey === preferredLoginKeyFromState)
+        : null) || limitCandidates[0] || null
+      const selectedLoginIdForCred = String(selectedLimitCandidate?.id ?? '').trim()
+      if (selectedLoginIdForCred) {
+        requestUrl.searchParams.set('id_consulta_presenca', selectedLoginIdForCred)
+        requestUrl.searchParams.set('id', selectedLoginIdForCred)
+      }
+
+      const credResponse = await fetch(requestUrl.toString(), { method: 'GET', signal })
+      const credRawText = await credResponse.text()
+      if (!credResponse.ok) throw new Error(credRawText || `HTTP ${credResponse.status}`)
+
+      let credPayload = null
+      try {
+        credPayload = credRawText ? JSON.parse(credRawText) : []
+      } catch {
+        throw new Error('Resposta da API de consultas inválida.')
+      }
+
+      const sourceRows = normalizeRows(credPayload).filter((row) => row && Object.keys(row).length > 0)
+      setRows(sourceRows.filter(hasConsultaDisplayData).map(mapRow))
 
       const sourceByLogin = new Map()
       for (const row of sourceRows) {
@@ -769,8 +826,10 @@ export default function ConsultaPresenca() {
       let summaries = Array.from(limitByLogin.entries()).map(([loginKey, limitRow]) => {
         const sourceRow = sourceByLogin.get(loginKey)
         const metrics = parseSummaryMetrics(limitRow)
+        const loginId = String(pick(limitRow, ['id'], pick(sourceRow, ['id'], ''))).trim()
 
         return {
+          idConsultaPresenca: loginId && loginId !== '0' ? loginId : '',
           loginP: pick(limitRow, ['loginP', 'login', 'usuario_login'], pick(sourceRow, ['loginP', 'login', 'usuario_login'], '-')),
           senhaP: pick(limitRow, ['senhaP', 'senha', 'password'], pick(sourceRow, ['senhaP', 'senha', 'password'], '')),
           total: metrics.total,
@@ -788,6 +847,7 @@ export default function ConsultaPresenca() {
             if (!loginKey || loginKey === 'total' || id === '0') return null
             const metrics = parseSummaryMetrics(row)
             return {
+              idConsultaPresenca: id && id !== '0' ? id : '',
               loginP,
               senhaP: pick(row, ['senhaP', 'senha', 'password'], ''),
               total: metrics.total,
@@ -842,7 +902,7 @@ export default function ConsultaPresenca() {
       setSelectedLoginIndex(0)
       setError(err?.message || 'Falha ao carregar consulta de presença.')
     }
-  }, [fetchLoteRows, uploadingBatchFile, user?.id, user?.equipe_id, user?.team_id, user?.equipeId, user?.teamId])
+  }, [fetchLoteRows, normalizedUserRole, uploadingBatchFile, user?.id, user?.equipe_id, user?.team_id, user?.equipeId, user?.teamId, user?.role, user?.level, user?.nivel_hierarquia, user?.NivelHierarquia])
 
   useEffect(() => {
     const userId = toNumberOrNull(user?.id)
@@ -880,6 +940,39 @@ export default function ConsultaPresenca() {
   }, [summaryRows, selectedLoginIndex, fetchHistoricoRows])
 
   const selectedLoginToken = String(summaryRows[selectedLoginIndex]?.loginP ?? '').trim().toLowerCase()
+
+  useEffect(() => {
+    if (!user?.id) return undefined
+
+    const hasPending = rows.some((row) => {
+      const status = String(row?.status ?? '').trim()
+      if (!isPendingConsultaStatus(status)) return false
+
+      const rawBase = row?.raw || row || {}
+      const rowLogin = String(pick(rawBase, ['loginP', 'login', 'usuario_login'], '')).trim().toLowerCase()
+      if (selectedLoginToken && rowLogin && rowLogin !== selectedLoginToken) return false
+      return true
+    })
+
+    if (!hasPending) return undefined
+
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled || summaryAutoPollInFlightRef.current) return
+      summaryAutoPollInFlightRef.current = true
+      try {
+        await fetchSummary()
+      } finally {
+        summaryAutoPollInFlightRef.current = false
+      }
+    }
+
+    const interval = setInterval(tick, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [fetchSummary, rows, selectedLoginToken, user?.id])
 
   const filteredRowsForExport = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -931,7 +1024,7 @@ export default function ConsultaPresenca() {
     })
   }, [filteredRowsForExport])
 
-  const currentSummary = summaryRows[selectedLoginIndex] || { loginP: '-', senhaP: '', total: '-', usado: '-', restantes: '-' }
+  const currentSummary = summaryRows[selectedLoginIndex] || { idConsultaPresenca: '', loginP: '-', senhaP: '', total: '-', usado: '-', restantes: '-' }
   const loteGroupsByLogin = useMemo(() => {
     const list = Array.isArray(loteGroups) ? loteGroups : []
     if (!selectedLoginToken) return list
@@ -1000,51 +1093,19 @@ export default function ConsultaPresenca() {
   }, [search, dateFrom, dateTo, rows, selectedLoginIndex])
 
   useEffect(() => {
+    if (!canAccessBatchMode && consultaTab === 'lote') {
+      setConsultaTab('individual')
+    }
+  }, [canAccessBatchMode, consultaTab])
+
+  useEffect(() => {
     if (consultaTab !== 'lote') return
     setLotePage(1)
   }, [consultaTab, selectedLoginIndex])
 
-  const fetchConsultaPauseStatus = useCallback(async (signal) => {
-    try {
-      const response = await fetch(CONSULTA_PAUSE_STATUS_URL, { method: 'GET', signal })
-      if (!response.ok) return
-      const rawText = await response.text()
-      const { known, paused, reason } = parsePauseStatusPayload(rawText)
-      if (!known) return
-      setConsultaPaused(paused)
-      setConsultaPauseReason(paused ? reason : '')
-    } catch (err) {
-      if (err?.name === 'AbortError') return
-      /* ignore */
-    }
-  }, [])
-
   const refresh = () => {
     fetchSummary()
-    fetchConsultaPauseStatus()
   }
-
-  useEffect(() => () => {
-    if (consultaPauseSyncTimerRef.current) {
-      clearTimeout(consultaPauseSyncTimerRef.current)
-      consultaPauseSyncTimerRef.current = null
-    }
-  }, [])
-
-  const schedulePauseStatusSync = useCallback((delayMs = 2200) => {
-    if (consultaPauseSyncTimerRef.current) {
-      clearTimeout(consultaPauseSyncTimerRef.current)
-    }
-    consultaPauseSyncTimerRef.current = setTimeout(() => {
-      fetchConsultaPauseStatus()
-    }, delayMs)
-  }, [fetchConsultaPauseStatus])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    fetchConsultaPauseStatus(controller.signal)
-    return () => controller.abort()
-  }, [fetchConsultaPauseStatus])
 
   const openAddLoginModal = () => {
     setNovoLogin('')
@@ -1066,6 +1127,11 @@ export default function ConsultaPresenca() {
       notify.error('Usuário sem ID para cadastrar login.', { autoClose: 2400 })
       return
     }
+    const equipeId = resolveUserEquipeId(user)
+    if (equipeId === null) {
+      notify.error('Usuário sem equipe para cadastrar login.', { autoClose: 2400 })
+      return
+    }
 
     try {
       setSavingNovoLogin(true)
@@ -1075,7 +1141,8 @@ export default function ConsultaPresenca() {
         body: JSON.stringify({
           login,
           senha,
-          id_user: user.id
+          id_user: user.id,
+          equipe_id: equipeId
         })
       })
       const rawText = await response.text()
@@ -1083,6 +1150,9 @@ export default function ConsultaPresenca() {
 
       notify.success('Novo login enviado com sucesso.', { autoClose: 2200 })
       setShowAddLoginModal(false)
+      setTimeout(() => {
+        window.location.reload()
+      }, 600)
     } catch (err) {
       notify.error(err?.message || 'Falha ao enviar novo login.', { autoClose: 2800 })
     } finally {
@@ -1198,11 +1268,11 @@ export default function ConsultaPresenca() {
       nome: nomeBase,
       telefone: telefoneBase,
       phoneOrigin: pick(resultData, ['phoneOrigin', 'phone_origin'], phoneOriginFallback),
-      vinculo: resultData?.vinculo || payload?.vinculo || {
-        matricula: pick(payload, ['matricula'], ''),
-        numeroInscricaoEmpregador: pick(payload, ['numeroInscricaoEmpregador'], ''),
-        elegivel: parseBoolean(pick(payload, ['elegivel'], false))
-      },
+        vinculo: resultData?.vinculo || payload?.vinculo || {
+          matricula: pick(payload, ['matricula'], ''),
+          numeroInscricaoEmpregador: pick(payload, ['numeroInscricaoEmpregador'], ''),
+          elegivel: parseNullableBoolean(pick(payload, ['elegivel'], null))
+        },
       margemData: resultData?.margem_data || payload?.margem_data || {
         valorMargemDisponivel: pick(payload, ['valorMargemDisponivel'], ''),
         valorMargemBase: pick(payload, ['valorMargemBase'], ''),
@@ -1257,14 +1327,24 @@ export default function ConsultaPresenca() {
       setConsultaMsg('Selecione um login válido no card Limites API.')
       return
     }
+    if (!currentSummary?.idConsultaPresenca) {
+      setConsultaMsg('Não foi possível identificar o ID do login selecionado.')
+      return
+    }
     if (!user?.id) {
       setConsultaMsg('Usuário sem ID para consulta.')
       return
     }
+    const equipeId = resolveUserEquipeId(user)
+    if (equipeId === null) {
+      setConsultaMsg('Usuário sem equipe para consulta.')
+      return
+    }
 
     const payload = {
-      loginP: currentSummary.loginP,
+      id_consulta_presenca: String(currentSummary.idConsultaPresenca),
       id_user: user.id,
+      equipe_id: equipeId,
       cpf: cpfDigits,
       telefone: phoneDigits,
       nome
@@ -1292,107 +1372,17 @@ export default function ConsultaPresenca() {
         throw new Error(typeof parsed === 'string' ? parsed : JSON.stringify(parsedObj))
       }
 
-      setConsultaMsg('Consulta enviada com sucesso. Aguardando retorno...')
-
-      const query = new URLSearchParams({
-        loginP: String(currentSummary.loginP),
-        id_user: String(user.id),
-        cpf: String(cpfDigits),
-        telefone: String(phoneDigits),
-        nome: String(nome)
+      setConsultaMsg('')
+      notify.warn(`Consulta enviada com sucesso | CPF ${formatCpf(cpfDigits)} | Telefone ${formatPhone(phoneDigits)}.`, {
+        autoClose: 3200
       })
-
-      let completedPayload = null
-      while (!completedPayload) {
-        const pollResp = await fetch(`${INDIVIDUAL_RESPONSE_API_URL}?${query.toString()}`, { method: 'GET' })
-        const pollRaw = await pollResp.text()
-        if (!pollResp.ok) throw new Error(pollRaw || `HTTP ${pollResp.status}`)
-
-        let pollPayload = pollRaw
-        try {
-          pollPayload = pollRaw ? JSON.parse(pollRaw) : []
-        } catch {
-          pollPayload = pollRaw || []
-        }
-
-        const sourceRows = normalizeRows(pollPayload)
-        const expectedCpf = onlyDigits(cpfDigits)
-        const expectedTel = onlyDigits(phoneDigits)
-        const expectedNome = String(nome).trim().toLowerCase()
-
-        const matchedRows = sourceRows.filter((row) => {
-          const rowCpf = onlyDigits(pick(row, ['cpf'], ''))
-          const rowTel = onlyDigits(pick(row, ['telefone'], ''))
-          const rowNome = String(pick(row, ['nome'], '')).trim().toLowerCase()
-          const rowLogin = String(pick(row, ['loginP', 'login'], '')).trim()
-          const rowUser = String(pick(row, ['id_user', 'idUser', 'user_id'], '')).trim()
-          const byCpf = !expectedCpf || !rowCpf || rowCpf === expectedCpf
-          const byTel = !expectedTel || !rowTel || rowTel === expectedTel
-          const byNome = !expectedNome || !rowNome || rowNome === expectedNome
-          const byLogin = !currentSummary.loginP || !rowLogin || rowLogin === String(currentSummary.loginP)
-          const byUser = !user?.id || !rowUser || rowUser === String(user.id)
-          return byCpf && byTel && byNome && byLogin && byUser
-        })
-
-        const rowsToCheck = matchedRows.length ? matchedRows : sourceRows
-        const doneRow = rowsToCheck.find((row) => {
-          const status = pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')
-          return isDoneIndividualStatus(status)
-        })
-
-        if (doneRow) {
-          const doneCreatedKey = dateMinuteKey(pick(doneRow, ['created_at', 'createdAt'], ''))
-          const doneCpf = onlyDigits(pick(doneRow, ['cpf'], ''))
-          const doneTel = onlyDigits(pick(doneRow, ['telefone'], ''))
-          const doneNome = String(pick(doneRow, ['nome'], '')).trim().toLowerCase()
-          const doneLogin = String(pick(doneRow, ['loginP', 'login'], '')).trim()
-
-          const relatedRows = rowsToCheck.filter((row) => {
-            const rowStatus = pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')
-            if (!isDoneIndividualStatus(rowStatus)) return false
-
-            const rowCreatedKey = dateMinuteKey(pick(row, ['created_at', 'createdAt'], ''))
-            const rowCpf = onlyDigits(pick(row, ['cpf'], ''))
-            const rowTel = onlyDigits(pick(row, ['telefone'], ''))
-            const rowNome = String(pick(row, ['nome'], '')).trim().toLowerCase()
-            const rowLogin = String(pick(row, ['loginP', 'login'], '')).trim()
-
-            const sameCreated = !doneCreatedKey || !rowCreatedKey || rowCreatedKey === doneCreatedKey
-            const sameCpf = !doneCpf || !rowCpf || rowCpf === doneCpf
-            const sameTel = !doneTel || !rowTel || rowTel === doneTel
-            const sameNome = !doneNome || !rowNome || rowNome === doneNome
-            const sameLogin = !doneLogin || !rowLogin || rowLogin === doneLogin
-            return sameCreated && sameCpf && sameTel && sameNome && sameLogin
-          })
-
-          const tabelasBody = relatedRows
-            .map(mapTabelaFromFlat)
-            .filter(Boolean)
-            .filter((item, idx, arr) => {
-              const key = `${item?.id ?? ''}|${item?.nome ?? ''}|${item?.prazo ?? ''}|${item?.taxaJuros ?? ''}|${item?.valorLiberado ?? ''}|${item?.valorParcela ?? ''}`
-              return arr.findIndex((x) => `${x?.id ?? ''}|${x?.nome ?? ''}|${x?.prazo ?? ''}|${x?.taxaJuros ?? ''}|${x?.valorLiberado ?? ''}|${x?.valorParcela ?? ''}` === key) === idx
-            })
-
-          completedPayload = {
-            ...doneRow,
-            tabelas_body: tabelasBody
-          }
-          break
-        }
-
-        setConsultaMsg('Consulta em processamento... aguardando status Concluido.')
-        await new Promise((resolve) => setTimeout(resolve, 5000))
-      }
-
-      openConsultaResultModalFromSource(completedPayload, phoneOrigin)
-      setConsultaMsg(`Consulta concluída | CPF ${formatCpf(cpfDigits)} | Telefone ${formatPhone(phoneDigits)}.`)
       await fetchSummary()
     } catch (err) {
       setConsultaMsg(err?.message || 'Falha ao chamar API de consulta individual.')
     } finally {
       setConsultando(false)
     }
-  }, [cpfConsulta, telefoneConsulta, nomeConsulta, currentSummary, fetchSummary, openConsultaResultModalFromSource, user?.id])
+  }, [cpfConsulta, telefoneConsulta, nomeConsulta, currentSummary, fetchSummary, user?.id])
 
   const handleBatchFileChange = useCallback(async (event) => {
     const file = event?.target?.files?.[0] ?? null
@@ -1575,7 +1565,6 @@ export default function ConsultaPresenca() {
         if (!response.ok) throw new Error(rawText || `HTTP ${response.status}`)
         setConsultaPaused(false)
         setConsultaPauseReason('')
-        schedulePauseStatusSync()
         notify.success('Processamento retomado.', { autoClose: 2200 })
         const activeLogin = String(currentSummary?.loginP || '').trim()
         if (activeLogin && activeLogin !== '-') {
@@ -1593,7 +1582,6 @@ export default function ConsultaPresenca() {
         const parsed = parsePauseStatusPayload(rawText)
         setConsultaPaused(true)
         setConsultaPauseReason(parsed.reason || 'Pausa manual via tela de lote.')
-        schedulePauseStatusSync()
         setLoteAutoPollingEnabled(false)
         notify.warn('Processamento pausado.', { autoClose: 2200 })
       }
@@ -1602,7 +1590,7 @@ export default function ConsultaPresenca() {
     } finally {
       setConsultaPauseBusy(false)
     }
-  }, [consultaPauseBusy, consultaPaused, currentSummary?.loginP, fetchLoteGroups, schedulePauseStatusSync])
+  }, [consultaPauseBusy, consultaPaused, currentSummary?.loginP, fetchLoteGroups])
 
   const uploadBatchFile = useCallback(async () => {
     if (uploadingBatchFile || loteCsvUploadInFlightRef.current) return
@@ -2020,7 +2008,15 @@ export default function ConsultaPresenca() {
                   <select
                     className="form-select form-select-sm"
                     value={selectedLoginIndex}
-                    onChange={(e) => setSelectedLoginIndex(Number(e.target.value))}
+                    onChange={(e) => {
+                      const nextIndex = Number(e.target.value)
+                      setSelectedLoginIndex(nextIndex)
+                      const nextLoginKey = normalizeLoginKey(summaryRows[nextIndex]?.loginP)
+                      selectedLoginKeyRef.current = nextLoginKey
+                      const userId = toNumberOrNull(user?.id)
+                      if (userId !== null) saveSelectedLoginToStorage(userId, nextLoginKey)
+                      fetchSummary()
+                    }}
                     disabled={summaryRows.length === 0}
                   >
                     {summaryRows.length === 0 ? (
@@ -2124,14 +2120,16 @@ export default function ConsultaPresenca() {
                     >
                       Individual
                     </button>
-                    <button
-                      type="button"
-                      className={`btn ${consultaTab === 'lote' ? 'btn-primary' : 'btn-outline-light'}`}
-                      onClick={() => setConsultaTab('lote')}
-                      disabled={consultando}
-                    >
-                      Em lote
-                    </button>
+                    {canAccessBatchMode && (
+                      <button
+                        type="button"
+                        className={`btn ${consultaTab === 'lote' ? 'btn-primary' : 'btn-outline-light'}`}
+                        onClick={() => setConsultaTab('lote')}
+                        disabled={consultando}
+                      >
+                        Em lote
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -2286,13 +2284,12 @@ export default function ConsultaPresenca() {
                     <th>Data de atualização</th>
                     <th>Status</th>
                     <th>Elegível</th>
-                    <th>Data de nascimento</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading && (
                     <tr>
-                      <td colSpan={6} className="text-center py-4">
+                      <td colSpan={5} className="text-center py-4">
                         <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                         Carregando registros...
                       </td>
@@ -2300,12 +2297,12 @@ export default function ConsultaPresenca() {
                   )}
                   {!loading && error && (
                     <tr>
-                      <td colSpan={6} className="text-center py-4 text-danger">{error}</td>
+                      <td colSpan={5} className="text-center py-4 text-danger">{error}</td>
                     </tr>
                   )}
                   {!loading && !error && filteredRows.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-4 opacity-75">Nenhum registro encontrado.</td>
+                      <td colSpan={5} className="text-center py-4 opacity-75">Sem clientes consultados.</td>
                     </tr>
                   ) : (
                     !loading && !error && pagedRows.map((row) => (
@@ -2354,11 +2351,14 @@ export default function ConsultaPresenca() {
                           </span>
                         </td>
                         <td>
-                          <span className={`badge ${row.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
-                            {row.elegivel ? 'Sim' : 'Não'}
-                          </span>
+                          {row.elegivel === null ? (
+                            <span className="badge text-bg-secondary">-</span>
+                          ) : (
+                            <span className={`badge ${row.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
+                              {row.elegivel ? 'Sim' : 'Não'}
+                            </span>
+                          )}
                         </td>
-                        <td>{formatDateOnly(row.dataNascimento)}</td>
                       </tr>
                     ))
                   )}
@@ -2371,13 +2371,6 @@ export default function ConsultaPresenca() {
             <div className="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
               <div className="d-flex align-items-center gap-2">
                 <div className="small opacity-75">Lotes: {loteSourceRows.length}</div>
-                <span
-                  className={`badge ${consultaPaused ? 'text-bg-warning' : 'text-bg-success'}`}
-                  title={consultaPaused ? (consultaPauseReason || 'Pausa manual') : 'Processamento ativo'}
-                  aria-label={consultaPaused ? (consultaPauseReason || 'Pausa manual') : 'Processamento ativo'}
-                >
-                  {consultaPaused ? 'Pausado' : 'Ativo'}
-                </span>
               </div>
               {loteSourceRows.length > 0 && (
                 <div className="d-flex align-items-center gap-2">
@@ -2650,9 +2643,15 @@ export default function ConsultaPresenca() {
                     <div className="col-12 col-md-4">
                       <div className="small opacity-75">Elegível</div>
                       <div className="fw-semibold">
-                        <span className={`badge ${consultaResultModal?.vinculo?.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
-                          {consultaResultModal?.vinculo?.elegivel ? 'Sim' : 'Não'}
-                        </span>
+                        {(() => {
+                          const elegivel = parseNullableBoolean(consultaResultModal?.vinculo?.elegivel)
+                          if (elegivel === null) return <span className="badge text-bg-secondary">-</span>
+                          return (
+                            <span className={`badge ${elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
+                              {elegivel ? 'Sim' : 'Não'}
+                            </span>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2667,7 +2666,6 @@ export default function ConsultaPresenca() {
                     <div className="col-12 col-md-3"><div className="small opacity-75">Registro Empregatício</div><div className="fw-semibold">{consultaResultModal?.margemData?.registroEmpregaticio || '-'}</div></div>
                     <div className="col-12 col-md-3"><div className="small opacity-75">CNPJ Empregador</div><div className="fw-semibold">{consultaResultModal?.margemData?.cnpjEmpregador || '-'}</div></div>
                     <div className="col-12 col-md-3"><div className="small opacity-75">Data Admissão</div><div className="fw-semibold">{formatDate(consultaResultModal?.margemData?.dataAdmissao)}</div></div>
-                    <div className="col-12 col-md-3"><div className="small opacity-75">Data Nascimento</div><div className="fw-semibold">{formatDate(consultaResultModal?.margemData?.dataNascimento)}</div></div>
                     <div className="col-12 col-md-3"><div className="small opacity-75">Sexo</div><div className="fw-semibold">{consultaResultModal?.margemData?.sexo || '-'}</div></div>
                     <div className="col-12"><div className="small opacity-75">Nome Mãe</div><div className="fw-semibold text-break">{consultaResultModal?.margemData?.nomeMae || '-'}</div></div>
                   </div>

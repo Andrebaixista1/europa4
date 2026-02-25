@@ -895,7 +895,18 @@ const parseDurationToMs = (value) => {
 }
 
 const getRowDurationMs = (row) => {
-  const explicit = parseDurationToMs(pickRowValue(row, ['tempo_medio', 'tempoMedio', 'tempo_medio_ms', 'avg_duration_ms', 'duracao_ms'], null))
+  const explicit = parseDurationToMs(pickRowValue(row, [
+    'tempo_medio',
+    'tempoMedio',
+    'tempo_medio_ms',
+    'avg_duration_ms',
+    'duracao_ms',
+    'duration_ms',
+    'durationMs',
+    'duracaoMs',
+    'elapsed_ms',
+    'elapsedMs'
+  ], null))
   if (explicit !== null) return explicit
 
   const createdAt = new Date(row?.created_at || row?.createdAt || 0).getTime()
