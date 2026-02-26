@@ -9,6 +9,8 @@
     { "src": "/api/n8n/(.*)", "dest": "/api/n8n/[...path].js" },
     { "src": "/api/consulta-v8", "dest": "/api/consulta-v8/[...path].js" },
     { "src": "/api/consulta-v8/(.*)", "dest": "/api/consulta-v8/[...path].js?path=$1" },
+    { "src": "/api/consulta-presenca", "dest": "/api/consulta-presenca/[...path].js" },
+    { "src": "/api/consulta-presenca/(.*)", "dest": "/api/consulta-presenca/[...path].js?path=$1" },
     { "src": "/api/(.*)", "dest": "/api/$1.js" },
     { "handle": "filesystem" },
     { "src": "/.*", "dest": "/index.html" }
