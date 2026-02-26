@@ -31,6 +31,10 @@ const LOTE_CSV_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencaba
 const LOTE_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-lote/'
 const PRESENCA_CONSULTAS_DELETE_API_URL = `${PRESENCA_LARAVEL_BASE_PATH}/consultas`
 const PROCESS_CSV_URL = `${PRESENCA_API_BASE}/api/process/csv`
+const PRESENCA_DELETE_TIMEOUT_MS = Math.max(
+  15000,
+  Number(import.meta.env.VITE_PRESENCA_DELETE_TIMEOUT_MS || 60000)
+)
 
 const onlyDigits = (value) => String(value ?? '').replace(/\D/g, '')
 
@@ -2138,13 +2142,17 @@ export default function ConsultaPresenca() {
       requestUrl.searchParams.set('id_consulta_presenca', idConsultaPresenca)
       requestUrl.searchParams.set('tipoConsulta', fileName)
       const controller = new AbortController()
-      const deleteTimeoutId = setTimeout(() => controller.abort('DELETE_TIMEOUT'), 15000)
-      const response = await fetch(requestUrl.toString(), {
-        method: 'POST',
-        headers: { Accept: 'application/json' },
-        signal: controller.signal
-      })
-      clearTimeout(deleteTimeoutId)
+      const deleteTimeoutId = setTimeout(() => controller.abort('DELETE_TIMEOUT'), PRESENCA_DELETE_TIMEOUT_MS)
+      let response
+      try {
+        response = await fetch(requestUrl.toString(), {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal
+        })
+      } finally {
+        clearTimeout(deleteTimeoutId)
+      }
       const rawText = await response.text()
       let payload = {}
       try { payload = rawText ? JSON.parse(rawText) : {} } catch { payload = {} }
