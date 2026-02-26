@@ -8,9 +8,19 @@ import { notify } from '../utils/notify.js'
 import { Roles, normalizeRole } from '../utils/roles.js'
 
 const PRESENCA_API_BASE = import.meta.env.DEV ? '/api/presenca' : 'http://85.31.61.242:3011'
-const PRESENCA_LARAVEL_BASE_PATH = String(
-  import.meta.env.VITE_PRESENCA_LARAVEL_BASE_PATH || '/api/consulta-presenca'
-).trim()
+const resolvePresencaLaravelBasePath = () => {
+  const raw = String(import.meta.env.VITE_PRESENCA_LARAVEL_BASE_PATH || '/api/consulta-presenca').trim()
+  if (!raw) return '/api/consulta-presenca'
+
+  // Evita mixed content no Vercel/producao quando houver env antiga em http://IP:porta.
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && raw.startsWith('http://')) {
+    return '/api/consulta-presenca'
+  }
+
+  return raw
+}
+
+const PRESENCA_LARAVEL_BASE_PATH = resolvePresencaLaravelBasePath()
 const CRED_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const LIMITES_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
 const INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-individual/'

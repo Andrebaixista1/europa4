@@ -40,10 +40,17 @@ export default async function handler(req, res) {
   const pathParam = req.query.path
   const pathSegments = Array.isArray(pathParam) ? pathParam : (pathParam ? [pathParam] : [])
   const extraPath = pathSegments.join('/')
-
-  const searchIndex = req.url.indexOf('?')
-  const search = searchIndex >= 0 ? req.url.slice(searchIndex) : ''
-  const targetUrl = `${BASE_URL}${extraPath ? `/${extraPath}` : ''}${search}`
+  const target = new URL(`${BASE_URL}${extraPath ? `/${extraPath}` : ''}`)
+  const query = { ...(req.query || {}) }
+  delete query.path
+  for (const [key, value] of Object.entries(query)) {
+    if (Array.isArray(value)) {
+      for (const item of value) target.searchParams.append(key, String(item))
+    } else if (value !== undefined) {
+      target.searchParams.set(key, String(value))
+    }
+  }
+  const targetUrl = target.toString()
 
   const headers = {}
   for (const [key, value] of Object.entries(req.headers)) {
