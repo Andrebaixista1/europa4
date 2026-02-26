@@ -440,9 +440,26 @@ const saveSelectedLoginToStorage = (userId, loginKey) => {
 
 const parseSummaryMetrics = (row) => {
   const total = toNumberOrNull(pick(row, ['total', 'limite'], null))
-  const usado = toNumberOrNull(pick(row, ['usado', 'consultados'], null))
+  let usado = toNumberOrNull(pick(row, ['usado', 'consultados'], null))
+  const updatedAtRaw = String(pick(row, ['updated_at', 'updatedAt', 'data_update', 'updated'], '')).trim()
+  const updatedAtTs = updatedAtRaw ? new Date(updatedAtRaw).getTime() : Number.NaN
+  const twentyFourHoursMs = 24 * 60 * 60 * 1000
+
+  if (
+    total !== null
+    && usado !== null
+    && usado > 0
+    && Number.isFinite(updatedAtTs)
+    && updatedAtTs <= (Date.now() - twentyFourHoursMs)
+  ) {
+    usado = 0
+  }
+
   let restantes = toNumberOrNull(pick(row, ['restantes', 'restante', 'saldo'], null))
   if (restantes === null && total !== null && usado !== null) {
+    restantes = Math.max(0, total - usado)
+  }
+  if (restantes !== null && total !== null && usado !== null) {
     restantes = Math.max(0, total - usado)
   }
   return {
@@ -523,8 +540,12 @@ const isDoneLoteStatus = (status) => {
 }
 
 const isPendingLoteStatus = (status) => {
-  const s = String(status ?? '').trim().toLowerCase()
-  return s.includes('pendente')
+  const s = String(status ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  return s.includes('pendente') || s.includes('process')
 }
 
 const isPendingConsultaStatus = (status) => {
@@ -1985,17 +2006,43 @@ export default function ConsultaPresenca() {
     const targetFile = String(group?.file || '').trim().toLowerCase()
     const targetLogin = normalizeLoginKey(group?.loginP || currentSummary?.loginP || '')
     const sourceList = Array.isArray(sourceRowsRef.current) ? sourceRowsRef.current : []
-
-    const rows = sourceList
+    const filteredRows = sourceList
       .filter((row) => {
         const tipo = String(pick(row, ['tipoConsulta', 'tipo_consulta', 'tipo'], '')).trim().toLowerCase()
         if (tipo === 'individual') return false
         const rowFile = String(pick(row, ['nomeArquivo', 'nome_arquivo', 'tipoConsulta', 'name', 'fileName'], '')).trim().toLowerCase()
         const rowLogin = normalizeLoginKey(pick(row, ['loginP', 'login', 'usuario_login'], ''))
-        if (targetFile && rowFile && rowFile !== targetFile) return false
+        if (targetFile && rowFile !== targetFile) return false
         if (targetLogin && rowLogin && rowLogin !== targetLogin) return false
         return true
       })
+
+    const byPreviewKey = new Map()
+    for (const row of filteredRows) {
+      const cpfKey = normalizeCpfBatch(pick(row, ['cpf', 'cliente_cpf', 'documento'], ''))
+      const fallbackKey = String(pick(row, ['id', 'ID'], '')).trim()
+      const key = cpfKey || `id:${fallbackKey || Math.random()}`
+      const prev = byPreviewKey.get(key)
+      if (!prev) {
+        byPreviewKey.set(key, row)
+        continue
+      }
+
+      const prevTs = new Date(pick(prev, ['updated_at', 'created_at', 'data'], 0)).getTime()
+      const currTs = new Date(pick(row, ['updated_at', 'created_at', 'data'], 0)).getTime()
+      const prevStatus = String(pick(prev, ['status', 'final_status', 'situacao', 'status_presenca'], '')).trim()
+      const currStatus = String(pick(row, ['status', 'final_status', 'situacao', 'status_presenca'], '')).trim()
+
+      const currIsNewer = (Number.isFinite(currTs) ? currTs : 0) > (Number.isFinite(prevTs) ? prevTs : 0)
+      const sameTs = (Number.isFinite(currTs) ? currTs : 0) === (Number.isFinite(prevTs) ? prevTs : 0)
+      const preferFinalOverPending = sameTs && isPendingLoteStatus(prevStatus) && !isPendingLoteStatus(currStatus)
+
+      if (currIsNewer || preferFinalOverPending) {
+        byPreviewKey.set(key, row)
+      }
+    }
+
+    const rows = Array.from(byPreviewKey.values())
       .sort((a, b) => new Date(pick(b, ['updated_at', 'created_at', 'data'], 0)).getTime() - new Date(pick(a, ['updated_at', 'created_at', 'data'], 0)).getTime())
       .map((row, idx) => ({
         id: String(pick(row, ['id', 'ID'], idx + 1)),
@@ -2100,6 +2147,7 @@ export default function ConsultaPresenca() {
         deletedCount > 0 ? `Lote removido (${deletedCount} registro${deletedCount === 1 ? '' : 's'}).` : 'Nenhum registro encontrado para remover.',
         { autoClose: 2200 }
       )
+      await fetchSummary()
       await fetchLoteGroups(undefined, login)
       setDeleteLoteModal(null)
     } catch (err) {
@@ -2108,7 +2156,7 @@ export default function ConsultaPresenca() {
     } finally {
       setDeletingLote(false)
     }
-  }, [canDeleteLoteByUser, currentSummary?.idConsultaPresenca, currentSummary?.loginP, deleteLoteModal, fetchLoteGroups, user])
+  }, [canDeleteLoteByUser, currentSummary?.idConsultaPresenca, currentSummary?.loginP, deleteLoteModal, fetchLoteGroups, fetchSummary, user])
 
   const startBatchJob = useCallback(async (jobId) => {
     setConsultaMsg('')
