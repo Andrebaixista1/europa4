@@ -11,6 +11,7 @@ import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import Relatorios from './pages/Relatorios.jsx'
+import Backups from './pages/Backups.jsx'
 import GeradorSites from './pages/GeradorSites.jsx'
 import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
@@ -94,6 +95,14 @@ function App() {
           element={
             <ProtectedRoute roles={['Master']}>
               <Relatorios />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/backups"
+          element={
+            <ProtectedRoute roles={['Master']}>
+              <Backups />
             </ProtectedRoute>
           }
         />

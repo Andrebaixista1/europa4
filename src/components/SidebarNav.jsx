@@ -72,7 +72,8 @@ export default function SidebarNav() {
         icon: 'FiSettings',
         children: [
           { label: 'Usuários', to: '/usuarios' },
-          { label: 'Equipes', to: '/equipes' }
+          { label: 'Equipes', to: '/equipes' },
+          ...(isMaster ? [{ label: 'Backups', to: '/admin/backups' }] : [])
         ]
       })
     }
