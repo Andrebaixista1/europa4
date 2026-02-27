@@ -4,8 +4,8 @@ import * as Fi from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 
-const BACKUPS_HEALTH_URL = String(import.meta.env.VITE_BACKUPS_HEALTH_URL || 'http://85.31.61.242:3002/api/health-consult').trim()
-const BACKUPS_FORCE_URL = String(import.meta.env.VITE_BACKUPS_FORCE_URL || 'http://85.31.61.242:3002/api/health-consult/force-backup').trim()
+const BACKUPS_HEALTH_URL = String(import.meta.env.VITE_BACKUPS_HEALTH_URL || '/api/health-consult').trim()
+const BACKUPS_FORCE_URL = String(import.meta.env.VITE_BACKUPS_FORCE_URL || '/api/health-consult/force-backup').trim()
 const REQUEST_TIMEOUT_MS = 20000
 const FORCE_POLL_INTERVAL_MS = 5000
 const FORCE_POLL_MAX_TRIES = 90

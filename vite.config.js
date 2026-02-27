@@ -40,6 +40,16 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/api/consulta-presenca': {
+          target: V8_IMPORT_API_BASE,
+          changeOrigin: true,
+          secure: false,
+        },
+        '/api/health-consult': {
+          target: V8_IMPORT_API_BASE,
+          changeOrigin: true,
+          secure: false,
+        },
         ...(BMG_SOAP_URL
           ? {
             '/api/bmg': {
