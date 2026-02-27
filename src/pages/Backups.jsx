@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
+import { notify } from '../utils/notify.js'
 
 const BACKUPS_HEALTH_URL = String(import.meta.env.VITE_BACKUPS_HEALTH_URL || '/api/health-consult').trim()
 const BACKUPS_FORCE_URL = String(import.meta.env.VITE_BACKUPS_FORCE_URL || '/api/health-consult/force-backup').trim()
@@ -203,7 +204,6 @@ export default function Backups() {
   const [forcingBackup, setForcingBackup] = useState(false)
   const [pollingForce, setPollingForce] = useState(false)
   const [error, setError] = useState('')
-  const [triggerMessage, setTriggerMessage] = useState('')
   const [generatedAt, setGeneratedAt] = useState('')
   const [servers, setServers] = useState([])
   const [expandedServerKey, setExpandedServerKey] = useState('')
@@ -285,7 +285,6 @@ export default function Backups() {
     const defaultServer = serverOptions[0] || ''
     setForceServer((prev) => prev || defaultServer)
     setForceType('daily')
-    setTriggerMessage('')
     setIsForceModalOpen(true)
   }, [serverOptions])
 
@@ -295,7 +294,6 @@ export default function Backups() {
   }, [forcingBackup])
 
   const openForceTableModal = useCallback((serverName, tableName) => {
-    setTriggerMessage('')
     setForceTableServer(String(serverName || '').trim())
     setForceTableName(String(tableName || '').trim())
     setForceTableType('daily')
@@ -312,16 +310,15 @@ export default function Backups() {
     event.preventDefault()
     if (forcingBackup) return
     if (!forceServer) {
-      setTriggerMessage('Falha ao forçar backup: selecione um servidor.')
+      notify.error('Falha ao forçar backup: selecione um servidor.', { autoClose: 5000 })
       return
     }
     if (!FORCE_TYPE_SET.has(forceType)) {
-      setTriggerMessage('Falha ao forçar backup: type inválido.')
+      notify.error('Falha ao forçar backup: type inválido.', { autoClose: 5000 })
       return
     }
 
     setForcingBackup(true)
-    setTriggerMessage('')
     try {
       const response = await fetch(BACKUPS_FORCE_URL, {
         method: 'POST',
@@ -337,7 +334,7 @@ export default function Backups() {
         const raw = await response.text().catch(() => '')
         throw new Error(raw || `HTTP ${response.status}`)
       }
-      setTriggerMessage('Backup forçado com sucesso. Aguardando finalizar execução...')
+      notify.info('Backup forçado com sucesso. Aguardando finalizar execução...', { autoClose: 5000 })
       setIsForceModalOpen(false)
       setPollingForce(true)
       let finished = false
@@ -348,17 +345,16 @@ export default function Backups() {
           finished = true
           break
         }
-        setTriggerMessage(`Backup em andamento. Em execução: ${runningCount}. Atualizando...`)
         await new Promise((resolve) => setTimeout(resolve, FORCE_POLL_INTERVAL_MS))
       }
       if (finished) {
-        setTriggerMessage('Backup finalizado. Não há mais itens em execução.')
+        notify.success('Backup finalizado. Não há mais itens em execução.', { autoClose: 5000 })
       } else {
-        setTriggerMessage('Backup enviado. Ainda existem itens em execução; continue acompanhando.')
+        notify.warn('Backup enviado. Ainda existem itens em execução; continue acompanhando.', { autoClose: 5000 })
       }
       await fetchHealth({ silent: false })
     } catch (err) {
-      setTriggerMessage(`Falha ao forçar backup: ${err?.message || 'erro desconhecido'}`)
+      notify.error(`Falha ao forçar backup: ${err?.message || 'erro desconhecido'}`, { autoClose: 5000 })
     } finally {
       setPollingForce(false)
       setForcingBackup(false)
@@ -369,16 +365,15 @@ export default function Backups() {
     event.preventDefault()
     if (forcingBackup) return
     if (!forceTableServer || !forceTableName) {
-      setTriggerMessage('Falha ao forçar backup individual: servidor ou tabela inválido.')
+      notify.error('Falha ao forçar backup individual: servidor ou tabela inválido.', { autoClose: 5000 })
       return
     }
     if (!FORCE_TYPE_SET.has(forceTableType)) {
-      setTriggerMessage('Falha ao forçar backup individual: type inválido.')
+      notify.error('Falha ao forçar backup individual: type inválido.', { autoClose: 5000 })
       return
     }
 
     setForcingBackup(true)
-    setTriggerMessage('')
     try {
       const response = await fetch(BACKUPS_FORCE_URL, {
         method: 'POST',
@@ -395,7 +390,7 @@ export default function Backups() {
         const raw = await response.text().catch(() => '')
         throw new Error(raw || `HTTP ${response.status}`)
       }
-      setTriggerMessage('Backup individual forçado com sucesso. Aguardando finalizar execução...')
+      notify.info('Backup individual forçado com sucesso. Aguardando finalizar execução...', { autoClose: 5000 })
       setIsForceTableModalOpen(false)
       setPollingForce(true)
       let finished = false
@@ -406,17 +401,16 @@ export default function Backups() {
           finished = true
           break
         }
-        setTriggerMessage(`Backup individual em andamento. Em execução: ${runningCount}. Atualizando...`)
         await new Promise((resolve) => setTimeout(resolve, FORCE_POLL_INTERVAL_MS))
       }
       if (finished) {
-        setTriggerMessage('Backup individual finalizado. Não há mais itens em execução.')
+        notify.success('Backup individual finalizado. Não há mais itens em execução.', { autoClose: 5000 })
       } else {
-        setTriggerMessage('Backup individual enviado. Ainda existem itens em execução; continue acompanhando.')
+        notify.warn('Backup individual enviado. Ainda existem itens em execução; continue acompanhando.', { autoClose: 5000 })
       }
       await fetchHealth({ silent: false })
     } catch (err) {
-      setTriggerMessage(`Falha ao forçar backup individual: ${err?.message || 'erro desconhecido'}`)
+      notify.error(`Falha ao forçar backup individual: ${err?.message || 'erro desconhecido'}`, { autoClose: 5000 })
     } finally {
       setPollingForce(false)
       setForcingBackup(false)
@@ -439,11 +433,6 @@ export default function Backups() {
         </div>
 
         {error && <div className="alert alert-danger py-2 px-3 mb-3 small">{error}</div>}
-        {triggerMessage && (
-          <div className={`alert py-2 px-3 mb-3 small ${triggerMessage.startsWith('Falha') ? 'alert-warning' : 'alert-success'}`}>
-            {triggerMessage}
-          </div>
-        )}
 
         <div className="row g-3">
           <div className="col-12">
