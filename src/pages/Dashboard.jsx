@@ -8,6 +8,14 @@ import { Roles } from '../utils/roles.js'
 import { notify } from '../utils/notify.js'
 
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
+const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
+const PRESENCA_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
+const PRESENCA_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
+const LOG_SOURCE = {
+  IN100: 'in100',
+  V8: 'v8',
+  PRESENCA: 'presenca'
+}
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -18,9 +26,24 @@ export default function Dashboard() {
   const [loadingSaldo, setLoadingSaldo] = useState(false)
   const [saldoV8, setSaldoV8] = useState({ total: '-', usado: '-', restantes: '-' })
   const [loadingSaldoV8, setLoadingSaldoV8] = useState(false)
-  const [logs, setLogs] = useState([])
-  const [loadingLogs, setLoadingLogs] = useState(false)
-  const [logsError, setLogsError] = useState('')
+  const [saldoPresenca, setSaldoPresenca] = useState({ total: '-', usado: '-', restantes: '-' })
+  const [loadingSaldoPresenca, setLoadingSaldoPresenca] = useState(false)
+  const [activeLogsSource, setActiveLogsSource] = useState(LOG_SOURCE.IN100)
+  const [logsBySource, setLogsBySource] = useState({
+    [LOG_SOURCE.IN100]: [],
+    [LOG_SOURCE.V8]: [],
+    [LOG_SOURCE.PRESENCA]: []
+  })
+  const [loadingLogsBySource, setLoadingLogsBySource] = useState({
+    [LOG_SOURCE.IN100]: false,
+    [LOG_SOURCE.V8]: false,
+    [LOG_SOURCE.PRESENCA]: false
+  })
+  const [logsErrorBySource, setLogsErrorBySource] = useState({
+    [LOG_SOURCE.IN100]: '',
+    [LOG_SOURCE.V8]: '',
+    [LOG_SOURCE.PRESENCA]: ''
+  })
   const copyToClipboard = async (text, successMsg = 'Copiado!') => {
     try {
       await navigator.clipboard.writeText(String(text ?? ''))
@@ -189,6 +212,64 @@ export default function Dashboard() {
     }
   }
 
+  const buildPresencaSummaryFromRows = (rows) => {
+    const list = Array.isArray(rows) ? rows : []
+    if (list.length === 0) return { total: '-', usado: '-', restantes: '-' }
+
+    let total = 0
+    let usado = 0
+    let hasAnyNumeric = false
+
+    for (const row of list) {
+      const id = String(row?.id ?? '').trim()
+      if (id === '0') continue
+      const totalValue = toNumberOrNull(row?.total ?? row?.limite)
+      const usadoValue = toNumberOrNull(row?.usado ?? row?.consultados)
+
+      if (totalValue !== null) {
+        total += totalValue
+        hasAnyNumeric = true
+      }
+      if (usadoValue !== null) {
+        usado += usadoValue
+        hasAnyNumeric = true
+      }
+    }
+
+    if (!hasAnyNumeric) return { total: '-', usado: '-', restantes: '-' }
+    return { total, usado, restantes: Math.max(0, total - usado) }
+  }
+
+  const fetchSaldoPresenca = async () => {
+    if (!user?.id) return
+    setLoadingSaldoPresenca(true)
+    try {
+      const requestUrl = new URL(PRESENCA_LIMITES_GET_API_URL)
+      requestUrl.searchParams.set('id_user', String(user.id))
+      const equipeId = resolveUserEquipeId(user)
+      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? ''
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const payload = await response.json().catch(() => ({}))
+      const rows = normalizeRows(payload)
+      setSaldoPresenca(buildPresencaSummaryFromRows(rows))
+    } catch (_) {
+      setSaldoPresenca({ total: '-', usado: '-', restantes: '-' })
+    } finally {
+      setLoadingSaldoPresenca(false)
+    }
+  }
+
   const mapNivel = (r) => {
     if (r === Roles.Master) return 'master'
     if (r === Roles.Administrador) return 'adm'
@@ -196,7 +277,19 @@ export default function Dashboard() {
     return 'operador'
   }
 
-  const parseLogs = (raw) => {
+  const resolveUserEquipeId = (u) => {
+    const raw = u?.equipe_id ?? u?.team_id ?? u?.equipeId ?? u?.teamId ?? null
+    const parsed = Number(raw)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  const resolveUserRoleId = (u) => {
+    const raw = u?.id_role ?? u?.role_id ?? u?.roleId ?? u?.level ?? null
+    const parsed = Number(raw)
+    return Number.isNaN(parsed) ? null : parsed
+  }
+
+  const parseRowsFromRaw = (raw) => {
     try {
       const data = JSON.parse(raw)
       if (Array.isArray(data)) return data
@@ -209,21 +302,13 @@ export default function Dashboard() {
     }
   }
 
-  const dedupeLogs = (list) => {
+  const dedupeByKey = (list, keyBuilder) => {
     const arr = Array.isArray(list) ? list : []
     const seen = new Set()
     const out = []
     for (const item of arr) {
       if (!item) continue
-      const cpf = String(item?.numero_documento ?? '').replace(/\D/g, '')
-      const nb = String(item?.numero_beneficio ?? '').replace(/\D/g, '')
-      const key = [
-        String(item?.data_hora_registro ?? ''),
-        String(item?.status_api ?? '').trim(),
-        String(item?.resposta_api ?? '').trim(),
-        cpf,
-        nb
-      ].join('|')
+      const key = keyBuilder(item)
       if (seen.has(key)) continue
       seen.add(key)
       out.push(item)
@@ -231,12 +316,54 @@ export default function Dashboard() {
     return out
   }
 
-  const fetchLogs = async () => {
+  const getStatusToken = (row) => String(
+    row?.status ??
+    row?.status_api ??
+    row?.status_consulta_v8 ??
+    row?.status_presenca ??
+    row?.situacao ??
+    row?.final_status ??
+    ''
+  ).trim()
+
+  const getTimestampValue = (row) => String(
+    row?.data_hora_registro ??
+    row?.updated_at ??
+    row?.created_at ??
+    row?.data_hora ??
+    row?.data ??
+    row?.timestamp ??
+    row?.createdAt ??
+    ''
+  ).trim()
+
+  const sortByLatest = (list) => {
+    const arr = Array.isArray(list) ? [...list] : []
+    return arr.sort((a, b) => {
+      const ta = new Date(getTimestampValue(a)).getTime()
+      const tb = new Date(getTimestampValue(b)).getTime()
+      return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0)
+    })
+  }
+
+  const setLogsLoading = (source, value) => {
+    setLoadingLogsBySource((prev) => ({ ...prev, [source]: value }))
+  }
+
+  const setLogsError = (source, value) => {
+    setLogsErrorBySource((prev) => ({ ...prev, [source]: value }))
+  }
+
+  const setLogsData = (source, value) => {
+    setLogsBySource((prev) => ({ ...prev, [source]: value }))
+  }
+
+  const fetchLogsIn100 = async () => {
     if (!user?.id) return
-    setLoadingLogs(true)
-    setLogsError('')
+    setLogsLoading(LOG_SOURCE.IN100, true)
+    setLogsError(LOG_SOURCE.IN100, '')
     try {
-      const equipeId = user?.equipe_id ?? null
+      const equipeId = resolveUserEquipeId(user)
       const payload = { id: user.id, equipe_id: equipeId, nivel: mapNivel(user?.role) }
       const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-logs-in100', {
         method: 'POST',
@@ -245,14 +372,140 @@ export default function Dashboard() {
       })
       const raw = await res.text().catch(() => '')
       if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
-      const arr = parseLogs(raw)
-      setLogs(dedupeLogs(arr).slice(0, 10))
+      const arr = parseRowsFromRaw(raw)
+      const deduped = dedupeByKey(arr, (item) => {
+        const cpf = String(item?.numero_documento ?? '').replace(/\D/g, '')
+        const nb = String(item?.numero_beneficio ?? '').replace(/\D/g, '')
+        return [
+          getTimestampValue(item),
+          getStatusToken(item),
+          String(item?.resposta_api ?? '').trim(),
+          cpf,
+          nb
+        ].join('|')
+      })
+      const normalized = sortByLatest(deduped).map((item) => ({
+        timestamp: getTimestampValue(item),
+        status: getStatusToken(item),
+        detail: String(item?.resposta_api ?? '').trim() || '-',
+        cpf: String(item?.numero_documento ?? ''),
+        nb: String(item?.numero_beneficio ?? '')
+      }))
+      setLogsData(LOG_SOURCE.IN100, normalized.slice(0, 10))
     } catch (e) {
-      setLogs([])
-      setLogsError(e?.message || 'Erro ao carregar')
+      setLogsData(LOG_SOURCE.IN100, [])
+      setLogsError(LOG_SOURCE.IN100, e?.message || 'Erro ao carregar')
     } finally {
-      setLoadingLogs(false)
+      setLogsLoading(LOG_SOURCE.IN100, false)
     }
+  }
+
+  const fetchLogsV8 = async () => {
+    if (!user?.id) return
+    setLogsLoading(LOG_SOURCE.V8, true)
+    setLogsError(LOG_SOURCE.V8, '')
+    try {
+      const requestUrl = new URL(V8_CONSULTAS_GET_API_URL)
+      requestUrl.searchParams.set('id_user', String(user.id))
+      const equipeId = resolveUserEquipeId(user)
+      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleId = resolveUserRoleId(user)
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
+      if (roleId !== null && roleId !== undefined && roleId !== '') {
+        requestUrl.searchParams.set('id_role', String(roleId))
+        requestUrl.searchParams.set('role_id', String(roleId))
+      }
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
+      if (Number(user?.id) === 1) requestUrl.searchParams.set('all', '1')
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      const raw = await response.text().catch(() => '')
+      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
+      const rows = parseRowsFromRaw(raw)
+      const deduped = dedupeByKey(rows, (item) => {
+        const cpf = String(item?.cliente_cpf ?? item?.cpf ?? '').replace(/\D/g, '')
+        return [
+          getTimestampValue(item),
+          getStatusToken(item),
+          String(item?.cliente_nome ?? item?.nome ?? '').trim(),
+          cpf
+        ].join('|')
+      })
+      const normalized = sortByLatest(deduped).map((item) => ({
+        timestamp: getTimestampValue(item),
+        status: getStatusToken(item),
+        detail: String(item?.cliente_nome ?? item?.nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
+        cpf: String(item?.cliente_cpf ?? item?.cpf ?? ''),
+        nb: String(item?.numero_beneficio ?? item?.nb ?? '')
+      }))
+      setLogsData(LOG_SOURCE.V8, normalized.slice(0, 10))
+    } catch (e) {
+      setLogsData(LOG_SOURCE.V8, [])
+      setLogsError(LOG_SOURCE.V8, e?.message || 'Erro ao carregar')
+    } finally {
+      setLogsLoading(LOG_SOURCE.V8, false)
+    }
+  }
+
+  const fetchLogsPresenca = async () => {
+    if (!user?.id) return
+    setLogsLoading(LOG_SOURCE.PRESENCA, true)
+    setLogsError(LOG_SOURCE.PRESENCA, '')
+    try {
+      const requestUrl = new URL(PRESENCA_CONSULTAS_GET_API_URL)
+      const equipeId = resolveUserEquipeId(user)
+      requestUrl.searchParams.set('id_user', String(user.id))
+      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? ''
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      const raw = await response.text().catch(() => '')
+      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
+      const rows = parseRowsFromRaw(raw)
+      const deduped = dedupeByKey(rows, (item) => {
+        const cpf = String(item?.cpf ?? item?.cliente_cpf ?? item?.numero_documento ?? '').replace(/\D/g, '')
+        return [
+          getTimestampValue(item),
+          getStatusToken(item),
+          String(item?.nome ?? item?.cliente_nome ?? '').trim(),
+          cpf
+        ].join('|')
+      })
+      const normalized = sortByLatest(deduped).map((item) => ({
+        timestamp: getTimestampValue(item),
+        status: getStatusToken(item),
+        detail: String(item?.nome ?? item?.cliente_nome ?? item?.tipoConsulta ?? '-').trim() || '-',
+        cpf: String(item?.cpf ?? item?.cliente_cpf ?? item?.numero_documento ?? ''),
+        nb: String(item?.numero_beneficio ?? item?.nb ?? '')
+      }))
+      setLogsData(LOG_SOURCE.PRESENCA, normalized.slice(0, 10))
+    } catch (e) {
+      setLogsData(LOG_SOURCE.PRESENCA, [])
+      setLogsError(LOG_SOURCE.PRESENCA, e?.message || 'Erro ao carregar')
+    } finally {
+      setLogsLoading(LOG_SOURCE.PRESENCA, false)
+    }
+  }
+
+  const fetchLogsBySource = async (source) => {
+    if (source === LOG_SOURCE.V8) return fetchLogsV8()
+    if (source === LOG_SOURCE.PRESENCA) return fetchLogsPresenca()
+    return fetchLogsIn100()
   }
 
   useEffect(() => {
@@ -264,7 +517,10 @@ export default function Dashboard() {
   useEffect(() => {
     fetchSaldo()
     fetchSaldoV8()
-    fetchLogs()
+    fetchSaldoPresenca()
+    fetchLogsIn100()
+    fetchLogsV8()
+    fetchLogsPresenca()
   }, [user])
 
   const fmtCpf = (v) => {
@@ -294,6 +550,38 @@ export default function Dashboard() {
         backgroundColor: card?.imageBackground || 'rgba(255, 255, 255, 0.04)'
       }
     : {}
+
+  const sourceMeta = {
+    [LOG_SOURCE.IN100]: {
+      title: 'Últimas consultas IN100'
+    },
+    [LOG_SOURCE.V8]: {
+      title: 'Últimas consultas V8'
+    },
+    [LOG_SOURCE.PRESENCA]: {
+      title: 'Últimas consultas Presença'
+    }
+  }
+
+  const activeRows = logsBySource[activeLogsSource] || []
+  const activeLoading = Boolean(loadingLogsBySource[activeLogsSource])
+  const activeError = String(logsErrorBySource[activeLogsSource] || '')
+
+  const handleSelectLogsSource = (source) => {
+    setActiveLogsSource(source)
+    const hasLoaded = Array.isArray(logsBySource[source]) && logsBySource[source].length > 0
+    const isLoading = Boolean(loadingLogsBySource[source])
+    if (!hasLoaded && !isLoading) fetchLogsBySource(source)
+  }
+
+  const getStatusBadgeClass = (status, detail) => {
+    const token = String(status ?? '').trim().toLowerCase()
+    const detailToken = String(detail ?? '').trim().toLowerCase()
+    if (token.includes('sucesso') || token.includes('conclu') || token === 'ok' || token.includes('presente')) return 'text-bg-success'
+    if (token.includes('pend') || token.includes('process') || token.includes('aguard') || detailToken.includes('pendente')) return 'text-bg-warning'
+    if (token.includes('erro') || token.includes('falha') || token.includes('reprov') || token.includes('ausente')) return 'text-bg-danger'
+    return 'text-bg-secondary'
+  }
 
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
@@ -357,7 +645,19 @@ export default function Dashboard() {
         <section className="row g-3 mt-4 align-items-start">
           <div className="col-12 col-lg-4">
             <div className="d-flex flex-column gap-3">
-              <div className="neo-card neo-lg p-4">
+              <div
+                className="neo-card neo-lg p-4"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleSelectLogsSource(LOG_SOURCE.IN100)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleSelectLogsSource(LOG_SOURCE.IN100)
+                  }
+                }}
+                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.IN100 ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
+              >
                 <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuário)</div>
                 <div className="d-flex align-items-center gap-2">
                   <div className="display-5 fw-bold mb-0">{Number(saldo.disponivel ?? 0)}</div>
@@ -370,12 +670,29 @@ export default function Dashboard() {
                     <div className="fw-semibold">{saldo.realizadas}</div>
                   </div>
                 </div>
-                <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={fetchSaldo} disabled={loadingSaldo}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm mt-3"
+                  onClick={(event) => { event.stopPropagation(); fetchSaldo() }}
+                  disabled={loadingSaldo}
+                >
                   Atualizar saldo
                 </button>
               </div>
 
-              <div className="neo-card neo-lg p-4">
+              <div
+                className="neo-card neo-lg p-4"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleSelectLogsSource(LOG_SOURCE.V8)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleSelectLogsSource(LOG_SOURCE.V8)
+                  }
+                }}
+                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.V8 ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
+              >
                 <div className="small text-uppercase opacity-75">Saldo V8</div>
                 <div className="d-flex align-items-center gap-2">
                   <div className="display-5 fw-bold mb-0">{saldoV8.total}</div>
@@ -392,8 +709,52 @@ export default function Dashboard() {
                     <div className="fw-semibold">{saldoV8.restantes}</div>
                   </div>
                 </div>
-                <button type="button" className="btn btn-ghost btn-sm mt-3" onClick={fetchSaldoV8} disabled={loadingSaldoV8}>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm mt-3"
+                  onClick={(event) => { event.stopPropagation(); fetchSaldoV8() }}
+                  disabled={loadingSaldoV8}
+                >
                   Atualizar saldo V8
+                </button>
+              </div>
+
+              <div
+                className="neo-card neo-lg p-4"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleSelectLogsSource(LOG_SOURCE.PRESENCA)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleSelectLogsSource(LOG_SOURCE.PRESENCA)
+                  }
+                }}
+                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.PRESENCA ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
+              >
+                <div className="small text-uppercase opacity-75">Saldo Presença</div>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="display-5 fw-bold mb-0">{saldoPresenca.total}</div>
+                  {loadingSaldoPresenca && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+                </div>
+                <div className="small opacity-75">Limite total disponível para consultas Presença.</div>
+                <div className="mt-2 d-flex gap-3 flex-wrap">
+                  <div>
+                    <div className="small text-uppercase opacity-75">Usado</div>
+                    <div className="fw-semibold">{saldoPresenca.usado}</div>
+                  </div>
+                  <div>
+                    <div className="small text-uppercase opacity-75">Restante</div>
+                    <div className="fw-semibold">{saldoPresenca.restantes}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm mt-3"
+                  onClick={(event) => { event.stopPropagation(); fetchSaldoPresenca() }}
+                  disabled={loadingSaldoPresenca}
+                >
+                  Atualizar saldo Presença
                 </button>
               </div>
             </div>
@@ -403,14 +764,14 @@ export default function Dashboard() {
             <div className="neo-card neo-lg p-4 h-100">
               <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                 <div>
-                  <div className="small text-uppercase opacity-75">Últimas consultas IN100</div>
+                  <div className="small text-uppercase opacity-75">{sourceMeta[activeLogsSource]?.title || 'Últimas consultas'}</div>
                   <div className="fw-semibold">Exibindo até 10 mais recentes</div>
                 </div>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={fetchLogs} disabled={loadingLogs}>
-                  {loadingLogs ? 'Atualizando...' : 'Atualizar lista'}
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => fetchLogsBySource(activeLogsSource)} disabled={activeLoading}>
+                  {activeLoading ? 'Atualizando...' : 'Atualizar lista'}
                 </button>
               </div>
-              {logsError && <div className="alert alert-danger py-2 px-3 mb-3 small">{logsError}</div>}
+              {activeError && <div className="alert alert-danger py-2 px-3 mb-3 small">{activeError}</div>}
               <div className="table-responsive">
                 <table className="table table-dark table-sm align-middle mb-0">
                   <thead>
@@ -423,34 +784,34 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(logs && logs.length > 0 ? logs : loadingLogs ? Array.from({ length: 3 }) : []).map((log, idx) => (
+                    {(activeRows && activeRows.length > 0 ? activeRows : activeLoading ? Array.from({ length: 3 }) : []).map((log, idx) => (
                       <tr key={idx}>
                         <td className="small">
-                          {log ? fmtHoraSP(log.data_hora_registro) : <span className="placeholder col-8" />}
+                          {log ? fmtHoraSP(log.timestamp) : <span className="placeholder col-8" />}
                         </td>
                         <td className="small">
                           {log ? (
-                            (() => {
-                              const status = log?.status_api
-                              const resp = String(log?.resposta_api || '').toLowerCase()
-                              const cls = status === 'Sucesso' ? 'text-bg-success' : (status == null || resp === 'pendente' ? 'text-bg-warning' : 'text-bg-danger')
-                              const titleTxt = String(status ?? '')
-                              return <span className={`badge rounded-pill px-2 status-badge ${cls}`} title={titleTxt} aria-label={titleTxt}>i</span>
-                            })()
+                            <span
+                              className={`badge rounded-pill px-2 status-badge ${getStatusBadgeClass(log?.status, log?.detail)}`}
+                              title={String(log?.status ?? '')}
+                              aria-label={String(log?.status ?? '')}
+                            >
+                              i
+                            </span>
                           ) : (
                             <span className="placeholder col-6" />
                           )}
                         </td>
-                        <td className="small">{log ? (log.resposta_api || '-') : <span className="placeholder col-10" />}</td>
+                        <td className="small">{log ? (log.detail || '-') : <span className="placeholder col-10" />}</td>
                         <td className="small">
                           {log ? (
                             <button
                               type="button"
                               className="btn btn-link p-0 text-reset"
-                              onClick={() => copyToClipboard(log.numero_documento, 'CPF copiado!')}
+                              onClick={() => copyToClipboard(log.cpf, 'CPF copiado!')}
                               title="Copiar CPF"
                             >
-                              {fmtCpf(log.numero_documento)}
+                              {fmtCpf(log.cpf)}
                             </button>
                           ) : (
                             <span className="placeholder col-6" />
@@ -461,10 +822,10 @@ export default function Dashboard() {
                             <button
                               type="button"
                               className="btn btn-link p-0 text-reset"
-                              onClick={() => copyToClipboard(log.numero_beneficio, 'NB copiado!')}
+                              onClick={() => copyToClipboard(log.nb, 'NB copiado!')}
                               title="Copiar NB"
                             >
-                              {fmtNb(log.numero_beneficio)}
+                              {fmtNb(log.nb)}
                             </button>
                           ) : (
                             <span className="placeholder col-6" />
@@ -472,9 +833,9 @@ export default function Dashboard() {
                         </td>
                       </tr>
                     ))}
-                    {!loadingLogs && (!logs || logs.length === 0) && (
+                    {!activeLoading && (!activeRows || activeRows.length === 0) && (
                       <tr>
-                        <td className="small" colSpan={4}>Nenhuma consulta encontrada.</td>
+                        <td className="small" colSpan={5}>Nenhuma consulta encontrada.</td>
                       </tr>
                     )}
                   </tbody>

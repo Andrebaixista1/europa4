@@ -5,6 +5,13 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '27/02/2026',
+    titulo: 'Dashboard com filtros IN100, V8 e Presenca',
+    descricao:
+      'No Dashboard, ao clicar nos cards de saldo (IN100, V8 e Presenca), a tabela da direita agora mostra as 10 ultimas consultas da origem selecionada.',
+    image: 'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?auto=format&fit=crop&w=1600&q=80',
+  },
+  {
     data: '26/02/2026',
     titulo: 'Consulta Presenca liberada no menu Consultas',
     descricao:
