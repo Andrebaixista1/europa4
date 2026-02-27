@@ -5,6 +5,15 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '26/02/2026',
+    titulo: 'Consulta Presenca liberada no menu Consultas',
+    descricao:
+      'A Consulta Presenca ja esta disponivel no menu Consultas, com modo individual e em lote conforme permissao de hierarquia. Limite diario de 1000 consultas.',
+    image: 'https://portal.presencabank.com.br/assets/images/presencabank/logo.svg',
+    imageFit: 'contain',
+    imageBackground: '#ffffff',
+  },
+  {
     data: '24/02/2026',
     titulo: 'Consulta V8 liberada no menu Consultas',
     descricao:
