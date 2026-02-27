@@ -316,6 +316,21 @@ export default function Dashboard() {
     return out
   }
 
+  const dedupeByCpf = (list) => {
+    const arr = Array.isArray(list) ? list : []
+    const seen = new Set()
+    const out = []
+    for (const item of arr) {
+      const cpf = String(item?.cpf ?? '').replace(/\D/g, '')
+      if (cpf.length === 11) {
+        if (seen.has(cpf)) continue
+        seen.add(cpf)
+      }
+      out.push(item)
+    }
+    return out
+  }
+
   const getStatusToken = (row) => String(
     row?.status ??
     row?.status_api ??
@@ -391,7 +406,7 @@ export default function Dashboard() {
         cpf: String(item?.numero_documento ?? ''),
         nb: String(item?.numero_beneficio ?? '')
       }))
-      setLogsData(LOG_SOURCE.IN100, normalized.slice(0, 10))
+      setLogsData(LOG_SOURCE.IN100, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
       setLogsData(LOG_SOURCE.IN100, [])
       setLogsError(LOG_SOURCE.IN100, e?.message || 'Erro ao carregar')
@@ -445,7 +460,7 @@ export default function Dashboard() {
         cpf: String(item?.cliente_cpf ?? item?.cpf ?? ''),
         nb: String(item?.valor_liberado ?? item?.valorLiberado ?? item?.valor ?? item?.numero_beneficio ?? item?.nb ?? '')
       }))
-      setLogsData(LOG_SOURCE.V8, normalized.slice(0, 10))
+      setLogsData(LOG_SOURCE.V8, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
       setLogsData(LOG_SOURCE.V8, [])
       setLogsError(LOG_SOURCE.V8, e?.message || 'Erro ao carregar')
@@ -493,7 +508,7 @@ export default function Dashboard() {
         cpf: String(item?.cpf ?? item?.cliente_cpf ?? item?.numero_documento ?? ''),
         nb: String(item?.valorMargemDisponivel ?? item?.valor_margem_disponivel ?? item?.valorMargem ?? item?.numero_beneficio ?? item?.nb ?? '')
       }))
-      setLogsData(LOG_SOURCE.PRESENCA, normalized.slice(0, 10))
+      setLogsData(LOG_SOURCE.PRESENCA, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
       setLogsData(LOG_SOURCE.PRESENCA, [])
       setLogsError(LOG_SOURCE.PRESENCA, e?.message || 'Erro ao carregar')
