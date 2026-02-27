@@ -443,7 +443,7 @@ export default function Dashboard() {
         status: getStatusToken(item),
         detail: String(item?.cliente_nome ?? item?.nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
         cpf: String(item?.cliente_cpf ?? item?.cpf ?? ''),
-        nb: String(item?.numero_beneficio ?? item?.nb ?? '')
+        nb: String(item?.valor_liberado ?? item?.valorLiberado ?? item?.valor ?? item?.numero_beneficio ?? item?.nb ?? '')
       }))
       setLogsData(LOG_SOURCE.V8, normalized.slice(0, 10))
     } catch (e) {
@@ -491,7 +491,7 @@ export default function Dashboard() {
         status: getStatusToken(item),
         detail: String(item?.nome ?? item?.cliente_nome ?? item?.tipoConsulta ?? '-').trim() || '-',
         cpf: String(item?.cpf ?? item?.cliente_cpf ?? item?.numero_documento ?? ''),
-        nb: String(item?.numero_beneficio ?? item?.nb ?? '')
+        nb: String(item?.valorMargemDisponivel ?? item?.valor_margem_disponivel ?? item?.valorMargem ?? item?.numero_beneficio ?? item?.nb ?? '')
       }))
       setLogsData(LOG_SOURCE.PRESENCA, normalized.slice(0, 10))
     } catch (e) {
@@ -562,10 +562,16 @@ export default function Dashboard() {
       title: 'Últimas consultas Presença'
     }
   }
+  const rightColumnMeta = {
+    [LOG_SOURCE.IN100]: { label: 'NB', copyLabel: 'NB copiado!', copyTitle: 'Copiar NB' },
+    [LOG_SOURCE.V8]: { label: 'Valor liberado', copyLabel: 'Valor liberado copiado!', copyTitle: 'Copiar valor liberado' },
+    [LOG_SOURCE.PRESENCA]: { label: 'Margem disponível', copyLabel: 'Margem disponível copiada!', copyTitle: 'Copiar margem disponível' }
+  }
 
   const activeRows = logsBySource[activeLogsSource] || []
   const activeLoading = Boolean(loadingLogsBySource[activeLogsSource])
   const activeError = String(logsErrorBySource[activeLogsSource] || '')
+  const activeRightMeta = rightColumnMeta[activeLogsSource] || rightColumnMeta[LOG_SOURCE.IN100]
 
   const handleSelectLogsSource = (source) => {
     setActiveLogsSource(source)
@@ -577,10 +583,27 @@ export default function Dashboard() {
   const getStatusBadgeClass = (status, detail) => {
     const token = String(status ?? '').trim().toLowerCase()
     const detailToken = String(detail ?? '').trim().toLowerCase()
-    if (token.includes('sucesso') || token.includes('conclu') || token === 'ok' || token.includes('presente')) return 'text-bg-success'
+    if (token.includes('sucesso') || token.includes('conclu') || token === 'ok' || token.includes('presente') || token.includes('consultad')) return 'text-bg-success'
     if (token.includes('pend') || token.includes('process') || token.includes('aguard') || detailToken.includes('pendente')) return 'text-bg-warning'
     if (token.includes('erro') || token.includes('falha') || token.includes('reprov') || token.includes('ausente')) return 'text-bg-danger'
     return 'text-bg-secondary'
+  }
+
+  const fmtMoneyBRL = (value) => {
+    const raw = String(value ?? '').trim()
+    if (!raw) return '-'
+    const onlyThousandsWithDot = /^\d{1,3}(\.\d{3})+$/.test(raw)
+    const normalized = raw.includes(',')
+      ? raw.replace(/\./g, '').replace(',', '.')
+      : (onlyThousandsWithDot ? raw.replace(/\./g, '') : raw)
+    const numeric = Number(normalized)
+    if (!Number.isFinite(numeric)) return raw
+    return numeric.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  }
+
+  const fmtLastColumn = (value, source) => {
+    if (source === LOG_SOURCE.IN100) return fmtNb(value)
+    return fmtMoneyBRL(value)
   }
 
   return (
@@ -780,7 +803,7 @@ export default function Dashboard() {
                       <th style={{ width: '12%' }}>Status</th>
                       <th style={{ width: '30%' }}>Pesquisa</th>
                       <th style={{ width: '23%' }}>CPF</th>
-                      <th style={{ width: '23%' }}>NB</th>
+                      <th style={{ width: '23%' }}>{activeRightMeta.label}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -819,14 +842,18 @@ export default function Dashboard() {
                         </td>
                         <td className="small">
                           {log ? (
-                            <button
-                              type="button"
-                              className="btn btn-link p-0 text-reset"
-                              onClick={() => copyToClipboard(log.nb, 'NB copiado!')}
-                              title="Copiar NB"
-                            >
-                              {fmtNb(log.nb)}
-                            </button>
+                            activeLogsSource === LOG_SOURCE.IN100 ? (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-reset"
+                                onClick={() => copyToClipboard(log.nb, activeRightMeta.copyLabel)}
+                                title={activeRightMeta.copyTitle}
+                              >
+                                {fmtLastColumn(log.nb, activeLogsSource)}
+                              </button>
+                            ) : (
+                              <span>{fmtLastColumn(log.nb, activeLogsSource)}</span>
+                            )
                           ) : (
                             <span className="placeholder col-6" />
                           )}
