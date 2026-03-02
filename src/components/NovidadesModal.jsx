@@ -6,9 +6,9 @@ import '../styles/novidades-modal.css'
 const novidadesListRaw = [
   {
     data: '02/03/2026',
-    titulo: 'EUI 4.3.02032026.1704',
+    titulo: 'EUI 4.2.032026',
     descricao:
-      'Nova UI da barra lateral: abre no clique da logo, mostra opcoes em quadro flutuante ao passar o mouse nos icones com submenu e exibe dica de \"Expandir menu\" ao carregar a pagina.',
+      'Novo pacote de interface da Europa 4 com melhorias visuais e de usabilidade em toda a plataforma, incluindo navegacao mais fluida, organizacao de menus e refinamentos de experiencia nas telas principais.',
     image: '/neo-logo.svg',
     imageFit: 'contain',
     imageBackground: '#07132a',
