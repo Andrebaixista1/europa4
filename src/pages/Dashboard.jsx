@@ -11,10 +11,13 @@ const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getc
 const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
 const PRESENCA_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
 const PRESENCA_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
+const HANDMAIS_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-handmais'
+const HANDMAIS_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-handmais'
 const LOG_SOURCE = {
   IN100: 'in100',
   V8: 'v8',
-  PRESENCA: 'presenca'
+  PRESENCA: 'presenca',
+  HANDMAIS: 'handmais'
 }
 
 export default function Dashboard() {
@@ -28,21 +31,26 @@ export default function Dashboard() {
   const [loadingSaldoV8, setLoadingSaldoV8] = useState(false)
   const [saldoPresenca, setSaldoPresenca] = useState({ total: '-', usado: '-', restantes: '-' })
   const [loadingSaldoPresenca, setLoadingSaldoPresenca] = useState(false)
+  const [saldoHandMais, setSaldoHandMais] = useState({ total: '-', usado: '-', restantes: '-' })
+  const [loadingSaldoHandMais, setLoadingSaldoHandMais] = useState(false)
   const [activeLogsSource, setActiveLogsSource] = useState(LOG_SOURCE.IN100)
   const [logsBySource, setLogsBySource] = useState({
     [LOG_SOURCE.IN100]: [],
     [LOG_SOURCE.V8]: [],
-    [LOG_SOURCE.PRESENCA]: []
+    [LOG_SOURCE.PRESENCA]: [],
+    [LOG_SOURCE.HANDMAIS]: []
   })
   const [loadingLogsBySource, setLoadingLogsBySource] = useState({
     [LOG_SOURCE.IN100]: false,
     [LOG_SOURCE.V8]: false,
-    [LOG_SOURCE.PRESENCA]: false
+    [LOG_SOURCE.PRESENCA]: false,
+    [LOG_SOURCE.HANDMAIS]: false
   })
   const [logsErrorBySource, setLogsErrorBySource] = useState({
     [LOG_SOURCE.IN100]: '',
     [LOG_SOURCE.V8]: '',
-    [LOG_SOURCE.PRESENCA]: ''
+    [LOG_SOURCE.PRESENCA]: '',
+    [LOG_SOURCE.HANDMAIS]: ''
   })
   const copyToClipboard = async (text, successMsg = 'Copiado!') => {
     try {
@@ -240,6 +248,23 @@ export default function Dashboard() {
     return { total, usado, restantes: Math.max(0, total - usado) }
   }
 
+  const buildHandMaisSummaryFromRows = (rows) => {
+    const list = Array.isArray(rows) ? rows : []
+    if (list.length === 0) return { total: '-', usado: '-', restantes: '-' }
+
+    const row = list[0] || {}
+    const total = toNumberOrNull(row?.total)
+    const usado = toNumberOrNull(row?.consultados)
+    const restantesRaw = row?.restantes ?? (total !== null && usado !== null ? Math.max(total - usado, 0) : null)
+    const restantes = toNumberOrNull(restantesRaw)
+
+    return {
+      total: total !== null ? total : '-',
+      usado: usado !== null ? usado : '-',
+      restantes: restantes !== null ? Math.max(0, restantes) : '-',
+    }
+  }
+
   const fetchSaldoPresenca = async () => {
     if (!user?.id) return
     setLoadingSaldoPresenca(true)
@@ -267,6 +292,67 @@ export default function Dashboard() {
       setSaldoPresenca({ total: '-', usado: '-', restantes: '-' })
     } finally {
       setLoadingSaldoPresenca(false)
+    }
+  }
+
+  const buildHandMaisRequestUrl = (baseUrl, options = {}) => {
+    const url = new URL(baseUrl)
+    const equipeId = resolveUserEquipeId(user)
+    const roleId = resolveUserRoleId(user)
+    const roleLabel = String(user?.role ?? '').trim()
+    const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
+    const consultaId = toNumberOrNull(options?.idConsultaHand)
+
+    if (user?.id !== null && user?.id !== undefined && user?.id !== '') {
+      url.searchParams.set('id_user', String(user.id))
+    }
+    if (equipeId !== null) {
+      url.searchParams.set('equipe_id', String(equipeId))
+    }
+    if (roleId !== null) {
+      url.searchParams.set('id_role', String(roleId))
+      url.searchParams.set('role_id', String(roleId))
+    }
+    if (roleLabel) {
+      url.searchParams.set('role', roleLabel)
+      url.searchParams.set('hierarquia', roleLabel)
+    }
+    if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+      url.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+    }
+    if (consultaId !== null) {
+      url.searchParams.set('id_consulta_hand', String(consultaId))
+    }
+
+    return url.toString()
+  }
+
+  const getHandMaisSortTimestamp = (row) => {
+    const updatedTs = new Date(row?.updated_at ?? row?.updatedAt ?? '').getTime()
+    const createdTs = new Date(row?.created_at ?? row?.createdAt ?? '').getTime()
+    const updatedSafe = Number.isFinite(updatedTs) ? updatedTs : 0
+    const createdSafe = Number.isFinite(createdTs) ? createdTs : 0
+    return Math.max(updatedSafe, createdSafe, 0)
+  }
+
+  const sortHandMaisRowsByUpdatedAtDesc = (rows) => {
+    const arr = Array.isArray(rows) ? [...rows] : []
+    return arr.sort((a, b) => getHandMaisSortTimestamp(b) - getHandMaisSortTimestamp(a))
+  }
+
+  const fetchSaldoHandMais = async () => {
+    if (!user?.id) return
+    setLoadingSaldoHandMais(true)
+    try {
+      const response = await fetch(buildHandMaisRequestUrl(HANDMAIS_LIMITES_GET_API_URL), { method: 'GET' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const payload = await response.json().catch(() => ({}))
+      const rows = sortHandMaisRowsByUpdatedAtDesc(normalizeRows(payload))
+      setSaldoHandMais(buildHandMaisSummaryFromRows(rows))
+    } catch (_) {
+      setSaldoHandMais({ total: '-', usado: '-', restantes: '-' })
+    } finally {
+      setLoadingSaldoHandMais(false)
     }
   }
 
@@ -517,9 +603,54 @@ export default function Dashboard() {
     }
   }
 
+  const fetchLogsHandMais = async () => {
+    if (!user?.id) return
+    setLogsLoading(LOG_SOURCE.HANDMAIS, true)
+    setLogsError(LOG_SOURCE.HANDMAIS, '')
+    try {
+      const limitsResponse = await fetch(buildHandMaisRequestUrl(HANDMAIS_LIMITES_GET_API_URL), { method: 'GET' })
+      const limitsRaw = await limitsResponse.text().catch(() => '')
+      if (!limitsResponse.ok) throw new Error(limitsRaw || `HTTP ${limitsResponse.status}`)
+      const limitsRows = sortHandMaisRowsByUpdatedAtDesc(parseRowsFromRaw(limitsRaw))
+      const latestConsultaId = toNumberOrNull(limitsRows?.[0]?.id)
+
+      const consultasResponse = await fetch(
+        buildHandMaisRequestUrl(HANDMAIS_CONSULTAS_GET_API_URL, { idConsultaHand: latestConsultaId ?? 0 }),
+        { method: 'GET' }
+      )
+      const raw = await consultasResponse.text().catch(() => '')
+      if (!consultasResponse.ok) throw new Error(raw || `HTTP ${consultasResponse.status}`)
+      const rows = parseRowsFromRaw(raw)
+      const deduped = dedupeByKey(rows, (item) => {
+        const cpf = String(item?.cpf ?? item?.cliente_cpf ?? '').replace(/\D/g, '')
+        return [
+          getTimestampValue(item),
+          getStatusToken(item),
+          String(item?.nome ?? item?.cliente_nome ?? '').trim(),
+          cpf,
+          String(item?.valor_margem ?? item?.valorMargem ?? '').trim(),
+        ].join('|')
+      })
+      const normalized = sortByLatest(deduped).map((item) => ({
+        timestamp: getTimestampValue(item),
+        status: getStatusToken(item),
+        detail: String(item?.nome ?? item?.cliente_nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
+        cpf: String(item?.cpf ?? item?.cliente_cpf ?? ''),
+        nb: String(item?.valor_margem ?? item?.valorMargem ?? ''),
+      }))
+      setLogsData(LOG_SOURCE.HANDMAIS, dedupeByCpf(normalized).slice(0, 10))
+    } catch (e) {
+      setLogsData(LOG_SOURCE.HANDMAIS, [])
+      setLogsError(LOG_SOURCE.HANDMAIS, e?.message || 'Erro ao carregar')
+    } finally {
+      setLogsLoading(LOG_SOURCE.HANDMAIS, false)
+    }
+  }
+
   const fetchLogsBySource = async (source) => {
     if (source === LOG_SOURCE.V8) return fetchLogsV8()
     if (source === LOG_SOURCE.PRESENCA) return fetchLogsPresenca()
+    if (source === LOG_SOURCE.HANDMAIS) return fetchLogsHandMais()
     return fetchLogsIn100()
   }
 
@@ -533,9 +664,11 @@ export default function Dashboard() {
     fetchSaldo()
     fetchSaldoV8()
     fetchSaldoPresenca()
+    fetchSaldoHandMais()
     fetchLogsIn100()
     fetchLogsV8()
     fetchLogsPresenca()
+    fetchLogsHandMais()
   }, [user])
 
   const fmtCpf = (v) => {
@@ -575,12 +708,16 @@ export default function Dashboard() {
     },
     [LOG_SOURCE.PRESENCA]: {
       title: 'Últimas consultas Presença'
+    },
+    [LOG_SOURCE.HANDMAIS]: {
+      title: 'Últimas consultas Hand+'
     }
   }
   const rightColumnMeta = {
     [LOG_SOURCE.IN100]: { label: 'NB', copyLabel: 'NB copiado!', copyTitle: 'Copiar NB' },
     [LOG_SOURCE.V8]: { label: 'Valor liberado', copyLabel: 'Valor liberado copiado!', copyTitle: 'Copiar valor liberado' },
-    [LOG_SOURCE.PRESENCA]: { label: 'Margem disponível', copyLabel: 'Margem disponível copiada!', copyTitle: 'Copiar margem disponível' }
+    [LOG_SOURCE.PRESENCA]: { label: 'Margem disponível', copyLabel: 'Margem disponível copiada!', copyTitle: 'Copiar margem disponível' },
+    [LOG_SOURCE.HANDMAIS]: { label: 'Valor margem', copyLabel: 'Valor margem copiado!', copyTitle: 'Copiar valor margem' }
   }
 
   const activeRows = logsBySource[activeLogsSource] || []
@@ -754,6 +891,45 @@ export default function Dashboard() {
                   disabled={loadingSaldoV8}
                 >
                   Atualizar saldo V8
+                </button>
+              </div>
+
+              <div
+                className="neo-card neo-lg p-4"
+                role="button"
+                tabIndex={0}
+                onClick={() => handleSelectLogsSource(LOG_SOURCE.HANDMAIS)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    handleSelectLogsSource(LOG_SOURCE.HANDMAIS)
+                  }
+                }}
+                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.HANDMAIS ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
+              >
+                <div className="small text-uppercase opacity-75">Saldo Hand+</div>
+                <div className="d-flex align-items-center gap-2">
+                  <div className="display-5 fw-bold mb-0">{saldoHandMais.total}</div>
+                  {loadingSaldoHandMais && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+                </div>
+                <div className="small opacity-75">Limite total disponível para consultas Hand+.</div>
+                <div className="mt-2 d-flex gap-3 flex-wrap">
+                  <div>
+                    <div className="small text-uppercase opacity-75">Usado</div>
+                    <div className="fw-semibold">{saldoHandMais.usado}</div>
+                  </div>
+                  <div>
+                    <div className="small text-uppercase opacity-75">Restante</div>
+                    <div className="fw-semibold">{saldoHandMais.restantes}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm mt-3"
+                  onClick={(event) => { event.stopPropagation(); fetchSaldoHandMais() }}
+                  disabled={loadingSaldoHandMais}
+                >
+                  Atualizar saldo Hand+
                 </button>
               </div>
 

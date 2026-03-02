@@ -5,6 +5,15 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '02/03/2026',
+    titulo: 'Consulta Hand+ no menu Consultas e no Dashboard',
+    descricao:
+      'A Consulta Hand+ foi adicionada no menu Consultas e tambem no Dashboard com card de saldo e Top 10 das consultas mais recentes.',
+    image: '/handplus-logo.svg',
+    imageFit: 'contain',
+    imageBackground: '#07132a',
+  },
+  {
     data: '27/02/2026',
     titulo: 'Dashboard com filtros IN100, V8 e Presenca',
     descricao:
