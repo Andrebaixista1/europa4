@@ -24,7 +24,55 @@ Cada consulta fala com APIs externas e grava historico para acompanhamento.
 
 ---
 
-## 2) O que cada sistema de consulta faz
+## 2) Mapa das abas ativas do menu lateral
+
+Esta secao explica as abas que aparecem no menu da esquerda (como na sua imagem).
+
+### Visao Geral
+- O que e: entrada principal do sistema.
+- Para que serve: abrir o dashboard com resumo de saldos e ultimas consultas.
+- Rota: `/dashboard`
+
+### Consultas (grupo)
+- O que e: menu com todos os tipos de consulta.
+- Para que serve: acessar telas de consulta individual, lote e historico.
+- Rotas do grupo:
+- `Consulta Individual (IN100)` -> `/consultas/in100`
+- `Cliente Argus` -> `/consulta/cliente-argus`
+- `Historico de Consultas` -> `/consultas/historico`
+- `Consulta Presenca` -> `/consultas/presenca`
+- `Consulta Hand+` -> `/consultas/handmais`
+- `Consultas V8` -> `/consultas/v8`
+
+### Gestao (grupo)
+- O que e: menu administrativo de operacao/controle.
+- Para que serve: acompanhar consumo, planejamento e relatorios.
+- Itens (quando habilitado para o perfil):
+- `Gestao de Recargas` -> `/recargas`
+- `Controle Planejamento` -> `/admin/controle-planejamento`
+- `Relatorios` -> `/admin/relatorios`
+
+### Configuracoes (grupo)
+- O que e: menu de administracao de acesso e estrutura.
+- Para que serve: gerenciar pessoas e organizacao interna.
+- Itens (quando habilitado para o perfil):
+- `Usuarios` -> `/usuarios`
+- `Equipes` -> `/equipes`
+- `Backups` -> `/admin/backups` (normalmente apenas Master)
+
+Observacao de perfil:
+- Nem todas as abas aparecem para todos os perfis.
+- As permissoes sao controladas por `role`/hierarquia.
+
+Arquivos de referencia do menu:
+- [SidebarNav.jsx](src/components/SidebarNav.jsx)
+- [App.jsx](src/App.jsx)
+- [access.js](src/utils/access.js)
+- [roles.js](src/utils/roles.js)
+
+---
+
+## 3) O que cada sistema de consulta faz
 
 ### IN100 (Consulta Individual)
 - Objetivo: buscar dados do cliente por CPF e/ou numero de beneficio.
@@ -75,7 +123,7 @@ Arquivo principal:
 
 ---
 
-## 3) Dashboard (resumo operacional)
+## 4) Dashboard (resumo operacional)
 
 O Dashboard concentra:
 - novidades da plataforma
@@ -87,7 +135,7 @@ Arquivo principal:
 
 ---
 
-## 4) Perfis e acesso
+## 5) Perfis e acesso
 
 Perfis principais:
 - Master
@@ -105,7 +153,7 @@ Arquivos de referencia:
 
 ---
 
-## 5) Arquitetura (visao simples)
+## 6) Arquitetura (visao simples)
 
 Frontend:
 - React + Vite
@@ -125,7 +173,7 @@ Arquivos de referencia:
 
 ---
 
-## 6) Fluxo de uso no dia a dia
+## 7) Fluxo de uso no dia a dia
 
 Fluxo individual:
 1. Escolher a consulta (IN100, V8, Presenca ou Hand+).
@@ -142,7 +190,7 @@ Fluxo em lote:
 
 ---
 
-## 7) Como rodar localmente
+## 8) Como rodar localmente
 
 Pre requisitos:
 - Node.js 18+ (recomendado)
@@ -184,7 +232,7 @@ npm run lint
 
 ---
 
-## 8) Estrutura principal de pastas
+## 9) Estrutura principal de pastas
 
 - `src/pages/`: telas do sistema (consultas, dashboard, admin)
 - `src/components/`: componentes reutilizaveis (menu, topbar, modais)
@@ -195,7 +243,7 @@ npm run lint
 
 ---
 
-## 9) Observacoes importantes
+## 10) Observacoes importantes
 
 - As consultas dependem de servicos externos (n8n, APIs de parceiros e banco).
 - Queda ou lentidao desses servicos impacta o resultado no front.
@@ -204,7 +252,7 @@ npm run lint
 
 ---
 
-## 10) Resumo final (bem direto)
+## 11) Resumo final (bem direto)
 
 Se voce precisa explicar o Europa 4 para alguem:
 - e um painel unico para consultar clientes em diferentes provedores
