@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
-import { Roles } from '../utils/roles.js'
+import { Roles, normalizeRole } from '../utils/roles.js'
 import { useSidebar } from '../context/SidebarContext.jsx'
 import { canAccessConsultaPresenca, canAccessConsultasV8 } from '../utils/access.js'
 
@@ -29,14 +29,15 @@ export default function SidebarNav() {
   const { isOpen: mobileOpen, close: closeSidebar } = useSidebar()
   const role = user?.role
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
+  const normalizedRole = normalizeRole(role, level)
   const allowConsultasV8 = canAccessConsultasV8(user)
   const allowConsultaPresenca = canAccessConsultaPresenca(user)
   const prevPath = useRef(location.pathname)
 
   const menu = useMemo(() => {
-    const isMaster = role === Roles.Master
-    const isAdmin = role === Roles.Administrador
-    const isSupervisor = role === Roles.Supervisor
+    const isMaster = normalizedRole === Roles.Master
+    const isAdmin = normalizedRole === Roles.Administrador
+    const isSupervisor = normalizedRole === Roles.Supervisor
 
     const items = [
       { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' }
@@ -79,7 +80,7 @@ export default function SidebarNav() {
     }
 
     return items
-  }, [role, level, allowConsultasV8, allowConsultaPresenca])
+  }, [normalizedRole, allowConsultasV8, allowConsultaPresenca])
 
   const isActive = (path) => {
     if (!path) return false
