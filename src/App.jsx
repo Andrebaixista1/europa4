@@ -19,6 +19,7 @@ import FilaMilvus from './pages/FilaMilvus.jsx'
 import Status from './pages/Status.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import ConsultasV8 from './pages/ConsultasV8.jsx'
+import ConsultasHandMais from './pages/ConsultasHandMais.jsx'
 import ConsultaPresenca from './pages/ConsultaPresenca.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
@@ -27,7 +28,7 @@ import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 import { SidebarProvider } from './context/SidebarContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import { canAccessConsultaPresenca, canAccessConsultasV8 } from './utils/access.js'
+import { canAccessConsultaPresenca, canAccessConsultasHandMais, canAccessConsultasV8 } from './utils/access.js'
 
 function ConsultasV8Route() {
   const { user } = useAuth()
@@ -43,6 +44,14 @@ function ConsultaPresencaRoute() {
     return <Navigate to="/dashboard" replace />
   }
   return <ConsultaPresenca />
+}
+
+function ConsultasHandMaisRoute() {
+  const { user } = useAuth()
+  if (!canAccessConsultasHandMais(user)) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <ConsultasHandMais />
 }
 
 function App() {
@@ -215,6 +224,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ConsultaPresencaRoute />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/consultas/handmais"
+          element={
+            <ProtectedRoute>
+              <ConsultasHandMaisRoute />
             </ProtectedRoute>
           }
         />

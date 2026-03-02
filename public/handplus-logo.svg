@@ -1,0 +1,8 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="240" height="240" rx="20" fill="#F3F5F8"/>
+  <path d="M66 78L82 124L99 96L112 132L143 82" stroke="#6C43FF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M146 108L121 134" stroke="#6C43FF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="160" cy="133" r="8" fill="#6C43FF"/>
+  <text x="22" y="203" fill="#1F2430" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700">HandBank</text>
+</svg>
+
