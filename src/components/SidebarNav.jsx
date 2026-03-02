@@ -26,6 +26,8 @@ export default function SidebarNav() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(true)
   const [openMenu, setOpenMenu] = useState(null)
+  const [hoveredMenu, setHoveredMenu] = useState(null)
+  const [showToggleHint, setShowToggleHint] = useState(false)
   const { isOpen: mobileOpen, close: closeSidebar } = useSidebar()
   const role = user?.role
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
@@ -34,6 +36,22 @@ export default function SidebarNav() {
   const allowConsultasHandMais = canAccessConsultasHandMais(user)
   const allowConsultaPresenca = canAccessConsultaPresenca(user)
   const prevPath = useRef(location.pathname)
+  const hoverCloseTimerRef = useRef(null)
+  const hintTimerRef = useRef(null)
+
+  const clearHoverCloseTimer = () => {
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current)
+      hoverCloseTimerRef.current = null
+    }
+  }
+
+  const clearHintTimer = () => {
+    if (hintTimerRef.current) {
+      clearTimeout(hintTimerRef.current)
+      hintTimerRef.current = null
+    }
+  }
 
   const menu = useMemo(() => {
     const isMaster = normalizedRole === Roles.Master
@@ -92,17 +110,6 @@ export default function SidebarNav() {
     return current === normalizedPath || current.startsWith(`${normalizedPath}/`)
   }
 
-  const handleEnter = () => {
-    if (!mobileOpen) setCollapsed(false)
-  }
-
-  const handleLeave = () => {
-    if (!mobileOpen) {
-      setCollapsed(true)
-      setOpenMenu(null)
-    }
-  }
-
   const handleNavClick = () => {
     if (mobileOpen) closeSidebar()
   }
@@ -112,15 +119,46 @@ export default function SidebarNav() {
       closeSidebar()
       return
     }
-    setCollapsed((v) => !v)
+    setCollapsed((prev) => {
+      const next = !prev
+      if (next) setOpenMenu(null)
+      if (next) {
+        clearHintTimer()
+        setShowToggleHint(true)
+        hintTimerRef.current = setTimeout(() => {
+          setShowToggleHint(false)
+        }, 5000)
+      }
+      return next
+    })
   }
 
   useEffect(() => {
     if (prevPath.current !== location.pathname) {
       prevPath.current = location.pathname
+      clearHoverCloseTimer()
+      setHoveredMenu(null)
       if (mobileOpen) closeSidebar()
     }
   }, [location.pathname, mobileOpen, closeSidebar])
+
+  useEffect(() => {
+    clearHintTimer()
+    setShowToggleHint(true)
+    hintTimerRef.current = setTimeout(() => {
+      setShowToggleHint(false)
+    }, 5000)
+    return () => {
+      clearHintTimer()
+    }
+  }, [location.pathname])
+
+  useEffect(() => {
+    return () => {
+      clearHoverCloseTimer()
+      clearHintTimer()
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined
@@ -158,24 +196,49 @@ export default function SidebarNav() {
       <aside
         id="sidebar-nav"
         className={`dash-sidebar ${isCollapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}
-        onMouseEnter={handleEnter}
-        onMouseLeave={handleLeave}
       >
-        <button
-          className="dash-toggle"
-          type="button"
-          aria-label="Toggle menu"
-          onClick={handleToggle}
-        >
-          <img src="/neo-logo.svg" alt="Nova Europa" className="dash-toggle-icon" />
-        </button>
+        <div className="dash-toggle-wrap">
+          <button
+            className="dash-toggle"
+            type="button"
+            aria-label={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
+            title={isCollapsed ? 'Expandir menu' : 'Recolher menu'}
+            onClick={handleToggle}
+          >
+            <img src="/neo-logo.svg" alt="Nova Europa" className="dash-toggle-icon" />
+          </button>
+          {isCollapsed && !mobileOpen && showToggleHint && (
+            <div className="dash-toggle-bubble" aria-hidden="true">
+              Expandir menu
+            </div>
+          )}
+        </div>
 
         <div className="dash-menu">
           {menu.map((item) => {
             const active = isActive(item.to) || item.children?.some((c) => isActive(c.to))
             const isOpen = openMenu === item.label
+            const showInlineSubmenu = Boolean(item.children && !isCollapsed && isOpen)
+            const showFlyoutSubmenu = Boolean(item.children && isCollapsed && !mobileOpen && hoveredMenu === item.label)
             return (
-              <div key={item.label}>
+              <div
+                key={item.label}
+                className="dash-nav-item-wrap"
+                onMouseEnter={() => {
+                  if (isCollapsed && !mobileOpen && item.children) {
+                    clearHoverCloseTimer()
+                    setHoveredMenu(item.label)
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (isCollapsed && !mobileOpen && item.children) {
+                    clearHoverCloseTimer()
+                    hoverCloseTimerRef.current = setTimeout(() => {
+                      setHoveredMenu((prev) => (prev === item.label ? null : prev))
+                    }, 220)
+                  }
+                }}
+              >
                 {item.children ? (
                   <button
                     className={`dash-nav-link ${active ? 'active' : ''}`}
@@ -195,7 +258,7 @@ export default function SidebarNav() {
                   </Link>
                 )}
 
-                {item.children && !isCollapsed && isOpen && (
+                {showInlineSubmenu && (
                   <div className="dash-submenu">
                     {item.children.map((child) => (
                       <Link
@@ -208,6 +271,25 @@ export default function SidebarNav() {
                         <span>{child.label}</span>
                       </Link>
                     ))}
+                  </div>
+                )}
+
+                {showFlyoutSubmenu && (
+                  <div className="dash-flyout-submenu">
+                    <div className="dash-flyout-title">{item.label}</div>
+                    <div className="dash-flyout-list">
+                      {item.children.map((child) => (
+                        <Link
+                          key={child.label}
+                          to={child.to}
+                          className={`dash-subitem ${isActive(child.to) ? 'active' : ''}`}
+                          onClick={handleNavClick}
+                        >
+                          <SubItemIcon child={child} />
+                          <span>{child.label}</span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

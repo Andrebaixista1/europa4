@@ -1132,6 +1132,38 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
   width: 100%;
 }
 
+.dash-nav-item-wrap {
+  position: relative;
+}
+
+.dash-flyout-submenu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 10px);
+  min-width: 250px;
+  max-width: min(380px, 42vw);
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(14, 14, 18, 0.98), rgba(6, 6, 8, 0.98));
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+  z-index: 1300;
+}
+
+.dash-flyout-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #aeb7c6;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.dash-flyout-list {
+  display: grid;
+  gap: 6px;
+}
+
 .dash-subitem {
   display: flex;
   align-items: center;
@@ -1248,6 +1280,45 @@ a:hover { color: var(--primary); filter: brightness(0.9); }
 .dash-toggle:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.12);
+}
+
+.dash-toggle-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dash-toggle-bubble {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(8, 12, 22, 0.72);
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+  z-index: 1400;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+}
+
+.dash-toggle-bubble::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%) rotate(45deg);
+  background: rgba(8, 12, 22, 0.72);
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
 }
 
 .dash-label {
@@ -1841,6 +1912,21 @@ html, body {
   box-shadow: none;
 }
 
+[data-theme="light"] .dash-flyout-submenu {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 255, 0.98));
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+}
+
+[data-theme="dark"] .dash-flyout-submenu {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, rgba(10, 14, 24, 0.98), rgba(8, 11, 20, 0.98));
+}
+
+[data-theme="light"] .dash-flyout-title {
+  color: #5b6c86;
+}
+
 [data-theme="light"] .dash-nav-link {
   color: #334155;
   background: rgba(255, 255, 255, 0.7);
@@ -1904,6 +1990,19 @@ html, body {
 [data-theme="light"] .dash-toggle:hover {
   background: rgba(37, 99, 235, 0.08);
   border-color: rgba(37, 99, 235, 0.35);
+}
+
+[data-theme="light"] .dash-toggle-bubble {
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.84);
+  color: #334155;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.15);
+}
+
+[data-theme="light"] .dash-toggle-bubble::before {
+  background: rgba(255, 255, 255, 0.84);
+  border-left: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
 }
 
 [data-theme="light"] .news-carousel {

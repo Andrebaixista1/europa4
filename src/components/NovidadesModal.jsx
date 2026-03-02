@@ -6,6 +6,15 @@ import '../styles/novidades-modal.css'
 const novidadesListRaw = [
   {
     data: '02/03/2026',
+    titulo: 'EUI 4.3.02032026.1704',
+    descricao:
+      'Nova UI da barra lateral: abre no clique da logo, mostra opcoes em quadro flutuante ao passar o mouse nos icones com submenu e exibe dica de \"Expandir menu\" ao carregar a pagina.',
+    image: '/neo-logo.svg',
+    imageFit: 'contain',
+    imageBackground: '#07132a',
+  },
+  {
+    data: '02/03/2026',
     titulo: 'Consulta Hand+ no menu Consultas e no Dashboard',
     descricao:
       'A Consulta Hand+ foi adicionada no menu Consultas e tambem no Dashboard com card de saldo e Top 10 das consultas mais recentes.',
