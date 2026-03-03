@@ -29,7 +29,12 @@ import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 import { SidebarProvider } from './context/SidebarContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import { canAccessConsultaPresenca, canAccessConsultasHandMais, canAccessConsultasV8 } from './utils/access.js'
+import {
+  canAccessConsultaClientes,
+  canAccessConsultaPresenca,
+  canAccessConsultasHandMais,
+  canAccessConsultasV8
+} from './utils/access.js'
 
 function ConsultasV8Route() {
   const { user } = useAuth()
@@ -53,6 +58,14 @@ function ConsultasHandMaisRoute() {
     return <Navigate to="/dashboard" replace />
   }
   return <ConsultasHandMais />
+}
+
+function ConsultaClientesRoute() {
+  const { user } = useAuth()
+  if (!canAccessConsultaClientes(user)) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <ConsultaClientes />
 }
 
 function App() {
@@ -191,8 +204,8 @@ function App() {
         <Route
           path="/consultas/clientes"
           element={
-            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
-              <ConsultaClientes />
+            <ProtectedRoute>
+              <ConsultaClientesRoute />
             </ProtectedRoute>
           }
         />

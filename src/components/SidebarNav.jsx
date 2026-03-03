@@ -4,7 +4,12 @@ import * as Fi from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
 import { Roles, normalizeRole } from '../utils/roles.js'
 import { useSidebar } from '../context/SidebarContext.jsx'
-import { canAccessConsultaPresenca, canAccessConsultasHandMais, canAccessConsultasV8 } from '../utils/access.js'
+import {
+  canAccessConsultaClientes,
+  canAccessConsultaPresenca,
+  canAccessConsultasHandMais,
+  canAccessConsultasV8
+} from '../utils/access.js'
 
 function Icon({ name, size = 20 }) {
   const Comp = Fi[name] || Fi.FiSquare
@@ -32,6 +37,7 @@ export default function SidebarNav() {
   const role = user?.role
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
   const normalizedRole = normalizeRole(role, level)
+  const allowConsultaClientes = canAccessConsultaClientes(user)
   const allowConsultasV8 = canAccessConsultasV8(user)
   const allowConsultasHandMais = canAccessConsultasHandMais(user)
   const allowConsultaPresenca = canAccessConsultaPresenca(user)
@@ -66,7 +72,7 @@ export default function SidebarNav() {
       label: 'Consultas',
       icon: 'FiSearch',
       children: [
-        { label: 'Consulta Clientes', to: '/consultas/clientes' },
+        ...(allowConsultaClientes ? [{ label: 'Consulta Clientes', to: '/consultas/clientes' }] : []),
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
         { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
         { label: 'Histórico de Consultas', to: '/consultas/historico' },
@@ -101,7 +107,7 @@ export default function SidebarNav() {
     }
 
     return items
-  }, [normalizedRole, allowConsultasV8, allowConsultasHandMais, allowConsultaPresenca])
+  }, [normalizedRole, allowConsultaClientes, allowConsultasV8, allowConsultasHandMais, allowConsultaPresenca])
 
   const isActive = (path) => {
     if (!path) return false
