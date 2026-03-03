@@ -804,12 +804,13 @@ export default function ConsultaClientes() {
   const userContext = useMemo(() => {
     const idUser = toIntegerOrNull(user?.id ?? user?.id_user ?? user?.idUser)
     const equipeId = toIntegerOrNull(user?.equipe_id ?? user?.team_id ?? user?.id_equipe ?? user?.equipeId)
-    const hierarquia = String(user?.hierarquia ?? user?.role ?? user?.nivel_hierarquia ?? '').trim()
+    const isUserOne = idUser === 1
+    const hierarquia = String(user?.hierarquia ?? user?.role ?? user?.nivel_hierarquia ?? '').trim() || (isUserOne ? 'master' : '')
     return {
       idUser,
       equipeId,
       hierarquia,
-      ready: idUser !== null && equipeId !== null && hierarquia.length > 0,
+      ready: idUser !== null && (isUserOne || (equipeId !== null && hierarquia.length > 0)),
     }
   }, [user])
 
