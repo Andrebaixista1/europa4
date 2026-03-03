@@ -15,6 +15,11 @@ const V8_CONSULTAS_RELEASE_API_URL = `${V8_LARAVEL_BASE_PATH}/liberar-pendentes`
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
 const V8_INDIVIDUAL_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-individual'
 const V8_BATCH_UPLOAD_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultav8-lote'
+const V8_BATCH_UPLOAD_API_FALLBACK_URLS = [
+  'https://n8n.apivieiracred.store/webhook/api/consultav8-lote/',
+  'https://n8n.apivieiracred.store/webhook/api/consulta-v8-lote',
+  'https://n8n.apivieiracred.store/webhook/api/consulta-v8-lote/',
+]
 const V8_ADD_LOGIN_API_URL = 'https://n8n.apivieiracred.store/webhook/api/adduser-consultav8'
 const LIMITED_USER_ID = 3347
 const DEFAULT_LIMIT_SUMMARY = { total: '-', usado: '-', restantes: '-' }
@@ -27,6 +32,40 @@ const toNumberOrNull = (value) => {
 }
 
 const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)))
+
+const buildV8BatchUploadFormData = ({ userId, equipeId, uploadName, csvBlob }) => {
+  const formData = new FormData()
+  formData.append('id_user', String(userId))
+  formData.append('equipe_id', String(equipeId))
+  formData.append('id_equipe', String(equipeId))
+  formData.append('nome_arquivo', uploadName)
+  formData.append('tipoConsulta', uploadName)
+  formData.append('file', csvBlob, uploadName)
+  formData.append('arquivo', csvBlob, uploadName)
+  return formData
+}
+
+const shouldTryNextV8BatchUploadUrl = (error) => {
+  const msg = String(error?.message ?? '').trim().toLowerCase()
+  if (!msg) return false
+  if (msg.includes('not registered') && msg.includes('webhook')) return true
+  if (msg.includes('failed to fetch')) return true
+  if (msg.includes('networkerror')) return true
+  if (msg.includes('http 404')) return true
+  if (msg.includes('upstream error')) return true
+  if (msg.includes('econnrefused')) return true
+  if (msg.includes('rota n')) return true
+  return false
+}
+
+const normalizeV8BatchUploadErrorMessage = (error) => {
+  const raw = String(error?.message ?? '').trim()
+  const normalized = raw.toLowerCase()
+  if (normalized.includes('not registered') && normalized.includes('webhook')) {
+    return 'Webhook do lote V8 nao registrado/ativo no n8n (consultav8-lote).'
+  }
+  return raw || 'Falha ao enviar lote CSV.'
+}
 
 const canUser3347SeeRow = (row) => {
   const token = String(row?.token_usado ?? '').trim().toLowerCase()
@@ -579,10 +618,27 @@ const getRowCreatedAtTimestamp = (row) => {
   return Number.isFinite(parsedTs) ? parsedTs : 0
 }
 
+const getRowUpdatedAtTimestamp = (row) => {
+  const raw = row?.updated_at ?? row?.updatedAt ?? 0
+  const directTs = new Date(raw).getTime()
+  if (Number.isFinite(directTs)) return directTs
+
+  const str = String(raw ?? '').trim()
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(str)
+  if (!match) return 0
+
+  const day = Number(match[1])
+  const month = Number(match[2])
+  const year = Number(match[3])
+  const hour = Number(match[4] ?? 0)
+  const minute = Number(match[5] ?? 0)
+  const second = Number(match[6] ?? 0)
+  const parsedTs = new Date(year, month - 1, day, hour, minute, second).getTime()
+  return Number.isFinite(parsedTs) ? parsedTs : 0
+}
+
 const getRowSortTimestamp = (row) => {
-  const raw = row?.created_at || row?.updated_at || row?.createdAt || row?.updatedAt || 0
-  const ts = new Date(raw).getTime()
-  return Number.isFinite(ts) ? ts : 0
+  return Math.max(getRowCreatedAtTimestamp(row), getRowUpdatedAtTimestamp(row), 0)
 }
 
 const getV8RowIdentityKey = (row) => {
@@ -909,9 +965,9 @@ const getRowDurationMs = (row) => {
   ], null))
   if (explicit !== null) return explicit
 
-  const createdAt = new Date(row?.created_at || row?.createdAt || 0).getTime()
-  const updatedAt = new Date(row?.updated_at || row?.updatedAt || 0).getTime()
-  if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) return null
+  const createdAt = getRowCreatedAtTimestamp(row)
+  const updatedAt = getRowUpdatedAtTimestamp(row)
+  if (!Number.isFinite(createdAt) || createdAt <= 0 || !Number.isFinite(updatedAt) || updatedAt <= 0) return null
   if (updatedAt < createdAt) return null
   return updatedAt - createdAt
 }
@@ -922,6 +978,13 @@ const formatAvgDuration = (value) => {
   if (ms < 1000) return `${Math.round(ms)} ms`
   const sec = ms / 1000
   if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)} s`
+  if (sec >= 3600) {
+    const totalSeconds = Math.round(sec)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+  }
   const min = Math.floor(sec / 60)
   const rem = Math.round(sec % 60)
   return `${min}m ${String(rem).padStart(2, '0')}s`
@@ -1692,19 +1755,30 @@ export default function ConsultasV8() {
         : `${String(nomeArquivo || `lote_${Date.now()}`).trim()}.csv`
 
       const csvBlob = new Blob([normalizedCsv], { type: 'text/csv;charset=utf-8' })
-      const formData = new FormData()
-      formData.append('id_user', String(userId))
-      formData.append('equipe_id', String(equipeId))
-      formData.append('id_equipe', String(equipeId))
-      formData.append('nome_arquivo', uploadName)
-      formData.append('file', csvBlob, uploadName)
-
+      const uploadUrls = [V8_BATCH_UPLOAD_API_URL, ...V8_BATCH_UPLOAD_API_FALLBACK_URLS]
       const bulkStartedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
-      const response = await fetch(V8_BATCH_UPLOAD_API_URL, {
-        method: 'POST',
-        body: formData
-      })
-      const responsePayload = await parseResponseBody(response)
+      let responsePayload = null
+      let lastUploadError = null
+
+      for (const uploadUrl of uploadUrls) {
+        try {
+          const formData = buildV8BatchUploadFormData({ userId, equipeId, uploadName, csvBlob })
+          const response = await fetch(uploadUrl, {
+            method: 'POST',
+            body: formData
+          })
+          responsePayload = await parseResponseBody(response)
+          break
+        } catch (uploadErr) {
+          lastUploadError = uploadErr
+          if (!shouldTryNextV8BatchUploadUrl(uploadErr)) throw uploadErr
+        }
+      }
+
+      if (!responsePayload) {
+        throw (lastUploadError || new Error('Falha ao enviar lote CSV.'))
+      }
+
       const responseData = (responsePayload && typeof responsePayload === 'object')
         ? (responsePayload?.data && typeof responsePayload.data === 'object' ? responsePayload.data : responsePayload)
         : {}
@@ -1724,8 +1798,8 @@ export default function ConsultasV8() {
 
       const bulkEndedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()
       const bulkElapsedMs = Number(bulkEndedAt) - Number(bulkStartedAt)
-      const avgDurationMs = (Number.isFinite(bulkElapsedMs) && bulkElapsedMs >= 0 && validRows.length > 0)
-        ? bulkElapsedMs / validRows.length
+      const avgDurationMs = (Number.isFinite(bulkElapsedMs) && bulkElapsedMs >= 0)
+        ? bulkElapsedMs
         : null
 
       setPendingBatchUpload(null)
@@ -2273,12 +2347,41 @@ export default function ConsultasV8() {
       const okCount = rowsList.filter((r) => isSuccessV8Status(getV8RowStatus(r))).length
       const pendingCount = rowsList.filter((r) => isPendingV8Status(getV8RowStatus(r))).length
       const errCount = Math.max(0, quantity - okCount - pendingCount)
-      const durationCandidates = rowsList
-        .map((r) => getRowDurationMs(r))
-        .filter((v) => Number.isFinite(v) && v >= 0)
-      const avgDurationMs = durationCandidates.length > 0
-        ? durationCandidates.reduce((acc, v) => acc + v, 0) / durationCandidates.length
-        : null
+      const startCandidates = rowsList
+        .map((r) => {
+          const createdTs = getRowCreatedAtTimestamp(r)
+          if (Number.isFinite(createdTs) && createdTs > 0) return createdTs
+          const fallbackTs = getRowSortTimestamp(r)
+          return Number.isFinite(fallbackTs) && fallbackTs > 0 ? fallbackTs : null
+        })
+        .filter((v) => Number.isFinite(v) && v > 0)
+      const endCandidates = rowsList
+        .map((r) => {
+          const updatedTs = getRowUpdatedAtTimestamp(r)
+          if (Number.isFinite(updatedTs) && updatedTs > 0) return updatedTs
+          const fallbackTs = getRowSortTimestamp(r)
+          return Number.isFinite(fallbackTs) && fallbackTs > 0 ? fallbackTs : null
+        })
+        .filter((v) => Number.isFinite(v) && v > 0)
+
+      let avgDurationMs = null
+      if (quantity > 0 && startCandidates.length > 0 && endCandidates.length > 0) {
+        const earliestTs = Math.min(...startCandidates)
+        const latestTs = Math.max(...endCandidates)
+        if (latestTs >= earliestTs) {
+          avgDurationMs = latestTs - earliestTs
+        }
+      }
+
+      if (avgDurationMs === null) {
+        const durationCandidates = rowsList
+          .map((r) => getRowDurationMs(r))
+          .filter((v) => Number.isFinite(v) && v >= 0)
+        if (durationCandidates.length > 0) {
+          // Fallback quando a API nao fornece timestamps confiaveis por linha.
+          avgDurationMs = durationCandidates.reduce((acc, v) => acc + v, 0)
+        }
+      }
 
       let status = 'Aguardando'
       if (pendingCount > 0) status = 'Processando'
@@ -2306,7 +2409,7 @@ export default function ConsultasV8() {
   }, [apiBatchRows])
 
   const batchTableRows = useMemo(() => {
-    const combined = [...apiBatchGroups]
+    const combined = [...batchUploads, ...apiBatchGroups]
     const byFile = new Map()
 
     for (const entry of combined) {
@@ -2907,7 +3010,7 @@ export default function ConsultasV8() {
                     <th>Nome do arquivo</th>
                     <th>Quantidade de nomes</th>
                     <th>Resultado</th>
-                    <th>Tempo medio</th>
+                    <th>Tempo Estimado</th>
                     <th>Status</th>
                     <th className="text-center">Acoes</th>
                   </tr>
@@ -3359,7 +3462,7 @@ export default function ConsultasV8() {
                     <div className="fw-semibold">{batchPreviewRow?.status || '-'}</div>
                   </div>
                   <div className="col-6 col-md-3">
-                    <div className="small opacity-75">Tempo medio</div>
+                    <div className="small opacity-75">Tempo Estimado</div>
                     <div className="fw-semibold">{formatAvgDuration(batchPreviewRow?.avgDurationMs)}</div>
                   </div>
                   <div className="col-6 col-md-3">
