@@ -1,4 +1,5 @@
 import { toast } from 'react-toastify'
+import { isValidElement } from 'react'
 
 const defaultOptions = {
   position: 'top-right',
@@ -11,8 +12,13 @@ const defaultOptions = {
 
 const ensureMessage = (message) => {
   if (message == null) return ''
+  if (isValidElement(message)) return message
   if (typeof message === 'string') return message
-  if (Array.isArray(message)) return message.filter(Boolean).join(' ')
+  if (Array.isArray(message)) {
+    const hasReactNode = message.some((item) => isValidElement(item))
+    if (hasReactNode) return message
+    return message.filter(Boolean).join(' ')
+  }
   try {
     return String(message)
   } catch (_) {

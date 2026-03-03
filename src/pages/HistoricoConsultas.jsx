@@ -503,6 +503,31 @@ export default function HistoricoConsultas() {
   const bmgValorMaxComprometimento = bmgValue('valorMaximoComprometimento', 'valor_maximo_comprometimento')
   const bmgAge = bmgDataNascimento ? idadeFrom(parseBmgDateInput(bmgDataNascimento) || bmgDataNascimento) : '-'
   const bmgMoney = (value) => (value == null || value === '' ? '-' : brCurrency(value))
+  const modalCpfDigits = String(detail?.numero_documento ?? bmgCpf ?? '').replace(/\D/g, '')
+  const modalNbDigits = String(detail?.numero_beneficio ?? bmgNumeroBeneficio ?? '').replace(/\D/g, '')
+  const modalBirthIso = detail?.data_nascimento || (bmgDataNascimento ? (parseBmgDateInput(bmgDataNascimento) || bmgDataNascimento) : '')
+  const modalBirthAge = modalBirthIso ? idadeFrom(modalBirthIso) : '-'
+  const modalBirthLabel = modalBirthIso
+    ? `${formatDate(modalBirthIso)}${modalBirthAge !== '-' ? ` (${modalBirthAge} anos)` : ''}`
+    : '-'
+  const modalNome = textOrDash(detail?.nome || bmgNome)
+  const modalUf = textOrDash(detail?.estado || bmgEstado)
+  const modalSituacao = mapSituacao(detail?.situacao_beneficio || bmgElegivel)
+  const modalDataConcessao = detail?.data_concessao ? formatDate(detail?.data_concessao) : '-'
+  const modalDespacho = detail?.data_despacho_beneficio
+    ? formatDate(detail?.data_despacho_beneficio)
+    : (bmgDataDespacho ? formatBmgDate(bmgDataDespacho) : '-')
+  const modalPortabilidades = detail?.numero_portabilidades != null
+    ? String(detail?.numero_portabilidades)
+    : (bmgQtdEmprestimos ? String(bmgQtdEmprestimos) : '-')
+  const modalSaldoCartaoBeneficio = moneyValue(detail?.saldo_cartao_beneficio ?? bmgValue('saldo_cartao_beneficio'))
+  const modalSaldoCartaoConsignado = moneyValue(detail?.saldo_cartao_consignado ?? bmgValue('saldo_cartao_consignado'))
+  const modalMargemDisponivel = moneyValue(detail?.saldo_total_disponivel ?? bmgMargem)
+  const modalBanco = textOrDash(detail?.banco_desembolso || bmgValue('banco_desembolso'))
+  const modalAgencia = textOrDash(detail?.agencia_desembolso || bmgAgencia)
+  const modalConta = textOrDash(detail?.conta_desembolso || bmgContaCorrente)
+  const modalDigito = textOrDash(detail?.digito_desembolso || bmgValue('digito_desembolso'))
+  const modalTipoCredito = mapTipoCredito(detail?.tipo_credito || bmgValue('tipo_credito'))
 
   return (
     <div className="hc-page bg-deep text-light min-vh-100 d-flex flex-column">
@@ -786,7 +811,7 @@ export default function HistoricoConsultas() {
                 {detailError && (
                   <div className="alert alert-danger py-2 px-3 small mb-3">{detailError}</div>
                 )}
-                {detail && !isBmgDetail && (
+                {detail && (
                   <>
                     <div className="neo-card p-3 mb-3">
                       <div className="fw-semibold mb-2">Dados pessoais</div>
@@ -922,7 +947,7 @@ export default function HistoricoConsultas() {
                     </div>
                   </>
                 )}
-                {detail && isBmgDetail && (
+                {false && (
                   <section className="result-section">
                     <div className="neo-card result-hero bmg-hero p-4 mb-3">
                       <div className="d-flex align-items-center justify-content-between mb-3">

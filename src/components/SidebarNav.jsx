@@ -66,6 +66,7 @@ export default function SidebarNav() {
       label: 'Consultas',
       icon: 'FiSearch',
       children: [
+        { label: 'Consulta Clientes', to: '/consultas/clientes' },
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
         { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
         { label: 'Histórico de Consultas', to: '/consultas/historico' },
@@ -300,3 +301,4 @@ export default function SidebarNav() {
     </>
   )
 }
+
