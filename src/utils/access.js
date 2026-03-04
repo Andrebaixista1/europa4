@@ -2,6 +2,10 @@ export function canAccessConsultasV8(user) {
   return Boolean(user)
 }
 
+export function canAccessConsultasPrata(user) {
+  return resolveUserId(user) === 1
+}
+
 export function canAccessConsultasHandMais(user) {
   return Boolean(user)
 }
