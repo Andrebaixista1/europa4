@@ -20,6 +20,7 @@ import FilaMilvus from './pages/FilaMilvus.jsx'
 import Status from './pages/Status.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import ConsultasV8 from './pages/ConsultasV8.jsx'
+import ConsultaPrata from './pages/ConsultaPrata.jsx'
 import ConsultasHandMais from './pages/ConsultasHandMais.jsx'
 import ConsultaPresenca from './pages/ConsultaPresenca.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
@@ -33,6 +34,7 @@ import {
   canAccessConsultaClientes,
   canAccessConsultaPresenca,
   canAccessConsultasHandMais,
+  canAccessConsultasPrata,
   canAccessConsultasV8
 } from './utils/access.js'
 
@@ -58,6 +60,14 @@ function ConsultasHandMaisRoute() {
     return <Navigate to="/dashboard" replace />
   }
   return <ConsultasHandMais />
+}
+
+function ConsultaPrataRoute() {
+  const { user } = useAuth()
+  if (!canAccessConsultasPrata(user)) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <ConsultaPrata />
 }
 
 function ConsultaClientesRoute() {
@@ -238,6 +248,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ConsultasV8Route />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/consultas/prata"
+          element={
+            <ProtectedRoute>
+              <ConsultaPrataRoute />
             </ProtectedRoute>
           }
         />

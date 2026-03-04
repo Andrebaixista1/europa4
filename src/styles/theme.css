@@ -2112,3 +2112,13 @@ html, body {
   border-color: #2563eb;
   background: #2563eb;
 }
+
+.prata-logo-badge {
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+[data-theme="dark"] .prata-logo-badge {
+  background: #ffffff;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
+}

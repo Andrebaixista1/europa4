@@ -8,6 +8,7 @@ import {
   canAccessConsultaClientes,
   canAccessConsultaPresenca,
   canAccessConsultasHandMais,
+  canAccessConsultasPrata,
   canAccessConsultasV8
 } from '../utils/access.js'
 
@@ -39,6 +40,7 @@ export default function SidebarNav() {
   const normalizedRole = normalizeRole(role, level)
   const allowConsultaClientes = canAccessConsultaClientes(user)
   const allowConsultasV8 = canAccessConsultasV8(user)
+  const allowConsultasPrata = canAccessConsultasPrata(user)
   const allowConsultasHandMais = canAccessConsultasHandMais(user)
   const allowConsultaPresenca = canAccessConsultaPresenca(user)
   const prevPath = useRef(location.pathname)
@@ -78,6 +80,7 @@ export default function SidebarNav() {
         { label: 'Histórico de Consultas', to: '/consultas/historico' },
         ...(allowConsultaPresenca ? [{ label: 'Consulta Presença', to: '/consultas/presenca' }] : []),
         ...(allowConsultasHandMais ? [{ label: 'Consulta Hand+', to: '/consultas/handmais' }] : []),
+        ...(allowConsultasPrata ? [{ label: 'Consulta Prata', to: '/consultas/prata' }] : []),
         ...(allowConsultasV8 ? [{ label: 'Consultas V8', to: '/consultas/v8' }] : [])
       ]
     })
@@ -107,7 +110,7 @@ export default function SidebarNav() {
     }
 
     return items
-  }, [normalizedRole, allowConsultaClientes, allowConsultasV8, allowConsultasHandMais, allowConsultaPresenca])
+  }, [normalizedRole, allowConsultaClientes, allowConsultasV8, allowConsultasPrata, allowConsultasHandMais, allowConsultaPresenca])
 
   const isActive = (path) => {
     if (!path) return false
@@ -307,4 +310,6 @@ export default function SidebarNav() {
     </>
   )
 }
+
+
 

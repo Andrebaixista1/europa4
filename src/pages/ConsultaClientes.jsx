@@ -5,6 +5,7 @@ import {
   FiArrowLeft,
   FiBriefcase,
   FiChevronRight,
+  FiCalendar,
   FiCircle,
   FiCopy,
   FiCreditCard,
@@ -59,22 +60,15 @@ const CONTRATO_FONTE_ICON_BY_VALUE = {
   presenca: 'https://portal.presencabank.com.br/assets/images/presencabank/logo.svg',
   handmais: '/handplus-logo.svg',
 }
-const CONTRATO_FONTE_STORAGE_KEY = 'consulta_clientes_contrato_fonte'
-const CONTRATO_FONTE_VALUES = new Set(CONTRATO_FONTES.map((item) => item.value))
-
-const getInitialContratoFonte = () => {
-  if (typeof window === 'undefined') return 'portabilidade'
-  try {
-    const saved = String(window.localStorage.getItem(CONTRATO_FONTE_STORAGE_KEY) || '').trim()
-    if (CONTRATO_FONTE_VALUES.has(saved)) return saved
-  } catch {
-    // Se localStorage falhar, segue fallback padrao.
-  }
-  return 'portabilidade'
-}
+const getInitialContratoFonte = () => 'portabilidade'
 
 const digitsOnly = (value) => String(value ?? '').replace(/\D/g, '')
 const hasValue = (value) => value !== null && value !== undefined && String(value).trim() !== ''
+const hasDisplayValue = (value) => {
+  if (!hasValue(value)) return false
+  const normalized = String(value).trim().toLowerCase()
+  return normalized !== '-' && normalized !== '--' && normalized !== 'null' && normalized !== 'undefined' && normalized !== 'n/a'
+}
 const normalizeBankCode = (value) => {
   const digits = digitsOnly(value)
   if (!digits) return ''
@@ -143,6 +137,15 @@ const formatPercent = (value, decimals = 2) => {
   const n = parseNumber(value)
   if (n === null) return '-'
   return `${n.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}%`
+}
+
+const parseNullableBoolean = (value) => {
+  if (value === null || value === undefined) return null
+  const token = String(value).trim().toLowerCase()
+  if (!token) return null
+  if (token === 'true' || token === '1' || token === 'sim') return true
+  if (token === 'false' || token === '0' || token === 'nao' || token === 'não') return false
+  return null
 }
 
 const normalizeTaxaPercent = (value) => {
@@ -229,9 +232,44 @@ const parseDateAny = (value) => {
     const date = new Date(y, m - 1, d)
     return Number.isNaN(date.getTime()) ? null : date
   }
+  const brMatch = /^(\d{2})\/(\d{2})\/(\d{4})(?:[,\s]+(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(raw)
+  if (brMatch) {
+    const day = Number(brMatch[1])
+    const month = Number(brMatch[2])
+    const year = Number(brMatch[3])
+    const hour = Number(brMatch[4] ?? 0)
+    const minute = Number(brMatch[5] ?? 0)
+    const second = Number(brMatch[6] ?? 0)
+    const date = new Date(year, month - 1, day, hour, minute, second)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
   const date = new Date(raw)
   return Number.isNaN(date.getTime()) ? null : date
 }
+
+const getRowUpdatedAtCandidate = (row) => firstFilled(
+  row?.updated_at,
+  row?.updatedAt,
+  row?.data_update,
+  row?.dataUpdate,
+  row?.data_hora_registro,
+  row?.data_hora,
+  row?.data,
+  row?.created_at,
+  row?.createdAt,
+  row?.timestamp,
+  row?.result?.updated_at,
+  row?.result?.updatedAt,
+  row?.result?.data_update,
+  row?.result?.dataUpdate,
+  row?.result?.created_at,
+  row?.result?.createdAt,
+  row?.result?.timestamp,
+  row?.result?.original?.updated_at,
+  row?.result?.original?.updatedAt,
+  row?.original?.updated_at,
+  row?.original?.updatedAt,
+)
 
 const formatDate = (value) => {
   const date = parseDateAny(value)
@@ -499,6 +537,179 @@ const getV8StatusBadgeClass = (status) => {
   return 'text-bg-info text-dark'
 }
 
+const getHandMaisStatusBadgeClass = (statusRaw) => {
+  const status = normalizeSourceToken(statusRaw)
+  if (!status || status === '-') return 'text-bg-secondary'
+  if (status === 'consultado' || status.includes('sucesso') || status.includes('concluid')) return 'text-bg-success'
+  if (status.includes('erro') || status.includes('falha')) return 'text-bg-danger'
+  if (status.includes('process')) return 'text-bg-info'
+  if (status.includes('pend')) return 'text-bg-warning text-dark'
+  return 'text-bg-secondary'
+}
+
+const getHandMaisStatus = (row) => firstFilled(
+  row?.status,
+  row?.situacao,
+  row?.status_handmais,
+  row?.final_status,
+  '-'
+)
+
+const getHandMaisUpdatedAtRaw = (row) => firstFilled(
+  row?.updated_at,
+  row?.updatedAt,
+  row?.data_hora_registro,
+  row?.data_hora,
+  row?.timestamp,
+  row?.created_at,
+  row?.createdAt,
+  ''
+)
+
+const getHandMaisValorMargem = (row) => firstFilled(
+  row?.valor_margem,
+  row?.valorMargem,
+  row?.valor_margem_disponivel,
+  row?.valorMargemDisponivel,
+  row?.valor,
+  ''
+)
+
+const getHandMaisDescricao = (row) => formatApiMessageText(
+  firstFilled(row?.descricao, row?.descricao_handmais, row?.mensagem, row?.message, ''),
+  ''
+)
+
+const HANDMAIS_DETAIL_FIELD_LABELS = {
+  id: 'ID',
+  tipoConsulta: 'Tipo Consulta',
+  telefone: 'Telefone',
+  dataNascimento: 'Nascimento',
+  nome_tabela: 'Nome Tabela',
+  id_tabela: 'ID Tabela',
+  token_tabela: 'Token Tabela',
+  created_at: 'Criado em',
+  updated_at: 'Atualizado em',
+  createdAt: 'Criado em',
+  updatedAt: 'Atualizado em',
+}
+
+const pickByKeys = (source, keys, fallback = '') => {
+  if (!source || typeof source !== 'object') return fallback
+  for (const key of keys) {
+    const value = source[key]
+    if (hasValue(value)) return value
+  }
+  return fallback
+}
+
+const isFluxoCompletoOkMessage = (message) => {
+  const token = String(message ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  return token === 'fluxo completo ok'
+}
+
+const mapPresencaTabelaFromFlat = (row) => {
+  const src = row || {}
+  const nome = firstFilled(src?.nomeTipo, src?.nome_tipo, src?.nome, src?.tipo_nome)
+  const prazo = firstFilled(src?.prazo, src?.prazo_meses)
+  const valorLiberado = firstFilled(src?.valorLiberado, src?.valor_liberado, src?.valor)
+  const valorParcela = firstFilled(src?.valorParcela, src?.valor_parcela)
+  const taxaJuros = firstFilled(src?.taxaJuros, src?.taxa_juros)
+  const taxaSeguro = firstFilled(src?.taxaSeguro, src?.taxa_seguro)
+  const valorSeguro = firstFilled(src?.valorSeguro, src?.valor_seguro)
+  const id = firstFilled(src?.idTipo, src?.id_tipo, src?.id)
+  const tipoCreditoNome = firstFilled(src?.tipoCredito?.name, src?.tipoCreditoNome, src?.tipo_credito_nome, src?.tipo_credito, 'Novo')
+
+  if (!nome && !prazo && !valorLiberado && !valorParcela && !taxaJuros && !taxaSeguro && !valorSeguro) return null
+  return {
+    id,
+    nome,
+    prazo,
+    taxaJuros,
+    valorLiberado,
+    valorParcela,
+    tipoCredito: { name: hasValue(tipoCreditoNome) ? String(tipoCreditoNome) : 'Novo' },
+    taxaSeguro,
+    valorSeguro
+  }
+}
+
+const getPresencaUpdatedAtRaw = (row) => firstFilled(
+  row?.updated_at,
+  row?.updatedAt,
+  row?.data_hora_registro,
+  row?.dataHoraRegistro,
+  row?.created_at,
+  row?.createdAt,
+  row?.data_consulta,
+  row?.dataConsulta,
+)
+
+const getPresencaFallbackNome = (row) => firstFilled(
+  row?.nome,
+  row?.NOME,
+  row?.cliente_nome,
+  row?.nomeCliente,
+  row?.nome_segurado,
+  row?.Entrantes,
+  row?.entrantes,
+)
+
+const getPresencaFallbackCpfDigits = (row) => digitsOnly(firstFilled(
+  row?.cpf,
+  row?.CPF,
+  row?.cliente_cpf,
+  row?.CPF_LIMPO,
+  row?.nu_cpf_tratado,
+  row?.nu_cpf,
+  row?.numero_documento,
+))
+
+const getPresencaElegivel = (row) => parseNullableBoolean(firstFilled(
+  row?.elegivel,
+  row?.isElegivel,
+  row?.is_elegivel,
+  row?.eligivel,
+  row?.vinculo?.elegivel,
+  row?.result?.vinculo?.elegivel,
+  row?.result?.original?.elegivel,
+))
+
+const getPresencaIdentityToken = (row) => {
+  const nomeToken = normalizeNameToken(getPresencaFallbackNome(row))
+  if (hasValue(nomeToken)) return `nome:${nomeToken}`
+  const cpfDigits = getPresencaFallbackCpfDigits(row)
+  if (hasValue(cpfDigits)) return `cpf:${cpfDigits}`
+  return ''
+}
+
+const isPresencaRow = (row) => {
+  const sourceToken = normalizeSourceToken(firstFilled(
+    row?.Tabela,
+    row?.tabela,
+    row?.origem,
+    row?.fonte,
+    row?.source
+  ))
+  if (sourceToken.includes('presenca')) return true
+  return (
+    hasValue(row?.nomeTipo)
+    || hasValue(row?.nome_tipo)
+    || hasValue(row?.valorLiberado)
+    || hasValue(row?.valor_liberado)
+    || hasValue(row?.valorMargemBase)
+    || hasValue(row?.valor_margem_base)
+    || hasValue(row?.valorMargemDisponivel)
+    || hasValue(row?.valor_margem_disponivel)
+    || hasValue(row?.valorTotalDevido)
+    || hasValue(row?.valor_total_devido)
+  )
+}
+
 const resolveContratoFonteFromRow = (row) => {
   const sourceToken = normalizeSourceToken(firstFilled(
     row?.Tabela,
@@ -510,7 +721,7 @@ const resolveContratoFonteFromRow = (row) => {
 
   if (sourceToken.includes('qualibanking') || sourceToken.includes('in100')) return 'in100'
   if (sourceToken.includes('v8')) return 'v8'
-  if (sourceToken.includes('presenca')) return 'presenca'
+  if (isPresencaRow(row)) return 'presenca'
   if (sourceToken.includes('hand')) return 'handmais'
   if (sourceToken.includes('macica') || sourceToken.includes('maci') || sourceToken.includes('portabilidade')) return 'portabilidade'
 
@@ -599,6 +810,7 @@ const isClienteRow = (row) => (
   hasValue(row?.NOME)
   || hasValue(row?.nome)
   || hasValue(row?.cliente_nome)
+  || hasValue(row?.cpf)
   || hasValue(row?.CPF)
   || hasValue(row?.CPF_LIMPO)
   || hasValue(row?.cliente_cpf)
@@ -612,7 +824,7 @@ const isClienteRow = (row) => (
 )
 
 const getRowNome = (row) => firstFilled(row?.Entrantes, row?.entrantes, row?.nome_segurado, row?.NOME, row?.nome, row?.cliente_nome)
-const getRowCpfDigits = (row) => digitsOnly(firstFilled(row?.CPF_LIMPO, row?.CPF, row?.nu_cpf_tratado, row?.nu_cpf, row?.numero_documento, row?.cliente_cpf))
+const getRowCpfDigits = (row) => digitsOnly(firstFilled(row?.cpf, row?.CPF_LIMPO, row?.CPF, row?.nu_cpf_tratado, row?.nu_cpf, row?.numero_documento, row?.cliente_cpf))
 const getRowBeneficio = (row) => String(firstFilled(row?.numero_beneficio, row?.Beneficio, row?.BENEFICIO_LIMPO, row?.nb, row?.nb_tratado, row?.nb_ix)).trim()
 const getRowTableToken = (row) => normalizeSourceToken(firstFilled(row?.Tabela, row?.tabela))
 const isMacicaOrEntrantesRow = (row) => {
@@ -639,15 +851,14 @@ const panelStyle = {
 }
 
 const bubbleIconStyle = {
-  width: 28,
-  height: 28,
-  borderRadius: '50%',
-  background: '#1ea7ff',
-  color: '#fff',
+  width: 22,
+  height: 22,
+  color: '#f1f5f9',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   flex: '0 0 auto',
+  opacity: 0.95,
 }
 
 const miniLabelStyle = {
@@ -677,19 +888,10 @@ function SectionTitle({ icon: IconComp, title, right }) {
   return (
     <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
       <div className="d-flex align-items-center gap-2">
-        <span style={bubbleIconStyle}><IconComp size={14} /></span>
+        <span style={bubbleIconStyle}><IconComp size={19} /></span>
         <div className="fw-semibold text-uppercase" style={{ fontSize: '0.86rem' }}>{title}</div>
       </div>
       {right}
-    </div>
-  )
-}
-
-function InfoField({ label, value }) {
-  return (
-    <div>
-      <div style={miniLabelStyle}>{label}</div>
-      <div className="fw-semibold">{hasValue(value) ? String(value) : '-'}</div>
     </div>
   )
 }
@@ -742,6 +944,9 @@ function BankNameWithIcon({ bankCode, bankName }) {
   const code = normalizeBankCode(bankCode)
   const bankMeta = BANK_ICON_BY_CODE[code] || null
   const shortCode = bankMeta?.short || (code ? String(code).slice(0, 3) : '')
+  const fallbackChipBg = 'var(--primary-soft, rgba(37, 99, 235, 0.16))'
+  const fallbackChipColor = 'var(--text, #0f172a)'
+  const fallbackChipBorder = '1px solid var(--border-strong, rgba(37, 99, 235, 0.38))'
 
   return (
     <div className="d-flex align-items-center gap-2">
@@ -752,9 +957,9 @@ function BankNameWithIcon({ bankCode, bankName }) {
             height: 16,
             borderRadius: 4,
             padding: '0 4px',
-            background: bankMeta?.bg || 'rgba(30,167,255,0.2)',
-            color: bankMeta?.color || '#e5e7eb',
-            border: '1px solid rgba(255,255,255,0.18)',
+            background: bankMeta?.bg || fallbackChipBg,
+            color: bankMeta?.color || fallbackChipColor,
+            border: bankMeta ? '1px solid rgba(255,255,255,0.18)' : fallbackChipBorder,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -767,7 +972,19 @@ function BankNameWithIcon({ bankCode, bankName }) {
           {shortCode}
         </span>
       ) : (
-        <span style={{ width: 16, height: 16, borderRadius: 3, background: 'rgba(30,167,255,0.2)', border: '1px solid rgba(30,167,255,0.4)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: 3,
+            background: fallbackChipBg,
+            border: fallbackChipBorder,
+            color: 'var(--primary, #2563eb)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
           <FiCreditCard size={10} />
         </span>
       )}
@@ -795,6 +1012,8 @@ export default function ConsultaClientes() {
   const [contratoFonte, setContratoFonte] = useState(getInitialContratoFonte)
   const [in100DetailItem, setIn100DetailItem] = useState(null)
   const [v8DetailItem, setV8DetailItem] = useState(null)
+  const [handMaisDetailItem, setHandMaisDetailItem] = useState(null)
+  const [presencaDetailItem, setPresencaDetailItem] = useState(null)
   const lastUrlCpfRef = useRef('')
   const disponibilidadeToastKeyRef = useRef('')
   const hideSearchByInitialUrlRef = useRef(
@@ -1028,8 +1247,9 @@ export default function ConsultaClientes() {
         uf: pickFromRows(globalRows, ['uf', 'UF']),
       }].filter((item) => hasValue(item.cep) || hasValue(item.rua) || hasValue(item.cidade))
 
+      const phonesSourceRows = globalRows.filter((row) => !isPresencaRow(row))
       const phones = [
-        ...globalRows.flatMap((row) => [
+        ...phonesSourceRows.flatMap((row) => [
           row?.CELULAR1,
           row?.CELULAR2,
           row?.CELULAR3,
@@ -1075,6 +1295,8 @@ export default function ConsultaClientes() {
         const valorEmprestado = firstFilled(row?.vl_empres_tratado, row?.vl_empres)
         const pagas = stripTrailingZeroDecimals(firstFilled(row?.pagas, row?.parcelas_pagas, row?.qt_pagas))
         const restantes = stripTrailingZeroDecimals(firstFilled(row?.restantes, row?.parcelas_restantes, row?.qt_restantes))
+        const dataUpdateRaw = firstFilled(row?.data_update, row?.updated_at, row?.updatedAt, row?.data_hora_registro, row?.created_at)
+        const dataUpdateTs = parseDateAny(dataUpdateRaw)?.getTime?.() || 0
         const taxaRate = calcExcelRate(parcelas, valorParcela, valorEmprestado)
         const taxaRatePercent = taxaRate !== null ? taxaRate * 100 : null
         const taxaPercent = normalizeTaxaPercent(taxaRatePercent)
@@ -1093,13 +1315,163 @@ export default function ConsultaClientes() {
           showRoundedTaxaHint: taxaPercent === 1.5,
           valorParcela,
           emprestado: valorEmprestado,
+          dataUpdateRaw,
+          dataUpdateTs,
+          dataUpdate: hasValue(dataUpdateRaw)
+            ? (parseDateAny(dataUpdateRaw) ? formatDate(dataUpdateRaw) : String(dataUpdateRaw))
+            : '-',
         }
+      }
+
+      const mapContratoPresenca = (row, index) => {
+        const nomeTipo = firstFilled(row?.nomeTipo, row?.nome_tipo, row?.tipo_nome, row?.tipo)
+        const status = firstFilled(row?.status, row?.Status, row?.situacao)
+        const prazo = firstFilled(row?.prazo, row?.prazo_dias, row?.prazoDias)
+        const valorLiberado = firstFilled(row?.valorLiberado, row?.valor_liberado, row?.valor)
+        const valorMargemBase = firstFilled(row?.valorMargemBase, row?.valor_margem_base, row?.margemBase)
+        const valorMargemDisponivel = firstFilled(row?.valorMargemDisponivel, row?.valor_margem_disponivel, row?.margemDisponivel)
+        const valorParcela = firstFilled(row?.valorParcela, row?.valor_parcela)
+        const valorTotalDevido = firstFilled(row?.valorTotalDevido, row?.valor_total_devido)
+        const fallbackNome = getPresencaFallbackNome(row)
+        const fallbackCpfDigits = getPresencaFallbackCpfDigits(row)
+        const updatedAtRaw = getPresencaUpdatedAtRaw(row)
+        const updatedAtTs = parseDateAny(updatedAtRaw)?.getTime?.() || 0
+        const elegivel = getPresencaElegivel(row)
+        return {
+          key: `presenca-${index}-${updatedAtTs}-${getPresencaIdentityToken(row) || 'item'}`,
+          nomeTipo: hasValue(nomeTipo) ? String(nomeTipo).trim() : '-',
+          status: hasValue(status) ? String(status).trim() : '-',
+          prazo: hasValue(prazo) ? String(prazo).trim() : '-',
+          valorLiberado,
+          valorMargemBase,
+          valorMargemDisponivel,
+          valorParcela,
+          valorTotalDevido,
+          valorLiberadoNum: parseNumber(valorLiberado),
+          updatedAtRaw,
+          updatedAtTs,
+          fallbackNome: fallbackNome || '-',
+          fallbackCpfDigits,
+          fallbackCpf: fallbackCpfDigits ? formatCpf(fallbackCpfDigits) : '-',
+          elegivel,
+          identityToken: getPresencaIdentityToken(row),
+          rowRaw: row,
+        }
+      }
+
+      const buildPresencaContratos = (rows) => {
+        const presencaRows = rows.filter((row) => (
+          hasValue(firstFilled(row?.nomeTipo, row?.nome_tipo))
+          || hasValue(firstFilled(row?.status, row?.Status, row?.situacao))
+          || hasValue(firstFilled(row?.valorLiberado, row?.valor_liberado, row?.valor))
+          || hasValue(firstFilled(row?.valorMargemBase, row?.valor_margem_base))
+          || hasValue(firstFilled(row?.valorMargemDisponivel, row?.valor_margem_disponivel))
+          || hasValue(firstFilled(row?.valorParcela, row?.valor_parcela))
+          || hasValue(firstFilled(row?.valorTotalDevido, row?.valor_total_devido))
+        ))
+
+        const mostRecentFirst = [...presencaRows].sort((a, b) => {
+          const aTs = parseDateAny(getPresencaUpdatedAtRaw(a))?.getTime?.() || 0
+          const bTs = parseDateAny(getPresencaUpdatedAtRaw(b))?.getTime?.() || 0
+          return bTs - aTs
+        })
+
+        const uniqueByKey = new Map()
+        mostRecentFirst.forEach((row, index) => {
+          const mapped = mapContratoPresenca(row, index)
+          const distinctKey = [
+            mapped.identityToken || '-',
+            mapped.nomeTipo,
+            mapped.prazo,
+            String(mapped.valorLiberado ?? ''),
+            String(mapped.valorMargemBase ?? ''),
+            String(mapped.valorMargemDisponivel ?? ''),
+            String(mapped.valorParcela ?? ''),
+            String(mapped.valorTotalDevido ?? ''),
+            mapped.elegivel === null ? 'null' : (mapped.elegivel ? '1' : '0'),
+          ].join('|')
+          if (!uniqueByKey.has(distinctKey)) uniqueByKey.set(distinctKey, mapped)
+        })
+
+        return Array.from(uniqueByKey.values()).sort((a, b) => {
+          const aValor = a.valorLiberadoNum
+          const bValor = b.valorLiberadoNum
+          if (aValor !== null && bValor !== null && bValor !== aValor) return bValor - aValor
+          if (aValor === null && bValor !== null) return 1
+          if (aValor !== null && bValor === null) return -1
+          return b.updatedAtTs - a.updatedAtTs
+        })
+      }
+
+      const mapContratoHandMais = (row, index) => {
+        const nomeRaw = firstFilled(row?.nome, row?.NOME, row?.cliente_nome, row?.nomeCliente)
+        const cpfRawDigits = digitsOnly(firstFilled(row?.cpf, row?.CPF, row?.cliente_cpf, row?.numero_documento))
+        const statusRaw = getHandMaisStatus(row)
+        const valorMargemRaw = getHandMaisValorMargem(row)
+        const updatedAtRaw = getHandMaisUpdatedAtRaw(row)
+        const descricao = getHandMaisDescricao(row)
+        const updatedAtTs = parseDateAny(updatedAtRaw)?.getTime?.() || 0
+        return {
+          key: `handmais-${index}-${cpfRawDigits || row?.id || row?.id_tabela || 'item'}`,
+          nome: hasValue(nomeRaw) ? String(nomeRaw).trim() : '-',
+          cpfRaw: cpfRawDigits,
+          cpf: cpfRawDigits ? formatCpf(cpfRawDigits) : '-',
+          statusRaw: hasValue(statusRaw) ? String(statusRaw).trim() : '-',
+          status: hasValue(statusRaw) ? toTitleCase(String(statusRaw)) : '-',
+          valorMargemRaw,
+          valorMargem: hasValue(valorMargemRaw) ? formatMoney(valorMargemRaw) : '-',
+          valorMargemNum: parseNumber(valorMargemRaw),
+          updatedAtRaw,
+          updatedAt: hasValue(updatedAtRaw)
+            ? (parseDateAny(updatedAtRaw) ? formatDateTime(updatedAtRaw) : String(updatedAtRaw))
+            : '-',
+          updatedAtTs,
+          descricao,
+          hasDescricao: hasValue(descricao),
+          rowRaw: row,
+        }
+      }
+
+      const buildHandMaisContratos = (rows) => {
+        const handRows = rows.filter((row) => (
+          hasValue(firstFilled(row?.nome, row?.NOME, row?.cliente_nome))
+          || hasValue(firstFilled(row?.cpf, row?.CPF, row?.cliente_cpf))
+          || hasValue(getHandMaisStatus(row))
+          || hasValue(getHandMaisValorMargem(row))
+          || hasValue(getHandMaisUpdatedAtRaw(row))
+          || hasValue(getHandMaisDescricao(row))
+        ))
+
+        const mapped = handRows.map((row, index) => mapContratoHandMais(row, index))
+        const unique = new Map()
+        mapped.forEach((item) => {
+          const distinctKey = [
+            item.cpfRaw || normalizeNameToken(item.nome),
+            item.statusRaw,
+            String(item.valorMargemRaw ?? ''),
+            item.updatedAtRaw,
+            item.descricao,
+          ].join('|')
+          if (!unique.has(distinctKey)) unique.set(distinctKey, item)
+        })
+
+        return Array.from(unique.values()).sort((a, b) => {
+          const aValor = a.valorMargemNum
+          const bValor = b.valorMargemNum
+          if (aValor !== null && bValor !== null && bValor !== aValor) return bValor - aValor
+          if (aValor === null && bValor !== null) return 1
+          if (aValor !== null && bValor === null) return -1
+
+          if (b.updatedAtTs !== a.updatedAtTs) return b.updatedAtTs - a.updatedAtTs
+          return 0
+        })
       }
 
       const contratosByFonte = {
         portabilidade: rowsByFonte.portabilidade
           .filter((row) => hasValue(row?.id_contrato_empres) || hasValue(row?.vl_empres) || hasValue(row?.nb))
-          .map(mapContratoPadrao),
+          .map(mapContratoPadrao)
+          .sort((a, b) => b.dataUpdateTs - a.dataUpdateTs),
         in100: sortByDataHoraRegistroDesc(
           rowsByFonte.in100.filter((row) => hasValue(row?.numero_documento) || hasValue(row?.numero_beneficio) || hasValue(row?.status_api))
         ).map((row, index) => {
@@ -1173,12 +1545,8 @@ export default function ConsultaClientes() {
             rowRaw: row,
           }
         }),
-        presenca: rowsByFonte.presenca
-          .filter((row) => hasValue(row?.id_contrato_empres) || hasValue(row?.vl_empres) || hasValue(row?.nb))
-          .map(mapContratoPadrao),
-        handmais: rowsByFonte.handmais
-          .filter((row) => hasValue(row?.id_contrato_empres) || hasValue(row?.vl_empres) || hasValue(row?.nb))
-          .map(mapContratoPadrao),
+        presenca: buildPresencaContratos(rowsByFonte.presenca),
+        handmais: buildHandMaisContratos(rowsByFonte.handmais),
       }
 
       return {
@@ -1301,13 +1669,37 @@ export default function ConsultaClientes() {
       .filter((item) => item.quantidade > 0),
     [contratoQuantidadeByFonte]
   )
+  const handleSelectContratoFonte = useCallback((nextFonte) => {
+    const nextValue = String(nextFonte || '').trim()
+    if (!nextValue || nextValue === contratoFonte) return
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(CONTRATO_FONTE_STORAGE_KEY, contratoFonte)
-    } catch {
-      // Sem bloquear a UI se o navegador negar acesso ao storage.
-    }
+    const selectedFonte = CONTRATO_FONTES.find((item) => item.value === nextValue)
+    if (!selectedFonte) return
+
+    setContratoFonte(nextValue)
+
+    if (nextValue === 'portabilidade') return
+
+    notify.error(
+      <div className="d-flex align-items-center gap-2" style={{ lineHeight: 1.25 }}>
+        <img
+          src={CONTRATO_FONTE_ICON_BY_VALUE[nextValue] || '/neo-logo.svg'}
+          alt={selectedFonte.label}
+          width="20"
+          height="20"
+          style={{ width: 20, height: 20, objectFit: 'contain', borderRadius: 4, flex: '0 0 auto' }}
+          onError={(event) => {
+            if (event.currentTarget.src.endsWith('/neo-logo.svg')) return
+            event.currentTarget.src = '/neo-logo.svg'
+          }}
+        />
+        <span>Alguns dados mudaram. Para voltar ao padrão, clique em Portabilidade.</span>
+      </div>,
+      {
+        autoClose: 15000,
+        icon: false,
+      }
+    )
   }, [contratoFonte])
 
   useEffect(() => {
@@ -1464,6 +1856,56 @@ export default function ConsultaClientes() {
   }, [cpf, executeConsulta])
 
   const currentProfile = profileView || profile
+  const profileCpfRawDisplay = useMemo(() => {
+    const fromCurrentProfile = digitsOnly(firstFilled(currentProfile?.cpfRaw, currentProfile?.cpf))
+    if (hasValue(fromCurrentProfile)) return fromCurrentProfile
+
+    const presencaRows = Array.isArray(profile?.contratosByFonte?.presenca) ? profile.contratosByFonte.presenca : []
+    for (const item of presencaRows) {
+      const rowRaw = item?.rowRaw && typeof item.rowRaw === 'object' ? item.rowRaw : {}
+      const fallbackDigits = digitsOnly(firstFilled(
+        item?.fallbackCpfDigits,
+        item?.fallbackCpf,
+        rowRaw?.cpf,
+        rowRaw?.CPF,
+        rowRaw?.cliente_cpf,
+        rowRaw?.numero_documento,
+      ))
+      if (hasValue(fallbackDigits)) return fallbackDigits
+    }
+    return ''
+  }, [currentProfile?.cpfRaw, currentProfile?.cpf, profile?.contratosByFonte?.presenca])
+  const profileCpfDisplay = profileCpfRawDisplay ? formatCpf(profileCpfRawDisplay) : '-'
+  const profileUpdatedAtDisplay = useMemo(() => {
+    let latestRaw = ''
+    let latestTs = -Infinity
+
+    visibleRows.forEach((row) => {
+      if (!row || typeof row !== 'object') return
+      const raw = getRowUpdatedAtCandidate(row)
+      if (!hasValue(raw)) return
+
+      const ts = parseDateAny(raw)?.getTime?.()
+      if (Number.isFinite(ts)) {
+        if (ts > latestTs) {
+          latestTs = ts
+          latestRaw = raw
+        }
+      } else if (!latestRaw) {
+        latestRaw = raw
+      }
+    })
+
+    if (!hasDisplayValue(latestRaw)) return ''
+    const parsed = parseDateAny(latestRaw)
+    const formatted = parsed ? formatDateTime(latestRaw) : String(latestRaw).trim()
+    return hasDisplayValue(formatted) ? formatted : ''
+  }, [visibleRows])
+  const profileNascimentoDisplay = hasValue(currentProfile?.nascimento) ? currentProfile.nascimento : '-'
+  const profileIdadeDisplay = hasValue(currentProfile?.idade) ? currentProfile.idade : '-'
+  const profileUfDisplay = hasValue(currentProfile?.uf) ? currentProfile.uf : '-'
+  const profileBeneficioDisplay = hasValue(currentProfile?.nb) ? currentProfile.nb : '-'
+  const profileBeneficioCopyValue = hasValue(currentProfile?.nb) ? digitsOnly(currentProfile.nb) : ''
   const isIn100Selected = contratoFonte === 'in100'
   const summaryCards = isIn100Selected
     ? [
@@ -1472,10 +1914,10 @@ export default function ConsultaClientes() {
       { label: 'Margem disponível', value: currentProfile?.margemDisponivelIn100 ?? '-', footer: '' },
     ]
     : [
-      { label: 'Margem RMC', value: currentProfile?.margemRmc ?? '-', footer: `Valor Liberado RMC: ${currentProfile?.valorLiberadoRmc ?? '-'}` },
-      { label: 'Margem RCC', value: currentProfile?.margemRcc ?? '-', footer: `Valor Liberado RCC: ${currentProfile?.valorLiberadoRcc ?? '-'}` },
+      { label: 'Margem RMC', value: currentProfile?.margemRmc ?? '-', footer: '' },
+      { label: 'Margem RCC', value: currentProfile?.margemRcc ?? '-', footer: '' },
       { label: 'Total Cartão', value: currentProfile?.totalCartao ?? '-', footer: '' },
-      { label: 'Margem Livre', value: currentProfile?.margemLivre ?? '-', footer: `Renda: ${currentProfile?.renda ?? '-'}` },
+      { label: 'Margem Livre', value: currentProfile?.margemLivre ?? '-', footer: '' },
       { label: 'Valor Consignável', value: currentProfile?.totalValorLiberado ?? '-', footer: '' },
     ]
   const in100ModalData = useMemo(() => {
@@ -1520,6 +1962,224 @@ export default function ConsultaClientes() {
       descricao: firstFilled(v8DetailItem.descricaoV8, '-'),
     }
   }, [v8DetailItem])
+  const handMaisModalData = useMemo(() => {
+    if (!handMaisDetailItem) return null
+
+    const rowRaw = handMaisDetailItem?.rowRaw && typeof handMaisDetailItem.rowRaw === 'object'
+      ? handMaisDetailItem.rowRaw
+      : {}
+    const cpfRaw = firstFilled(
+      handMaisDetailItem.cpfRaw,
+      digitsOnly(firstFilled(rowRaw?.cpf, rowRaw?.CPF, rowRaw?.cliente_cpf, rowRaw?.numero_documento))
+    )
+    const nome = firstFilled(handMaisDetailItem.nome, rowRaw?.nome, rowRaw?.cliente_nome, '-')
+    const statusRaw = firstFilled(handMaisDetailItem.statusRaw, getHandMaisStatus(rowRaw), '-')
+    const valorMargemRaw = firstFilled(handMaisDetailItem.valorMargemRaw, getHandMaisValorMargem(rowRaw), '')
+    const updatedAtRaw = firstFilled(handMaisDetailItem.updatedAtRaw, getHandMaisUpdatedAtRaw(rowRaw), '')
+    const descricao = firstFilled(handMaisDetailItem.descricao, getHandMaisDescricao(rowRaw), '')
+
+    const formatHandMaisDetailValue = (key, value) => {
+      if (!hasValue(value)) return '-'
+      if (key === 'cpf') return formatCpf(value)
+      if (key === 'valor_margem' || key === 'valorMargem') return formatMoney(value)
+      if (key === 'dataNascimento') return formatDate(value)
+      if (key === 'created_at' || key === 'createdAt' || key === 'updated_at' || key === 'updatedAt') return formatDateTime(value)
+      return String(value)
+    }
+
+    const vinculoKeys = ['tipoConsulta', 'telefone', 'dataNascimento', 'nome_tabela', 'id_tabela', 'token_tabela']
+    const vinculoEntries = vinculoKeys.map((key) => ({
+      key,
+      label: HANDMAIS_DETAIL_FIELD_LABELS[key] || key,
+      value: formatHandMaisDetailValue(key, rowRaw?.[key]),
+    }))
+
+    const adicionaisEntries = [
+      { key: 'id', label: HANDMAIS_DETAIL_FIELD_LABELS.id, value: formatHandMaisDetailValue('id', rowRaw?.id) },
+      { key: 'created_at', label: HANDMAIS_DETAIL_FIELD_LABELS.created_at, value: formatHandMaisDetailValue('created_at', firstFilled(rowRaw?.created_at, rowRaw?.createdAt)) },
+      { key: 'updated_at', label: HANDMAIS_DETAIL_FIELD_LABELS.updated_at, value: formatHandMaisDetailValue('updated_at', firstFilled(rowRaw?.updated_at, rowRaw?.updatedAt)) },
+    ]
+
+    return {
+      cpfRaw,
+      cpf: cpfRaw ? formatCpf(cpfRaw) : '-',
+      nome: hasValue(nome) ? String(nome) : '-',
+      statusRaw: hasValue(statusRaw) ? String(statusRaw) : '-',
+      status: hasValue(statusRaw) ? String(statusRaw) : '-',
+      valorMargem: hasValue(valorMargemRaw) ? formatMoney(valorMargemRaw) : '-',
+      updatedAt: hasValue(updatedAtRaw) ? (parseDateAny(updatedAtRaw) ? formatDateTime(updatedAtRaw) : String(updatedAtRaw)) : '-',
+      vinculoEntries,
+      adicionaisEntries,
+      descricao: hasValue(descricao) ? String(descricao) : 'Sem descrição para esta consulta.',
+    }
+  }, [handMaisDetailItem])
+  const presencaModalData = useMemo(() => {
+    if (!presencaDetailItem) return null
+
+    const payload = presencaDetailItem?.rowRaw && typeof presencaDetailItem.rowRaw === 'object'
+      ? presencaDetailItem.rowRaw
+      : {}
+    const resultData = payload?.result && typeof payload.result === 'object' ? payload.result : payload
+    const fallbackOriginal = resultData?.original && typeof resultData.original === 'object' ? resultData.original : {}
+    const vinculoPayload = resultData?.vinculo && typeof resultData.vinculo === 'object'
+      ? resultData.vinculo
+      : (payload?.vinculo && typeof payload.vinculo === 'object' ? payload.vinculo : {})
+    const margemPayload = resultData?.margem_data && typeof resultData.margem_data === 'object'
+      ? resultData.margem_data
+      : (payload?.margem_data && typeof payload.margem_data === 'object' ? payload.margem_data : {})
+
+    const cpfDigits = digitsOnly(firstFilled(
+      pickByKeys(resultData, ['cpf', 'cliente_cpf', 'numero_documento', 'documento']),
+      pickByKeys(fallbackOriginal, ['cpf', 'cliente_cpf', 'numero_documento', 'documento']),
+      pickByKeys(payload, ['cpf', 'cliente_cpf', 'numero_documento', 'documento']),
+      presencaDetailItem.fallbackCpfDigits,
+    ))
+    const nome = firstFilled(
+      pickByKeys(resultData, ['nome', 'name', 'cliente_nome', 'nome_cliente', 'nomeCliente']),
+      pickByKeys(fallbackOriginal, ['nome', 'name', 'cliente_nome', 'nome_cliente', 'nomeCliente']),
+      pickByKeys(payload, ['nome', 'name', 'cliente_nome', 'nome_cliente', 'nomeCliente']),
+      presencaDetailItem.fallbackNome,
+      '-'
+    )
+    const updatedAtRaw = firstFilled(
+      presencaDetailItem.updatedAtRaw,
+      pickByKeys(resultData, ['updated_at', 'updatedAt', 'created_at', 'createdAt', 'data_hora_registro', 'data']),
+      pickByKeys(payload, ['updated_at', 'updatedAt', 'created_at', 'createdAt', 'data_hora_registro', 'data']),
+    )
+    const mensagem = firstFilled(
+      pickByKeys(resultData, ['Mensagem', 'mensagem', 'final_message', 'finalMessage', 'msg']),
+      pickByKeys(payload, ['Mensagem', 'mensagem', 'final_message', 'finalMessage', 'error', 'message']),
+      ''
+    )
+    const errorMessage = hasValue(mensagem) && !isFluxoCompletoOkMessage(mensagem) ? String(mensagem) : ''
+    const elegivel = parseNullableBoolean(firstFilled(
+      vinculoPayload?.elegivel,
+      pickByKeys(resultData, ['elegivel', 'isElegivel', 'is_elegivel', 'eligivel']),
+      pickByKeys(fallbackOriginal, ['elegivel', 'isElegivel', 'is_elegivel', 'eligivel']),
+      pickByKeys(payload, ['elegivel', 'isElegivel', 'is_elegivel', 'eligivel']),
+      presencaDetailItem.elegivel === null ? '' : String(presencaDetailItem.elegivel),
+    ))
+
+    const rawTabelas = Array.isArray(resultData?.tabelas_body)
+      ? resultData.tabelas_body
+      : (Array.isArray(payload?.tabelas_body)
+        ? payload.tabelas_body
+        : (Array.isArray(resultData?.tabelasBody)
+          ? resultData.tabelasBody
+          : (Array.isArray(payload?.tabelasBody) ? payload.tabelasBody : [])))
+
+    let tabelasBody = rawTabelas
+      .map((item) => mapPresencaTabelaFromFlat(item))
+      .filter(Boolean)
+
+    if (tabelasBody.length === 0) {
+      const identityToken = presencaDetailItem.identityToken || getPresencaIdentityToken(payload)
+      const relatedRows = visibleRows.filter((row) => (
+        row
+        && typeof row === 'object'
+        && isPresencaRow(row)
+        && getPresencaIdentityToken(row) === identityToken
+      ))
+      tabelasBody = relatedRows
+        .map((item) => mapPresencaTabelaFromFlat(item))
+        .filter(Boolean)
+    }
+    if (tabelasBody.length === 0) {
+      const fallbackTabela = mapPresencaTabelaFromFlat(payload)
+      if (fallbackTabela) tabelasBody = [fallbackTabela]
+    }
+
+    const uniqueTabelas = new Map()
+    tabelasBody.forEach((item) => {
+      const uniqueKey = `${item?.id ?? '-'}|${item?.nome ?? '-'}|${item?.prazo ?? '-'}|${item?.valorLiberado ?? '-'}`
+      if (!uniqueTabelas.has(uniqueKey)) uniqueTabelas.set(uniqueKey, item)
+    })
+
+    return {
+      cpfDigits,
+      cpf: cpfDigits ? formatCpf(cpfDigits) : '-',
+      nome,
+      updatedAt: hasValue(updatedAtRaw) ? formatDateTime(updatedAtRaw) : '-',
+      vinculo: {
+        matricula: firstFilled(vinculoPayload?.matricula, pickByKeys(resultData, ['matricula']), pickByKeys(payload, ['matricula']), '-'),
+        numeroInscricaoEmpregador: firstFilled(
+          vinculoPayload?.numeroInscricaoEmpregador,
+          pickByKeys(resultData, ['numeroInscricaoEmpregador', 'cnpjEmpregador']),
+          pickByKeys(payload, ['numeroInscricaoEmpregador', 'cnpjEmpregador']),
+          '-'
+        ),
+        elegivel,
+      },
+      margemData: {
+        valorMargemDisponivel: firstFilled(
+          margemPayload?.valorMargemDisponivel,
+          presencaDetailItem.valorMargemDisponivel,
+          pickByKeys(resultData, ['valorMargemDisponivel', 'valor_margem_disponivel']),
+          pickByKeys(payload, ['valorMargemDisponivel', 'valor_margem_disponivel']),
+        ),
+        valorMargemBase: firstFilled(
+          margemPayload?.valorMargemBase,
+          presencaDetailItem.valorMargemBase,
+          pickByKeys(resultData, ['valorMargemBase', 'valor_margem_base']),
+          pickByKeys(payload, ['valorMargemBase', 'valor_margem_base']),
+        ),
+        valorTotalDevido: firstFilled(
+          margemPayload?.valorTotalDevido,
+          presencaDetailItem.valorTotalDevido,
+          pickByKeys(resultData, ['valorTotalDevido', 'valor_total_devido']),
+          pickByKeys(payload, ['valorTotalDevido', 'valor_total_devido']),
+        ),
+        registroEmpregaticio: firstFilled(
+          margemPayload?.registroEmpregaticio,
+          pickByKeys(resultData, ['registroEmpregaticio', 'registro_empregaticio', 'matricula']),
+          pickByKeys(payload, ['registroEmpregaticio', 'registro_empregaticio', 'matricula']),
+          '-'
+        ),
+        cnpjEmpregador: firstFilled(
+          margemPayload?.cnpjEmpregador,
+          pickByKeys(resultData, ['cnpjEmpregador', 'numeroInscricaoEmpregador']),
+          pickByKeys(payload, ['cnpjEmpregador', 'numeroInscricaoEmpregador']),
+          '-'
+        ),
+        dataAdmissao: firstFilled(
+          margemPayload?.dataAdmissao,
+          pickByKeys(resultData, ['dataAdmissao', 'data_admissao']),
+          pickByKeys(payload, ['dataAdmissao', 'data_admissao']),
+          ''
+        ),
+        sexo: firstFilled(
+          margemPayload?.sexo,
+          pickByKeys(resultData, ['sexo']),
+          pickByKeys(payload, ['sexo']),
+          '-'
+        ),
+        nomeMae: firstFilled(
+          margemPayload?.nomeMae,
+          pickByKeys(resultData, ['nomeMae', 'nome_mae']),
+          pickByKeys(payload, ['nomeMae', 'nome_mae']),
+          '-'
+        ),
+      },
+      tabelasBody: Array.from(uniqueTabelas.values()),
+      finalMessage: hasValue(mensagem) ? String(mensagem) : '',
+      errorMessage,
+    }
+  }, [presencaDetailItem, visibleRows])
+  const sortedPresencaTabelas = useMemo(() => {
+    if (!presencaModalData) return []
+    const list = Array.isArray(presencaModalData.tabelasBody) ? [...presencaModalData.tabelasBody] : []
+    return list.sort((a, b) => {
+      const aValor = parseNumber(a?.valorLiberado)
+      const bValor = parseNumber(b?.valorLiberado)
+      if (aValor !== null && bValor !== null && bValor !== aValor) return bValor - aValor
+      if (aValor === null && bValor !== null) return 1
+      if (aValor !== null && bValor === null) return -1
+      const aPrazo = parseNumber(a?.prazo)
+      const bPrazo = parseNumber(b?.prazo)
+      if (aPrazo !== null && bPrazo !== null && aPrazo !== bPrazo) return aPrazo - bPrazo
+      return String(a?.nome || '').localeCompare(String(b?.nome || ''), 'pt-BR')
+    })
+  }, [presencaModalData])
   const in100ModalStatusIsError = useMemo(
     () => isQualibankingErrorStatus(in100ModalData?.status),
     [in100ModalData?.status]
@@ -1578,35 +2238,65 @@ export default function ConsultaClientes() {
           ) : currentProfile ? (
             <div className="d-flex flex-column gap-3">
               <section className="neo-card p-3" style={panelStyle}>
-                <SectionTitle icon={FiUser} title="Dados Pessoais" />
-                <div className="row g-3">
-                  <div className="col-12 col-md-4 col-xl-4"><InfoField label="Nome" value={currentProfile.nome} /></div>
-                  <div className="col-12 col-md-4 col-xl-4">
-                    <div className="d-flex flex-column flex-xl-row align-items-xl-end gap-2 gap-xl-3">
-                      <div className="flex-grow-1">
-                        <div style={miniLabelStyle}>CPF</div>
-                        <div className="d-flex align-items-center gap-2">
-                          <span className="fw-semibold">{currentProfile.cpf}</span>
-                          <CopyButton value={currentProfile.cpfRaw} label="CPF" />
-                        </div>
-                      </div>
-                      {profile.shouldShowBenefitSelect && (
-                        <div style={{ minWidth: 220, width: '100%', maxWidth: 320 }}>
-                          <label className="form-label small opacity-75 mb-1">Benefício</label>
-                          <select
-                            className="form-select form-select-sm"
-                            value={profile.selectedBenefitKey}
-                            onChange={(event) => setSelectedBenefitKey(event.target.value)}
-                          >
-                            {profile.benefitOptions.map((item) => (
-                              <option key={item.key} value={item.key}>{item.label}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                  <div className="d-flex align-items-center gap-2">
+                    <span style={bubbleIconStyle}><FiUser size={19} /></span>
+                    <div className="fw-semibold" style={{ fontSize: '1.85rem', lineHeight: 1 }}>Dados pessoais</div>
+                  </div>
+                  {hasDisplayValue(profileUpdatedAtDisplay) ? (
+                    <div className="small opacity-75">Atualizado: {profileUpdatedAtDisplay}</div>
+                  ) : null}
+                </div>
+                <div className="row g-3 align-items-start">
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <div style={miniLabelStyle}>Nome</div>
+                    <div className="fw-semibold">{hasValue(currentProfile?.nome) ? currentProfile.nome : '-'}</div>
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-2">
+                    <div style={miniLabelStyle}># CPF</div>
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fw-semibold">{profileCpfDisplay}</span>
+                      <CopyButton value={profileCpfRawDisplay} label="CPF" />
                     </div>
                   </div>
-                  <div className="col-12 col-md-4 col-xl-4"><InfoField label="Idade" value={`${currentProfile.nascimento} (${currentProfile.idade})`} /></div>
+                  <div className="col-6 col-md-4 col-lg-2">
+                    <div style={miniLabelStyle} className="d-flex align-items-center gap-1">
+                      <FiCalendar size={13} />
+                      <span>Data Nascimento</span>
+                    </div>
+                    <div className="fw-semibold">{profileNascimentoDisplay}</div>
+                  </div>
+                  <div className="col-6 col-md-2 col-lg-1">
+                    <div style={miniLabelStyle} className="d-flex align-items-center gap-1">
+                      <FiCalendar size={13} />
+                      <span>Idade</span>
+                    </div>
+                    <div className="fw-semibold">{profileIdadeDisplay}</div>
+                  </div>
+                  <div className="col-6 col-md-2 col-lg-1">
+                    <div style={miniLabelStyle}>UF</div>
+                    <div className="fw-semibold">{profileUfDisplay}</div>
+                  </div>
+                  <div className="col-12 col-md-6 col-lg-3">
+                    <div style={miniLabelStyle}>Benefícios (NB)</div>
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="fw-semibold">{profileBeneficioDisplay}</span>
+                      <CopyButton value={profileBeneficioCopyValue} label="NB" />
+                    </div>
+                    {profile.shouldShowBenefitSelect && (
+                      <div className="mt-2">
+                        <select
+                          className="form-select form-select-sm"
+                          value={profile.selectedBenefitKey}
+                          onChange={(event) => setSelectedBenefitKey(event.target.value)}
+                        >
+                          {profile.benefitOptions.map((item) => (
+                            <option key={item.key} value={item.key}>{item.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 
@@ -1614,8 +2304,8 @@ export default function ConsultaClientes() {
                 {summaryCards.map((item) => (
                   <div key={item.label} className={isIn100Selected ? 'col-12 col-lg-4' : 'col-12 col-md-6 col-xl'}>
                     <div className="neo-card p-3 h-100" style={panelStyle}>
-                      <div className="d-flex align-items-center gap-2 mb-2"><span style={bubbleIconStyle}><FiDollarSign size={13} /></span><div className="small opacity-75">{item.label}</div></div>
-                      <div className="h3 fw-bold mb-0">{item.value}</div>
+                      <div className="d-flex align-items-center gap-2 mb-2"><span style={bubbleIconStyle}><FiDollarSign size={18} /></span><div className="small opacity-75">{item.label}</div></div>
+                      <div className="h3 fw-bold mb-0" style={{ fontSize: '1.45rem', lineHeight: 1.2 }}>{item.value}</div>
                       {item.footer ? (
                         <div className="small fw-semibold mt-3 px-2 py-1 rounded" style={{ background: 'rgba(0, 199, 255, 0.25)' }}>{item.footer}</div>
                       ) : null}
@@ -1705,7 +2395,7 @@ export default function ConsultaClientes() {
                                     color: contratoFonte === fonte.value ? '#22d3ee' : 'inherit',
                                     fontWeight: contratoFonte === fonte.value ? 700 : 500,
                                   }}
-                                  onClick={() => setContratoFonte(fonte.value)}
+                                  onClick={() => handleSelectContratoFonte(fonte.value)}
                                 >
                                   <span className="d-inline-flex align-items-center gap-2">
                                     <img
@@ -1837,27 +2527,118 @@ export default function ConsultaClientes() {
                             )}
                           </tbody>
                         </table>
-                      ) : (
+                      ) : contratoFonte === 'presenca' ? (
                         <table className="table table-dark table-sm align-middle mb-0">
                           <thead>
                             <tr>
-                              <th>Cód.</th>
-                              <th>Banco</th>
-                              <th>N do Contrato</th>
-                              <th>Pago/Restantes</th>
-                              <th>Parcelas</th>
-                              <th>Taxa</th>
-                              <th>Valor Parcela</th>
-                              <th>Emprestado</th>
+                              <th>Nome</th>
+                              <th>CPF</th>
+                              <th>Tabela</th>
+                              <th>Prazo</th>
+                              <th>Valor Liberado</th>
+                              <th>Elegível</th>
+                              <th style={{ width: 100 }}>Ações</th>
                             </tr>
                           </thead>
                           <tbody>
                             {selectedContratoRows.length === 0 ? (
-                              <EmptyCell colSpan={8} text="Nenhum contrato encontrado." />
+                              <EmptyCell colSpan={7} text="Nenhum registro de Presença encontrado." />
                             ) : (
                               selectedContratoRows.map((item) => (
                                 <tr key={item.key}>
-                                  <td>{resolveBankCodeDisplay(item.bancoCodigo)}</td>
+                                  <td>{item.fallbackNome || '-'}</td>
+                                  <td>{item.fallbackCpf || '-'}</td>
+                                  <td>{item.nomeTipo || '-'}</td>
+                                  <td>{item.prazo || '-'}</td>
+                                  <td>{hasValue(item.valorLiberado) ? formatMoney(item.valorLiberado) : '-'}</td>
+                                  <td>
+                                    {item.elegivel === null ? (
+                                      <span className="badge text-bg-secondary">-</span>
+                                    ) : (
+                                      <span className={`badge ${item.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
+                                        {item.elegivel ? 'Sim' : 'Não'}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-info btn-sm d-inline-flex align-items-center justify-content-center"
+                                      title="Ver detalhes"
+                                      aria-label="Ver detalhes"
+                                      onClick={() => setPresencaDetailItem(item)}
+                                    >
+                                      <FiList size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      ) : contratoFonte === 'handmais' ? (
+                        <table className="table table-dark table-sm align-middle mb-0">
+                          <thead>
+                            <tr>
+                              <th>Nome</th>
+                              <th>CPF</th>
+                              <th>Status</th>
+                              <th>Valor Margem</th>
+                              <th>Última atualização</th>
+                              <th style={{ width: 110 }}>Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedContratoRows.length === 0 ? (
+                              <EmptyCell colSpan={6} text="Nenhum registro de Hand+ encontrado." />
+                            ) : (
+                              selectedContratoRows.map((item) => (
+                                <tr key={item.key}>
+                                  <td>{item.nome || '-'}</td>
+                                  <td>{item.cpf || '-'}</td>
+                                  <td>
+                                    <span className={`badge ${getHandMaisStatusBadgeClass(item.statusRaw || item.status)}`}>
+                                      {item.status || '-'}
+                                    </span>
+                                  </td>
+                                  <td>{item.valorMargem || '-'}</td>
+                                  <td>{item.updatedAt || '-'}</td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="btn btn-outline-info btn-sm d-inline-flex align-items-center justify-content-center"
+                                      title={item.hasDescricao ? 'Descrição' : 'Sem descrição'}
+                                      aria-label="Descrição"
+                                      onClick={() => setHandMaisDetailItem(item)}
+                                      disabled={!item.hasDescricao}
+                                    >
+                                      <FiList size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <table className="table table-dark table-sm align-middle mb-0">
+                          <thead>
+                            <tr>
+                              <th>Banco</th>
+                              <th>N do Contrato</th>
+                              <th>Pago/Restantes (Parcelas)</th>
+                              <th>Taxa</th>
+                              <th>Valor Parcela</th>
+                              <th>Emprestado</th>
+                              <th>Última atualização</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedContratoRows.length === 0 ? (
+                              <EmptyCell colSpan={7} text="Nenhum contrato encontrado." />
+                            ) : (
+                              selectedContratoRows.map((item) => (
+                                <tr key={item.key}>
                                   <td>
                                     <BankNameWithIcon
                                       bankCode={item.bancoCodigo}
@@ -1865,8 +2646,7 @@ export default function ConsultaClientes() {
                                     />
                                   </td>
                                   <td>{item.contrato || '-'}</td>
-                                  <td>{item.pgtoRestantes || '-'}</td>
-                                  <td>{item.parcelas || '-'}</td>
+                                  <td>{`${item.pgtoRestantes || '-'} (${item.parcelas || '-'})`}</td>
                                   <td>
                                     <span className="d-inline-flex align-items-center gap-1 position-relative">
                                       <span>{item.taxa || '-'}</span>
@@ -1920,6 +2700,7 @@ export default function ConsultaClientes() {
                                   </td>
                                   <td>{hasValue(item.valorParcela) ? formatMoney(item.valorParcela) : '-'}</td>
                                   <td>{hasValue(item.emprestado) ? formatMoney(item.emprestado) : '-'}</td>
+                                  <td>{item.dataUpdate || '-'}</td>
                                 </tr>
                               ))
                             )}
@@ -1940,6 +2721,97 @@ export default function ConsultaClientes() {
 
         </section>
       </main>
+      {handMaisDetailItem && handMaisModalData && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          style={{ background: 'rgba(2, 6, 23, 0.72)', zIndex: 2500 }}
+          onClick={() => setHandMaisDetailItem(null)}
+        >
+          <div
+            className="neo-card p-0"
+            style={{ width: 'min(1180px, 100%)', maxHeight: '85vh', overflow: 'auto', borderRadius: 12 }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="d-flex align-items-start justify-content-between gap-3 px-3 py-3 border-bottom border-secondary-subtle">
+              <div>
+                <h5 className="mb-1">Resultado da Consulta Hand+</h5>
+                <div className="small opacity-75">Visualização detalhada da consulta selecionada.</div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm text-danger"
+                aria-label="Fechar"
+                title="Fechar"
+                onClick={() => setHandMaisDetailItem(null)}
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+            <div className="p-3">
+              <div className="row g-2 mb-3">
+                <div className="col-12 col-md-3">
+                  <div className="small opacity-75">CPF</div>
+                  <div className="fw-semibold d-flex align-items-center gap-2">
+                    <span>{handMaisModalData.cpf}</span>
+                    <CopyButton value={handMaisModalData.cpfRaw} label="CPF" />
+                  </div>
+                </div>
+                <div className="col-12 col-md-3">
+                  <div className="small opacity-75">Nome</div>
+                  <div className="fw-semibold text-break">{handMaisModalData.nome}</div>
+                </div>
+                <div className="col-6 col-md-2">
+                  <div className="small opacity-75">Status</div>
+                  <div>
+                    <span className={`badge ${getHandMaisStatusBadgeClass(handMaisModalData.statusRaw)}`}>
+                      {handMaisModalData.status}
+                    </span>
+                  </div>
+                </div>
+                <div className="col-6 col-md-2">
+                  <div className="small opacity-75">Valor Margem</div>
+                  <div className="fw-semibold">{handMaisModalData.valorMargem}</div>
+                </div>
+                <div className="col-12 col-md-2">
+                  <div className="small opacity-75">Última atualização</div>
+                  <div className="fw-semibold text-wrap" style={{ whiteSpace: 'normal' }}>{handMaisModalData.updatedAt}</div>
+                </div>
+              </div>
+
+              <div className="neo-card p-3 mb-3">
+                <div className="small opacity-75 mb-2">Vínculo</div>
+                <div className="row g-2">
+                  {handMaisModalData.vinculoEntries.map((entry) => (
+                    <div key={entry.key} className="col-12 col-md-4">
+                      <div className="small opacity-75">{entry.label}</div>
+                      <div className="fw-semibold text-wrap" style={{ whiteSpace: 'normal' }}>{entry.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="neo-card p-3 mb-3">
+                <div className="small opacity-75 mb-2">Informações adicionais</div>
+                <div className="row g-2">
+                  {handMaisModalData.adicionaisEntries.map((entry) => (
+                    <div key={entry.key} className="col-12 col-md-4">
+                      <div className="neo-card p-2 h-100">
+                        <div className="small opacity-75">{entry.label}</div>
+                        <div className="small text-wrap" style={{ whiteSpace: 'normal' }}>{entry.value}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="neo-card p-3" style={{ borderColor: 'rgba(255, 140, 0, 0.35)' }}>
+                <div className="small opacity-75 mb-1">Descrição</div>
+                <div className="small text-break">{handMaisModalData.descricao}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {v8DetailItem && v8ModalData && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
@@ -2147,6 +3019,128 @@ export default function ConsultaClientes() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {presencaDetailItem && presencaModalData && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          style={{ background: 'rgba(2, 6, 23, 0.72)', zIndex: 2500 }}
+          onClick={() => setPresencaDetailItem(null)}
+        >
+          <div
+            className="neo-card p-3 p-md-4"
+            style={{ width: 'min(1200px, 100%)', maxHeight: '85vh', overflow: 'auto', borderRadius: 12 }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h6 className="mb-0">Resultado da Consulta Individual</h6>
+              <button
+                type="button"
+                className="btn btn-ghost btn-icon btn-sm text-danger"
+                aria-label="Fechar"
+                title="Fechar"
+                onClick={() => setPresencaDetailItem(null)}
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="small opacity-75 mb-3">Última atualização: {presencaModalData.updatedAt}</div>
+
+            <div className="row g-2 mb-3">
+              <div className="col-12 col-md-6">
+                <div className="small opacity-75">CPF</div>
+                <div className="fw-semibold d-flex align-items-center gap-2">
+                  <span>{presencaModalData.cpf}</span>
+                  <CopyButton value={presencaModalData.cpfDigits} label="CPF" />
+                </div>
+              </div>
+              <div className="col-12 col-md-6">
+                <div className="small opacity-75">Nome</div>
+                <div className="fw-semibold text-break">{presencaModalData.nome || '-'}</div>
+              </div>
+              {presencaModalData.finalMessage && !presencaModalData.errorMessage && (
+                <div className="col-12">
+                  <div className="small opacity-75">Mensagem</div>
+                  <div className="fw-semibold small text-break">{presencaModalData.finalMessage}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="neo-card p-3 mb-3">
+              <div className="small opacity-75 mb-2">Vínculo</div>
+              <div className="row g-2">
+                <div className="col-12 col-md-4">
+                  <div className="small opacity-75">Elegível</div>
+                  <div className="fw-semibold">
+                    {presencaModalData?.vinculo?.elegivel === null ? (
+                      <span className="badge text-bg-secondary">-</span>
+                    ) : (
+                      <span className={`badge ${presencaModalData.vinculo.elegivel ? 'text-bg-success' : 'text-bg-danger'}`}>
+                        {presencaModalData.vinculo.elegivel ? 'Sim' : 'Não'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="neo-card p-3 mb-3">
+              <div className="small opacity-75 mb-2">Margem</div>
+              <div className="row g-2">
+                <div className="col-12 col-md-3"><div className="small opacity-75">Valor Margem Disponível</div><div className="fw-semibold">{formatMoney(presencaModalData?.margemData?.valorMargemDisponivel)}</div></div>
+                <div className="col-12 col-md-3"><div className="small opacity-75">Valor Margem Base</div><div className="fw-semibold">{formatMoney(presencaModalData?.margemData?.valorMargemBase)}</div></div>
+                <div className="col-12 col-md-3"><div className="small opacity-75">Valor Total Devido</div><div className="fw-semibold">{formatMoney(presencaModalData?.margemData?.valorTotalDevido)}</div></div>
+                <div className="col-12 col-md-3"><div className="small opacity-75">Data Admissão</div><div className="fw-semibold">{formatDate(presencaModalData?.margemData?.dataAdmissao)}</div></div>
+              </div>
+            </div>
+
+            <div className="neo-card p-3">
+              <div className="small opacity-75 mb-2">Tabelas Disponíveis</div>
+              <div className="table-responsive">
+                <table className="table table-dark table-hover align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Nome</th>
+                      <th>Prazo</th>
+                      <th>Taxa Juros</th>
+                      <th>Valor Liberado</th>
+                      <th>Valor Parcela</th>
+                      <th>Tipo Crédito</th>
+                      <th>Taxa Seguro</th>
+                      <th>Valor Seguro</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedPresencaTabelas.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-3 opacity-75">Nenhuma tabela retornada.</td>
+                      </tr>
+                    ) : (
+                      sortedPresencaTabelas.map((item, idx) => (
+                        <tr key={`${item?.id ?? 'id'}-${item?.nome ?? 'nome'}-${idx}`}>
+                          <td className="text-wrap">{item?.nome || '-'}</td>
+                          <td>{hasValue(item?.prazo) ? String(item.prazo) : '-'}</td>
+                          <td>{hasValue(item?.taxaJuros) ? String(item.taxaJuros) : '-'}</td>
+                          <td>{hasValue(item?.valorLiberado) ? formatMoney(item.valorLiberado) : '-'}</td>
+                          <td>{hasValue(item?.valorParcela) ? formatMoney(item.valorParcela) : '-'}</td>
+                          <td>{firstFilled(item?.tipoCredito?.name, item?.tipoCredito, 'Novo')}</td>
+                          <td>{hasValue(item?.taxaSeguro) ? String(item.taxaSeguro) : '-'}</td>
+                          <td>{hasValue(item?.valorSeguro) ? formatMoney(item.valorSeguro) : '-'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {presencaModalData.errorMessage && (
+              <div className="neo-card p-3 mt-3 border border-danger-subtle">
+                <div className="small text-danger fw-semibold mb-2">Mensagem de erro</div>
+                <div className="small text-break">{presencaModalData.errorMessage}</div>
+              </div>
+            )}
           </div>
         </div>
       )}
