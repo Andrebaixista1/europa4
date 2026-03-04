@@ -3,7 +3,7 @@ export function canAccessConsultasV8(user) {
 }
 
 export function canAccessConsultasPrata(user) {
-  return resolveUserId(user) === 1
+  return Boolean(user)
 }
 
 export function canAccessConsultasHandMais(user) {

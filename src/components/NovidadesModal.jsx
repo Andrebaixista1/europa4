@@ -5,6 +5,15 @@ import '../styles/novidades-modal.css'
 
 const novidadesListRaw = [
   {
+    data: '04/03/2026',
+    titulo: 'Consulta Prata liberada para todos os usuarios logados',
+    descricao:
+      'A pagina de Consulta Prata foi liberada para todos os usuarios autenticados da plataforma, mantendo a Consulta Clientes com acesso restrito por id_user.',
+    image: '/prata-digital-logo.svg',
+    imageFit: 'contain',
+    imageBackground: '#ffffff',
+  },
+  {
     data: '02/03/2026',
     titulo: 'EUI 4.2.032026',
     descricao:
