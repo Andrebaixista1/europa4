@@ -6,6 +6,15 @@ import '../styles/novidades-modal.css'
 const novidadesListRaw = [
   {
     data: '04/03/2026',
+    titulo: 'Requisito de acesso para APIs novas (V8, Presenca, Hand+ e Prata)',
+    descricao:
+      'Para todas as APIs novas (V8, Presenca, Hand+ e Prata), e obrigatorio ter login de acesso aos bancos correspondentes de cada Parceiro/Expande.',
+    image: '/neo-logo.svg',
+    imageFit: 'contain',
+    imageBackground: '#07132a',
+  },
+  {
+    data: '04/03/2026',
     titulo: 'Consulta Prata liberada para todos os usuarios logados',
     descricao:
       'A pagina de Consulta Prata foi liberada para todos os usuarios autenticados da plataforma, mantendo a Consulta Clientes com acesso restrito por id_user.',
