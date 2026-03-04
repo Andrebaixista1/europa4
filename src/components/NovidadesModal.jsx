@@ -6,6 +6,15 @@ import '../styles/novidades-modal.css'
 const novidadesListRaw = [
   {
     data: '04/03/2026',
+    titulo: 'Europa 4.2 CRM com integração direta no Argus',
+    descricao:
+      'Agora o Europa 4.2 CRM possui integração direta com a tela do Argus para agilizar a consulta e o fluxo operacional.',
+    image: '/neo-logo.svg',
+    imageFit: 'contain',
+    imageBackground: '#07132a',
+  },
+  {
+    data: '04/03/2026',
     titulo: 'Requisito de acesso para APIs novas (V8, Presenca, Hand+ e Prata)',
     descricao:
       'Para todas as APIs novas (V8, Presenca, Hand+ e Prata), e obrigatorio ter login de acesso aos bancos correspondentes de cada Parceiro/Expande.',
