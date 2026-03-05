@@ -36,6 +36,7 @@ export default function SidebarNav() {
   const [showToggleHint, setShowToggleHint] = useState(false)
   const { isOpen: mobileOpen, close: closeSidebar } = useSidebar()
   const role = user?.role
+  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
   const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
   const normalizedRole = normalizeRole(role, level)
   const allowConsultaClientes = canAccessConsultaClientes(user)
@@ -67,7 +68,7 @@ export default function SidebarNav() {
     const isSupervisor = normalizedRole === Roles.Supervisor
 
     const items = [
-      { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' }
+      { label: 'Visao Geral', icon: 'FiHome', to: '/dashboard' }
     ]
 
     items.push({
@@ -77,8 +78,8 @@ export default function SidebarNav() {
         ...(allowConsultaClientes ? [{ label: 'Consulta Clientes', to: '/consultas/clientes' }] : []),
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
         { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
-        { label: 'Histórico de Consultas', to: '/consultas/historico' },
-        ...(allowConsultaPresenca ? [{ label: 'Consulta Presença', to: '/consultas/presenca' }] : []),
+        { label: 'Historico de Consultas', to: '/consultas/historico' },
+        ...(allowConsultaPresenca ? [{ label: 'Consulta Presenca', to: '/consultas/presenca' }] : []),
         ...(allowConsultasHandMais ? [{ label: 'Consulta Hand+', to: '/consultas/handmais' }] : []),
         ...(allowConsultasPrata ? [{ label: 'Consulta Prata', to: '/consultas/prata' }] : []),
         ...(allowConsultasV8 ? [{ label: 'Consultas V8', to: '/consultas/v8' }] : [])
@@ -87,30 +88,31 @@ export default function SidebarNav() {
 
     if (isMaster) {
       items.push({
-        label: 'Gestão',
+        label: 'Gestao',
         icon: 'FiBriefcase',
         children: [
-          { label: 'Gestão de Recargas', to: '/recargas' },
+          { label: 'Gestao de Recargas', to: '/recargas' },
           { label: 'Controle Planejamento', to: '/admin/controle-planejamento' },
-          { label: 'Relatórios', to: '/admin/relatorios' }
+          { label: 'Relatorios', to: '/admin/relatorios' }
         ]
       })
     }
 
     if (isMaster || isAdmin || isSupervisor) {
       items.push({
-        label: 'Configurações',
+        label: 'Configuracoes',
         icon: 'FiSettings',
         children: [
-          { label: 'Usuários', to: '/usuarios' },
+          { label: 'Usuarios', to: '/usuarios' },
           { label: 'Equipes', to: '/equipes' },
+          ...(loggedUserId === 1 ? [{ label: 'Permissoes', to: '/admin/permissoes' }] : []),
           ...(isMaster ? [{ label: 'Backups', to: '/admin/backups' }] : [])
         ]
       })
     }
 
     return items
-  }, [normalizedRole, allowConsultaClientes, allowConsultasV8, allowConsultasPrata, allowConsultasHandMais, allowConsultaPresenca])
+  }, [normalizedRole, loggedUserId, allowConsultaClientes, allowConsultasV8, allowConsultasPrata, allowConsultasHandMais, allowConsultaPresenca])
 
   const isActive = (path) => {
     if (!path) return false
@@ -310,6 +312,7 @@ export default function SidebarNav() {
     </>
   )
 }
+
 
 
 

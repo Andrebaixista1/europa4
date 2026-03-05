@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 
 const SCOPE_OPTIONS = [
   { key: 'hierarquia', label: 'Hierarquia', icon: FiLayers },
-  { key: 'setor', label: 'Setor', icon: FiShield },
+  { key: 'setor', label: 'Equipe', icon: FiShield },
   { key: 'usuario', label: 'Usuario especifico', icon: FiUser }
 ]
 
@@ -28,6 +28,45 @@ const PAGE_CATALOG = [
   { key: 'equipes', label: 'Equipes' },
   { key: 'permissoes', label: 'Permissoes' },
   { key: 'backups', label: 'Backups' }
+]
+
+const PAGE_CAPABILITIES = {
+  dashboard: { consultar: true },
+  consultas_in100: { consultar: true },
+  consultas_v8: { consultar: true },
+  consultas_prata: { consultar: true },
+  consultas_presenca: { consultar: true },
+  consultas_handmais: { consultar: true },
+  usuarios: { consultar: true, criar: true, editar: true, excluir: true },
+  equipes: { consultar: true, criar: true, editar: true, excluir: true },
+  permissoes: { consultar: true, criar: true, editar: true, excluir: true },
+  backups: { consultar: true, exportar: true }
+}
+
+const ACTION_LABELS = {
+  consultar: 'Consultar',
+  criar: 'Criar',
+  editar: 'Editar',
+  excluir: 'Excluir',
+  exportar: 'Exportar'
+}
+
+const ACCESS_MODE_OPTIONS = [
+  {
+    key: 'liberado',
+    title: 'Acesso completo',
+    description: 'Pode abrir a pagina e executar as acoes permitidas.'
+  },
+  {
+    key: 'somente-leitura',
+    title: 'Somente leitura',
+    description: 'Pode visualizar e consultar, sem alterar dados.'
+  },
+  {
+    key: 'restrito',
+    title: 'Bloqueado',
+    description: 'Nao pode visualizar esta pagina.'
+  }
 ]
 
 const API_CATALOG = [
@@ -172,6 +211,23 @@ const createEmptyPreset = () => ({
   apis: createFlags(API_CATALOG, []),
   extras: { readOnly: false, forceMfa: false, timeWindow: false }
 })
+
+const createPageRulesFromConfig = (cfg) => {
+  const next = {}
+  PAGE_CATALOG.forEach((page) => {
+    const cap = PAGE_CAPABILITIES[page.key] || {}
+    const view = Boolean(cfg?.pages?.[page.key])
+    next[page.key] = {
+      view,
+      consultar: view && Boolean(cap.consultar),
+      criar: false,
+      editar: false,
+      excluir: false,
+      exportar: false
+    }
+  })
+  return next
+}
 
 const ensurePresetShape = (input) => {
   const base = createEmptyPreset()
@@ -346,7 +402,10 @@ export default function Permissoes() {
   const { user } = useAuth()
   const [scope, setScope] = useState('hierarquia')
   const [target, setTarget] = useState(TARGETS_BY_SCOPE.hierarquia[0])
+  const [selectedPage, setSelectedPage] = useState(PAGE_CATALOG[0].key)
+  const [accessMode, setAccessMode] = useState('liberado')
   const [config, setConfig] = useState(() => cloneConfig(MOCK_PRESETS.hierarquia.Master))
+  const [pageRules, setPageRules] = useState(() => createPageRulesFromConfig(MOCK_PRESETS.hierarquia.Master))
   const [statusMsg, setStatusMsg] = useState('')
   const [loadingRemote, setLoadingRemote] = useState(false)
   const [apiTargetsByScope, setApiTargetsByScope] = useState(null)
@@ -372,7 +431,9 @@ export default function Permissoes() {
 
   useEffect(() => {
     const preset = resolvePreset(scope, target)
-    setConfig(cloneConfig(preset))
+    const nextConfig = cloneConfig(preset)
+    setConfig(nextConfig)
+    setPageRules(createPageRulesFromConfig(nextConfig))
   }, [scope, target, apiPresetsByScope])
 
   const loadPermissionsFromApi = async () => {
@@ -410,20 +471,16 @@ export default function Permissoes() {
     () => Object.values(config.pages || {}).filter(Boolean).length,
     [config.pages]
   )
-  const apisEnabledCount = useMemo(
-    () => Object.values(config.apis || {}).filter(Boolean).length,
-    [config.apis]
-  )
 
-  const toggleItem = (group, key) => {
-    setConfig((prev) => ({
-      ...prev,
-      [group]: {
-        ...(prev[group] || {}),
-        [key]: !prev?.[group]?.[key]
-      }
-    }))
-  }
+  const actionsEnabledCount = useMemo(
+    () => Object.values(pageRules || {}).reduce((acc, rule) => {
+      const total = ['consultar', 'criar', 'editar', 'excluir', 'exportar']
+        .filter((actionKey) => Boolean(rule?.[actionKey]))
+        .length
+      return acc + total
+    }, 0),
+    [pageRules]
+  )
 
   const toggleExtra = (key) => {
     setConfig((prev) => ({
@@ -435,10 +492,129 @@ export default function Permissoes() {
     }))
   }
 
+  const selectedPageMeta = PAGE_CATALOG.find((page) => page.key === selectedPage) || PAGE_CATALOG[0]
+  const selectedPageRule = pageRules[selectedPageMeta.key] || {
+    view: false,
+    consultar: false,
+    criar: false,
+    editar: false,
+    excluir: false,
+    exportar: false
+  }
+  const selectedPageCapabilities = PAGE_CAPABILITIES[selectedPageMeta.key] || {}
+  const selectedPageActions = ['consultar', 'criar', 'editar', 'excluir', 'exportar']
+    .filter((actionKey) => Boolean(selectedPageCapabilities[actionKey]))
+
+  const updatePageRule = (pageKey, updater) => {
+    setPageRules((prev) => {
+      const current = prev[pageKey] || {
+        view: false,
+        consultar: false,
+        criar: false,
+        editar: false,
+        excluir: false,
+        exportar: false
+      }
+      const nextRule = typeof updater === 'function' ? updater(current) : updater
+      return { ...prev, [pageKey]: nextRule }
+    })
+  }
+
+  const setPageVisibility = (pageKey, nextView) => {
+    const cap = PAGE_CAPABILITIES[pageKey] || {}
+    updatePageRule(pageKey, (current) => ({
+      ...current,
+      view: nextView,
+      consultar: nextView ? (current.consultar || Boolean(cap.consultar)) : false,
+      criar: nextView ? current.criar : false,
+      editar: nextView ? current.editar : false,
+      excluir: nextView ? current.excluir : false,
+      exportar: nextView ? current.exportar : false
+    }))
+
+    setConfig((prev) => ({
+      ...prev,
+      pages: {
+        ...(prev.pages || {}),
+        [pageKey]: nextView
+      }
+    }))
+  }
+
+  const togglePageAction = (pageKey, actionKey) => {
+    const cap = PAGE_CAPABILITIES[pageKey] || {}
+    if (!cap[actionKey]) return
+    updatePageRule(pageKey, (current) => {
+      const nextActionValue = !current[actionKey]
+      const nextView = current.view || nextActionValue
+      return {
+        ...current,
+        view: nextView,
+        consultar: actionKey === 'consultar' ? nextActionValue : (nextView ? current.consultar || Boolean(cap.consultar) : false),
+        [actionKey]: nextActionValue
+      }
+    })
+
+    setConfig((prev) => ({
+      ...prev,
+      pages: {
+        ...(prev.pages || {}),
+        [pageKey]: true
+      }
+    }))
+  }
+
+  useEffect(() => {
+    const hasWriteAccess =
+      Boolean(selectedPageRule.criar) ||
+      Boolean(selectedPageRule.editar) ||
+      Boolean(selectedPageRule.excluir) ||
+      Boolean(selectedPageRule.exportar)
+
+    if (!selectedPageRule.view) {
+      setAccessMode('restrito')
+    } else if (hasWriteAccess) {
+      setAccessMode('liberado')
+    } else {
+      setAccessMode('somente-leitura')
+    }
+  }, [selectedPageRule])
+
+  const applyAccessMode = (mode) => {
+    setAccessMode(mode)
+    if (mode === 'restrito') {
+      setPageVisibility(selectedPageMeta.key, false)
+      return
+    }
+
+    setPageVisibility(selectedPageMeta.key, true)
+    if (mode === 'somente-leitura') {
+      updatePageRule(selectedPageMeta.key, (current) => ({
+        ...current,
+        consultar: true,
+        criar: false,
+        editar: false,
+        excluir: false,
+        exportar: false
+      }))
+    } else if (mode === 'liberado') {
+      updatePageRule(selectedPageMeta.key, (current) => ({
+        ...current,
+        consultar: Boolean(selectedPageCapabilities.consultar),
+        criar: Boolean(selectedPageCapabilities.criar),
+        editar: Boolean(selectedPageCapabilities.editar),
+        excluir: Boolean(selectedPageCapabilities.excluir),
+        exportar: Boolean(selectedPageCapabilities.exportar)
+      }))
+    }
+  }
+
   const restorePreset = () => {
     const preset = MOCK_PRESETS?.[scope]?.[target]
     if (!preset) return
-    setConfig(cloneConfig(preset))
+    const nextConfig = cloneConfig(preset)
+    setConfig(nextConfig)
+    setPageRules(createPageRulesFromConfig(nextConfig))
     setStatusMsg('Preset restaurado (modo ficticio).')
   }
 
@@ -459,161 +635,199 @@ export default function Permissoes() {
             <div>
               <h2 className="fw-bold mb-1">Permissoes</h2>
               <div className="opacity-75 small">
-                Pagina para configurar permissoes por hierarquia, setor e usuario especifico,
-                incluindo paginas visiveis e APIs permitidas.
+                Defina visibilidade de paginas e regras por hierarquia, equipe ou usuario.
               </div>
             </div>
           </div>
         </div>
 
-        <section className="row g-3">
-          <div className="col-12 col-xl-4">
-            <div className="neo-card p-4 h-100 permissions-kanban-card">
-              <div className="d-flex align-items-center gap-2 mb-3">
+        <section className="row g-3 permissions-wix-grid">
+          <div className="col-12 col-xl-3">
+            <div className="neo-card p-0 h-100 permissions-wix-panel">
+              <div className="permissions-wix-panel-head">
                 <FiLayers size={16} />
-                <div className="fw-semibold">Definicao da Regra de Acesso</div>
+                <span>Escopo da Regra e Publico-alvo</span>
               </div>
-
-              <div className="small text-uppercase opacity-75 mb-2">Escopo</div>
-              <div className="permissions-scope-wrap mb-3">
-                {SCOPE_OPTIONS.map((item) => {
-                  const Icon = item.icon
-                  const active = scope === item.key
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className={`permissions-scope-pill ${active ? 'active' : ''}`}
-                      onClick={() => setScope(item.key)}
-                    >
-                      <Icon size={15} />
-                      <span>{item.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="small text-uppercase opacity-75 mb-2">Alvo da regra</div>
-              <div className="permissions-target-grid mb-3" role="listbox" aria-label="Alvo da regra">
-                {scopeTargets.map((item) => {
-                  const isActive = target === item
-                  return (
-                    <button
-                      key={item}
-                      type="button"
-                      className={`permissions-target-pill ${isActive ? 'active' : ''}`}
-                      onClick={() => setTarget(item)}
-                      aria-pressed={isActive}
-                    >
-                      {item}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="permissions-summary-grid mb-3">
-                <div className="permissions-summary-item">
-                  <div className="permissions-summary-value">{pagesEnabledCount}</div>
-                  <div className="permissions-summary-label">Paginas</div>
+              <div className="permissions-wix-panel-body">
+                <div className="small text-uppercase opacity-75 mb-2">Escopo</div>
+                <div className="permissions-scope-stack mb-3">
+                  {SCOPE_OPTIONS.map((item) => {
+                    const Icon = item.icon
+                    const active = scope === item.key
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`permissions-scope-item ${active ? 'active' : ''}`}
+                        onClick={() => setScope(item.key)}
+                      >
+                        <Icon size={15} />
+                        <span>{item.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
-                <div className="permissions-summary-item">
-                  <div className="permissions-summary-value">{apisEnabledCount}</div>
-                  <div className="permissions-summary-label">Permissoes</div>
+
+                <div className="small text-uppercase opacity-75 mb-2">
+                  {scope === 'hierarquia' ? 'Niveis' : scope === 'setor' ? 'Equipes' : 'Usuarios'}
+                </div>
+                <div className="permissions-target-stack mb-3" role="listbox" aria-label="Alvo da regra">
+                  {scopeTargets.map((item) => {
+                    const isActive = target === item
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`permissions-target-item ${isActive ? 'active' : ''}`}
+                        onClick={() => setTarget(item)}
+                        aria-pressed={isActive}
+                      >
+                        {item}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="permissions-summary-grid mb-3">
+                  <div className="permissions-summary-item">
+                    <div className="permissions-summary-value">{pagesEnabledCount}</div>
+                    <div className="permissions-summary-label">Paginas liberadas</div>
+                  </div>
+                  <div className="permissions-summary-item">
+                    <div className="permissions-summary-value">{actionsEnabledCount}</div>
+                    <div className="permissions-summary-label">Acoes ativas</div>
+                  </div>
+                </div>
+
+                <div className="d-flex gap-2 flex-wrap">
+                  <button type="button" className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2" onClick={saveMock}>
+                    <FiCheck size={15} />
+                    <span>Salvar</span>
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={loadPermissionsFromApi} disabled={loadingRemote}>
+                    {loadingRemote ? 'Carregando API...' : 'Atualizar API'}
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={restorePreset}>
+                    Restaurar
+                  </button>
                 </div>
               </div>
-
-              <div className="d-flex gap-2 flex-wrap">
-                <button type="button" className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2" onClick={saveMock}>
-                  <FiCheck size={15} />
-                  <span>Salvar</span>
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={loadPermissionsFromApi} disabled={loadingRemote}>
-                  {loadingRemote ? 'Carregando API...' : 'Atualizar API'}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={restorePreset}>
-                  Restaurar
-                </button>
-              </div>
-
-              {statusMsg && <div className="alert alert-info py-2 px-3 mt-3 mb-0 small">{statusMsg}</div>}
             </div>
           </div>
 
           <div className="col-12 col-xl-4">
-            <div className="neo-card p-4 h-100 permissions-kanban-card">
-              <div className="d-flex align-items-center gap-2 mb-3">
+            <div className="neo-card p-0 h-100 permissions-wix-panel">
+              <div className="permissions-wix-panel-head">
                 <FiLayers size={16} />
-                <div className="fw-semibold">Paginas</div>
+                <span>Paginas do Sistema</span>
               </div>
-              <div className="permissions-scroll-list">
+              <div className="permissions-wix-panel-body permissions-wix-scroll">
                 <div className="d-flex flex-column gap-2">
-                  {PAGE_CATALOG.map((item) => (
-                    <label className="permissions-check-row" key={item.key}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(config?.pages?.[item.key])}
-                        onChange={() => toggleItem('pages', item.key)}
-                      />
-                      <span>{item.label}</span>
-                    </label>
-                  ))}
+                  {PAGE_CATALOG.map((item) => {
+                    const isSelected = selectedPage === item.key
+                    const isEnabled = Boolean(pageRules?.[item.key]?.view || config?.pages?.[item.key])
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className={`permissions-page-row ${isSelected ? 'active' : ''}`}
+                        onClick={() => setSelectedPage(item.key)}
+                      >
+                        <span className="permissions-page-row-label">{item.label}</span>
+                        <span className={`permissions-page-row-badge ${isEnabled ? 'on' : 'off'}`}>
+                          {isEnabled ? 'Liberada' : 'Bloqueada'}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="col-12 col-xl-4">
-            <div className="neo-card p-4 h-100 permissions-kanban-card">
-              <div className="d-flex align-items-center gap-2 mb-3">
+          <div className="col-12 col-xl-5">
+            <div className="neo-card p-0 h-100 permissions-wix-panel">
+              <div className="permissions-wix-panel-head">
                 <FiShield size={16} />
-                <div className="fw-semibold">Permissoes</div>
+                <span>Permissoes da Pagina</span>
               </div>
-              <div className="permissions-scroll-list">
-                <div className="d-flex flex-column gap-2">
-                  {API_CATALOG.map((item) => (
-                    <label className="permissions-check-row" key={item.key}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(config?.apis?.[item.key])}
-                        onChange={() => toggleItem('apis', item.key)}
-                      />
-                      <span>{item.label}</span>
-                    </label>
-                  ))}
+              <div className="permissions-wix-panel-body permissions-wix-scroll">
+                <div className="permissions-config-title mb-3">
+                  <div className="small text-uppercase opacity-75">Pagina selecionada</div>
+                  <div className="fw-semibold fs-5">{selectedPageMeta.label}</div>
                 </div>
 
-                <div className="mt-3 pt-3 border-top border-secondary-subtle">
-                  <div className="d-flex align-items-center gap-2 mb-2 opacity-85">
-                    <FiSliders size={15} />
-                    <span className="small text-uppercase">Regras adicionais</span>
-                  </div>
-                  <div className="d-flex flex-column gap-2">
-                    <label className="permissions-check-row">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(config?.extras?.readOnly)}
-                        onChange={() => toggleExtra('readOnly')}
-                      />
-                      <span>Somente leitura</span>
-                    </label>
-                    <label className="permissions-check-row">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(config?.extras?.forceMfa)}
-                        onChange={() => toggleExtra('forceMfa')}
-                      />
-                      <span>Obrigar MFA (2FA)</span>
-                    </label>
-                    <label className="permissions-check-row">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(config?.extras?.timeWindow)}
-                        onChange={() => toggleExtra('timeWindow')}
-                      />
-                      <span>Restringir horario de acesso</span>
-                    </label>
-                  </div>
+                <div className="small text-uppercase opacity-75 mb-2">Quem pode acessar esta pagina?</div>
+                <div className="permissions-mode-grid mb-3">
+                  {ACCESS_MODE_OPTIONS.map((option) => {
+                    const active = accessMode === option.key
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        className={`permissions-mode-card ${active ? 'active' : ''}`}
+                        onClick={() => applyAccessMode(option.key)}
+                      >
+                        <div className="permissions-mode-title">{option.title}</div>
+                        <div className="permissions-mode-desc">{option.description}</div>
+                      </button>
+                    )
+                  })}
                 </div>
+
+                <div className="small text-uppercase opacity-75 mb-2">Acoes permitidas nesta pagina</div>
+                <div className="permissions-action-grid mb-3">
+                  {selectedPageActions.length === 0 && (
+                    <div className="permissions-empty">
+                      Esta pagina nao possui acoes configuraveis no momento.
+                    </div>
+                  )}
+                  {selectedPageActions.map((actionKey) => {
+                    const active = Boolean(selectedPageRule[actionKey])
+                    return (
+                      <button
+                        key={actionKey}
+                        type="button"
+                        className={`permissions-action-item ${active ? 'active' : ''}`}
+                        onClick={() => togglePageAction(selectedPageMeta.key, actionKey)}
+                        disabled={!selectedPageRule.view}
+                        title={!selectedPageRule.view ? 'Libere a visualizacao da pagina para editar acoes.' : ''}
+                      >
+                        <span>{ACTION_LABELS[actionKey] || actionKey}</span>
+                        <span>{active ? 'ON' : 'OFF'}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="small text-uppercase opacity-75 mb-2 d-flex align-items-center gap-2">
+                  <FiSliders size={14} />
+                  Politicas complementares
+                </div>
+                <div className="permissions-policy-grid">
+                  <button
+                    type="button"
+                    className={`permissions-policy-item ${config?.extras?.forceMfa ? 'active' : ''}`}
+                    onClick={() => toggleExtra('forceMfa')}
+                  >
+                    <span>Obrigar MFA (2FA)</span>
+                    <span>{config?.extras?.forceMfa ? 'ON' : 'OFF'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`permissions-policy-item ${config?.extras?.timeWindow ? 'active' : ''}`}
+                    onClick={() => toggleExtra('timeWindow')}
+                  >
+                    <span>Restringir horario de acesso</span>
+                    <span>{config?.extras?.timeWindow ? 'ON' : 'OFF'}</span>
+                  </button>
+                </div>
+
+                {statusMsg && (
+                  <div className="alert alert-info py-2 px-3 mt-3 mb-0 small">
+                    {statusMsg}
+                  </div>
+                )}
               </div>
             </div>
           </div>
