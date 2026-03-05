@@ -103,9 +103,17 @@ export default function SidebarNav() {
         label: 'Configurações',
         icon: 'FiSettings',
         children: [
-          { label: 'Usuários', to: '/usuarios' },
-          { label: 'Equipes', to: '/equipes' },
-          ...(loggedUserId === 1 ? [{ label: 'Permissões', to: '/admin/permissoes' }] : []),
+          ...(loggedUserId === 1
+              ? [
+                { label: 'Usuários', to: '/usuarios' },
+                { label: 'Equipes', to: '/equipes' },
+                { label: 'Usuários 2', to: '/admin/usuarios-cadastro' },
+                { label: 'Equipes e Permissões', to: '/admin/permissoes' }
+              ]
+            : [
+                { label: 'Usuários', to: '/usuarios' },
+                { label: 'Equipes', to: '/equipes' }
+              ]),
           ...(isMaster ? [{ label: 'Backups', to: '/admin/backups' }] : [])
         ]
       })

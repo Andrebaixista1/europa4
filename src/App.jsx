@@ -26,6 +26,7 @@ import ConsultaPresenca from './pages/ConsultaPresenca.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
 import CampanhasZap from './pages/CampanhasZap.jsx'
+import AdminUsuariosCadastro from './pages/AdminUsuariosCadastro.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 import { SidebarProvider } from './context/SidebarContext.jsx'
@@ -85,6 +86,15 @@ function PermissoesRoute() {
     return <Navigate to="/dashboard" replace />
   }
   return <Permissoes />
+}
+
+function UsuariosCadastroRoute() {
+  const { user } = useAuth()
+  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
+  if (loggedUserId !== 1) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <AdminUsuariosCadastro />
 }
 
 function App() {
@@ -154,6 +164,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PermissoesRoute />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/usuarios-cadastro"
+          element={
+            <ProtectedRoute>
+              <UsuariosCadastroRoute />
             </ProtectedRoute>
           }
         />
