@@ -68,7 +68,7 @@ export default function SidebarNav() {
     const isSupervisor = normalizedRole === Roles.Supervisor
 
     const items = [
-      { label: 'Visao Geral', icon: 'FiHome', to: '/dashboard' }
+      { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' }
     ]
 
     items.push({
@@ -78,8 +78,8 @@ export default function SidebarNav() {
         ...(allowConsultaClientes ? [{ label: 'Consulta Clientes', to: '/consultas/clientes' }] : []),
         { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
         { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
-        { label: 'Historico de Consultas', to: '/consultas/historico' },
-        ...(allowConsultaPresenca ? [{ label: 'Consulta Presenca', to: '/consultas/presenca' }] : []),
+        { label: 'Histórico de Consultas', to: '/consultas/historico' },
+        ...(allowConsultaPresenca ? [{ label: 'Consulta Presença', to: '/consultas/presenca' }] : []),
         ...(allowConsultasHandMais ? [{ label: 'Consulta Hand+', to: '/consultas/handmais' }] : []),
         ...(allowConsultasPrata ? [{ label: 'Consulta Prata', to: '/consultas/prata' }] : []),
         ...(allowConsultasV8 ? [{ label: 'Consultas V8', to: '/consultas/v8' }] : [])
@@ -88,24 +88,24 @@ export default function SidebarNav() {
 
     if (isMaster) {
       items.push({
-        label: 'Gestao',
+        label: 'Gestão',
         icon: 'FiBriefcase',
         children: [
-          { label: 'Gestao de Recargas', to: '/recargas' },
+          { label: 'Gestão de Recargas', to: '/recargas' },
           { label: 'Controle Planejamento', to: '/admin/controle-planejamento' },
-          { label: 'Relatorios', to: '/admin/relatorios' }
+          { label: 'Relatórios', to: '/admin/relatorios' }
         ]
       })
     }
 
     if (isMaster || isAdmin || isSupervisor) {
       items.push({
-        label: 'Configuracoes',
+        label: 'Configurações',
         icon: 'FiSettings',
         children: [
-          { label: 'Usuarios', to: '/usuarios' },
+          { label: 'Usuários', to: '/usuarios' },
           { label: 'Equipes', to: '/equipes' },
-          ...(loggedUserId === 1 ? [{ label: 'Permissoes', to: '/admin/permissoes' }] : []),
+          ...(loggedUserId === 1 ? [{ label: 'Permissões', to: '/admin/permissoes' }] : []),
           ...(isMaster ? [{ label: 'Backups', to: '/admin/backups' }] : [])
         ]
       })

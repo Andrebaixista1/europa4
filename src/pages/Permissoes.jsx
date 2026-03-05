@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 const SCOPE_OPTIONS = [
   { key: 'hierarquia', label: 'Hierarquia', icon: FiLayers },
   { key: 'setor', label: 'Equipe', icon: FiShield },
-  { key: 'usuario', label: 'Usuario especifico', icon: FiUser }
+  { key: 'usuario', label: 'Usuário específico', icon: FiUser }
 ]
 
 const TARGETS_BY_SCOPE = {
@@ -22,11 +22,11 @@ const PAGE_CATALOG = [
   { key: 'consultas_in100', label: 'Consultas IN100' },
   { key: 'consultas_v8', label: 'Consultas V8' },
   { key: 'consultas_prata', label: 'Consultas Prata' },
-  { key: 'consultas_presenca', label: 'Consultas Presenca' },
+  { key: 'consultas_presenca', label: 'Consultas Presença' },
   { key: 'consultas_handmais', label: 'Consultas Hand+' },
-  { key: 'usuarios', label: 'Usuarios' },
+  { key: 'usuarios', label: 'Usuários' },
   { key: 'equipes', label: 'Equipes' },
-  { key: 'permissoes', label: 'Permissoes' },
+  { key: 'permissoes', label: 'Permissões' },
   { key: 'backups', label: 'Backups' }
 ]
 
@@ -55,7 +55,7 @@ const ACCESS_MODE_OPTIONS = [
   {
     key: 'liberado',
     title: 'Acesso completo',
-    description: 'Pode abrir a pagina e executar as acoes permitidas.'
+    description: 'Pode abrir a página e executar as ações permitidas.'
   },
   {
     key: 'somente-leitura',
@@ -65,7 +65,7 @@ const ACCESS_MODE_OPTIONS = [
   {
     key: 'restrito',
     title: 'Bloqueado',
-    description: 'Nao pode visualizar esta pagina.'
+    description: 'Não pode visualizar esta página.'
   }
 ]
 
@@ -449,15 +449,15 @@ export default function Permissoes() {
       const parsed = parsePermissionsFromPayload(json)
 
       if (!parsed) {
-        setStatusMsg('API de permissoes ainda sem estrutura final. Mantido modo local.')
+        setStatusMsg('API de permissões ainda sem estrutura final. Mantido modo local.')
         return
       }
 
       setApiTargetsByScope(parsed.targetsByScope)
       setApiPresetsByScope(parsed.presetsByScope)
-      setStatusMsg(`Permissoes carregadas da API (${parsed.appliedRows} registros).`)
+      setStatusMsg(`Permissões carregadas da API (${parsed.appliedRows} registros).`)
     } catch (error) {
-      setStatusMsg(`Falha ao carregar API de permissoes: ${error?.message || 'erro desconhecido'}`)
+      setStatusMsg(`Falha ao carregar API de permissões: ${error?.message || 'erro desconhecido'}`)
     } finally {
       setLoadingRemote(false)
     }
@@ -633,9 +633,9 @@ export default function Permissoes() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Permissoes</h2>
+              <h2 className="fw-bold mb-1">Permissões</h2>
               <div className="opacity-75 small">
-                Defina visibilidade de paginas e regras por hierarquia, equipe ou usuario.
+                Defina visibilidade de páginas e regras por hierarquia, equipe ou usuário.
               </div>
             </div>
           </div>
@@ -669,7 +669,7 @@ export default function Permissoes() {
                 </div>
 
                 <div className="small text-uppercase opacity-75 mb-2">
-                  {scope === 'hierarquia' ? 'Niveis' : scope === 'setor' ? 'Equipes' : 'Usuarios'}
+                  {scope === 'hierarquia' ? 'Níveis' : scope === 'setor' ? 'Equipes' : 'Usuários'}
                 </div>
                 <div className="permissions-target-stack mb-3" role="listbox" aria-label="Alvo da regra">
                   {scopeTargets.map((item) => {
@@ -691,11 +691,11 @@ export default function Permissoes() {
                 <div className="permissions-summary-grid mb-3">
                   <div className="permissions-summary-item">
                     <div className="permissions-summary-value">{pagesEnabledCount}</div>
-                    <div className="permissions-summary-label">Paginas liberadas</div>
+                    <div className="permissions-summary-label">Páginas liberadas</div>
                   </div>
                   <div className="permissions-summary-item">
                     <div className="permissions-summary-value">{actionsEnabledCount}</div>
-                    <div className="permissions-summary-label">Acoes ativas</div>
+                    <div className="permissions-summary-label">Ações ativas</div>
                   </div>
                 </div>
 
@@ -719,7 +719,7 @@ export default function Permissoes() {
             <div className="neo-card p-0 h-100 permissions-wix-panel">
               <div className="permissions-wix-panel-head">
                 <FiLayers size={16} />
-                <span>Paginas do Sistema</span>
+                <span>Páginas do Sistema</span>
               </div>
               <div className="permissions-wix-panel-body permissions-wix-scroll">
                 <div className="d-flex flex-column gap-2">
@@ -749,15 +749,15 @@ export default function Permissoes() {
             <div className="neo-card p-0 h-100 permissions-wix-panel">
               <div className="permissions-wix-panel-head">
                 <FiShield size={16} />
-                <span>Permissoes da Pagina</span>
+                <span>Permissões da Página</span>
               </div>
               <div className="permissions-wix-panel-body permissions-wix-scroll">
                 <div className="permissions-config-title mb-3">
-                  <div className="small text-uppercase opacity-75">Pagina selecionada</div>
+                  <div className="small text-uppercase opacity-75">Página selecionada</div>
                   <div className="fw-semibold fs-5">{selectedPageMeta.label}</div>
                 </div>
 
-                <div className="small text-uppercase opacity-75 mb-2">Quem pode acessar esta pagina?</div>
+                <div className="small text-uppercase opacity-75 mb-2">Quem pode acessar esta página?</div>
                 <div className="permissions-mode-grid mb-3">
                   {ACCESS_MODE_OPTIONS.map((option) => {
                     const active = accessMode === option.key
@@ -775,11 +775,11 @@ export default function Permissoes() {
                   })}
                 </div>
 
-                <div className="small text-uppercase opacity-75 mb-2">Acoes permitidas nesta pagina</div>
+                <div className="small text-uppercase opacity-75 mb-2">Ações permitidas nesta página</div>
                 <div className="permissions-action-grid mb-3">
                   {selectedPageActions.length === 0 && (
                     <div className="permissions-empty">
-                      Esta pagina nao possui acoes configuraveis no momento.
+                      Esta página não possui ações configuráveis no momento.
                     </div>
                   )}
                   {selectedPageActions.map((actionKey) => {
@@ -791,7 +791,7 @@ export default function Permissoes() {
                         className={`permissions-action-item ${active ? 'active' : ''}`}
                         onClick={() => togglePageAction(selectedPageMeta.key, actionKey)}
                         disabled={!selectedPageRule.view}
-                        title={!selectedPageRule.view ? 'Libere a visualizacao da pagina para editar acoes.' : ''}
+                        title={!selectedPageRule.view ? 'Libere a visualização da página para editar ações.' : ''}
                       >
                         <span>{ACTION_LABELS[actionKey] || actionKey}</span>
                         <span>{active ? 'ON' : 'OFF'}</span>
@@ -802,7 +802,7 @@ export default function Permissoes() {
 
                 <div className="small text-uppercase opacity-75 mb-2 d-flex align-items-center gap-2">
                   <FiSliders size={14} />
-                  Politicas complementares
+                  Políticas complementares
                 </div>
                 <div className="permissions-policy-grid">
                   <button
@@ -818,7 +818,7 @@ export default function Permissoes() {
                     className={`permissions-policy-item ${config?.extras?.timeWindow ? 'active' : ''}`}
                     onClick={() => toggleExtra('timeWindow')}
                   >
-                    <span>Restringir horario de acesso</span>
+                    <span>Restringir horário de acesso</span>
                     <span>{config?.extras?.timeWindow ? 'ON' : 'OFF'}</span>
                   </button>
                 </div>
