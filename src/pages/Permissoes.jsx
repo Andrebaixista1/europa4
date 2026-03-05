@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { FiArrowLeft, FiCheck, FiLayers, FiShield, FiSliders, FiUser } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 
 const SCOPE_OPTIONS = [
   { key: 'hierarquia', label: 'Hierarquia', icon: FiLayers },
@@ -39,6 +40,8 @@ const API_CATALOG = [
   { key: 'api_admin_teams', label: '/api/teams/*' },
   { key: 'api_admin_perms', label: '/api/permissoes/*' }
 ]
+
+const PERMISSIONS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/permissions'
 
 const createFlags = (catalog, enabledKeys = []) => {
   const enabled = new Set(enabledKeys)
@@ -113,25 +116,295 @@ const MOCK_PRESETS = {
 }
 
 const cloneConfig = (config) => JSON.parse(JSON.stringify(config))
+const normalizeToken = (value) => String(value ?? '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim()
+  .toLowerCase()
+
+const toBool = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  const token = normalizeToken(value)
+  return ['1', 'true', 'sim', 'yes', 'on'].includes(token)
+}
+
+const parseJsonSafe = (value) => {
+  try {
+    return JSON.parse(value)
+  } catch (_) {
+    return null
+  }
+}
+
+const pageKeyAliases = PAGE_CATALOG.reduce((acc, item) => {
+  acc[normalizeToken(item.key)] = item.key
+  acc[normalizeToken(item.label)] = item.key
+  return acc
+}, {})
+
+const apiKeyAliases = API_CATALOG.reduce((acc, item) => {
+  acc[normalizeToken(item.key)] = item.key
+  acc[normalizeToken(item.label)] = item.key
+  return acc
+}, {})
+
+const normalizeScope = (value) => {
+  const token = normalizeToken(value)
+  if (token.includes('hier')) return 'hierarquia'
+  if (token.includes('setor') || token.includes('equipe') || token.includes('team')) return 'setor'
+  if (token.includes('user') || token.includes('usuario')) return 'usuario'
+  return ''
+}
+
+const normalizePageKey = (value) => {
+  const token = normalizeToken(value)
+  return pageKeyAliases[token] || ''
+}
+
+const normalizeApiKey = (value) => {
+  const token = normalizeToken(value)
+  return apiKeyAliases[token] || ''
+}
+
+const createEmptyPreset = () => ({
+  pages: createFlags(PAGE_CATALOG, []),
+  apis: createFlags(API_CATALOG, []),
+  extras: { readOnly: false, forceMfa: false, timeWindow: false }
+})
+
+const ensurePresetShape = (input) => {
+  const base = createEmptyPreset()
+  const next = { ...base }
+
+  if (Array.isArray(input?.pages)) {
+    input.pages.forEach((value) => {
+      const key = normalizePageKey(value)
+      if (key) next.pages[key] = true
+    })
+  } else if (input?.pages && typeof input.pages === 'object') {
+    Object.entries(input.pages).forEach(([rawKey, rawValue]) => {
+      const key = normalizePageKey(rawKey)
+      if (key) next.pages[key] = toBool(rawValue)
+    })
+  }
+
+  if (Array.isArray(input?.apis)) {
+    input.apis.forEach((value) => {
+      const key = normalizeApiKey(value)
+      if (key) next.apis[key] = true
+    })
+  } else if (input?.apis && typeof input.apis === 'object') {
+    Object.entries(input.apis).forEach(([rawKey, rawValue]) => {
+      const key = normalizeApiKey(rawKey)
+      if (key) next.apis[key] = toBool(rawValue)
+    })
+  }
+
+  if (input?.extras && typeof input.extras === 'object') {
+    next.extras = {
+      readOnly: toBool(input.extras.readOnly ?? input.extras.somente_leitura),
+      forceMfa: toBool(input.extras.forceMfa ?? input.extras.force_mfa),
+      timeWindow: toBool(input.extras.timeWindow ?? input.extras.time_window)
+    }
+  }
+
+  return next
+}
+
+const unwrapPermissionsPayload = (raw) => {
+  let payload = raw
+
+  if (payload && typeof payload === 'object' && Array.isArray(payload.value) && payload.value.length > 0) {
+    payload = payload.value
+  }
+
+  if (Array.isArray(payload) && payload.length === 1 && payload[0] && typeof payload[0] === 'object') {
+    const jsonKey = Object.keys(payload[0]).find((key) => key.toUpperCase().startsWith('JSON_'))
+    if (jsonKey && typeof payload[0][jsonKey] === 'string') {
+      const parsed = parseJsonSafe(payload[0][jsonKey])
+      if (parsed) return parsed
+    }
+  }
+
+  if (typeof payload === 'string') {
+    const parsed = parseJsonSafe(payload)
+    if (parsed) return parsed
+  }
+
+  return payload
+}
+
+const parsePermissionsFromPayload = (rawPayload) => {
+  const payload = unwrapPermissionsPayload(rawPayload)
+
+  if (!payload) return null
+
+  const hasEchoShape = payload?.webhookUrl && payload?.headers && payload?.query && payload?.body
+  if (hasEchoShape && !payload?.rules && !payload?.permissoes && !payload?.data) return null
+
+  const targetsByScope = { hierarquia: [], setor: [], usuario: [] }
+  const presetsByScope = { hierarquia: {}, setor: {}, usuario: {} }
+  let appliedRows = 0
+
+  const upsertPreset = (scope, target, partial) => {
+    if (!scope || !target) return
+    if (!targetsByScope[scope].includes(target)) targetsByScope[scope].push(target)
+
+    if (!presetsByScope[scope][target]) {
+      presetsByScope[scope][target] = createEmptyPreset()
+    }
+
+    const current = presetsByScope[scope][target]
+    presetsByScope[scope][target] = ensurePresetShape({
+      ...current,
+      ...partial,
+      pages: { ...current.pages, ...(partial?.pages || {}) },
+      apis: { ...current.apis, ...(partial?.apis || {}) },
+      extras: { ...current.extras, ...(partial?.extras || {}) }
+    })
+    appliedRows += 1
+  }
+
+  const directSource = payload?.data || payload
+  for (const scopeKey of ['hierarquia', 'setor', 'usuario']) {
+    const scopeBlock = directSource?.[scopeKey]
+    if (scopeBlock && typeof scopeBlock === 'object' && !Array.isArray(scopeBlock)) {
+      Object.entries(scopeBlock).forEach(([target, cfg]) => {
+        upsertPreset(scopeKey, String(target).trim(), cfg)
+      })
+    }
+  }
+
+  const rowsCandidate =
+    (Array.isArray(directSource?.rules) && directSource.rules) ||
+    (Array.isArray(directSource?.permissoes) && directSource.permissoes) ||
+    (Array.isArray(directSource?.rows) && directSource.rows) ||
+    (Array.isArray(directSource) && directSource) ||
+    []
+
+  rowsCandidate.forEach((row) => {
+    if (!row || typeof row !== 'object') return
+
+    const scope = normalizeScope(row.escopo_tipo ?? row.scope ?? row.escopo)
+    if (!scope) return
+
+    const targetRaw =
+      row.alvo ??
+      row.target ??
+      row.role_alvo ??
+      row.role ??
+      row.setor ??
+      row.equipe_nome ??
+      row.equipe_id ??
+      row.usuario_login ??
+      row.usuario_id
+
+    if (!targetRaw) return
+
+    const target = String(targetRaw).trim()
+    if (!target) return
+
+    const partial = { pages: {}, apis: {}, extras: {} }
+
+    const pageKey = normalizePageKey(row.pagina_key ?? row.page_key ?? row.page)
+    if (pageKey) {
+      partial.pages[pageKey] = toBool(row.allow_view ?? row.allowView ?? row.view ?? 0)
+    }
+
+    const apiKey = normalizeApiKey(row.api_key ?? row.endpoint_key ?? row.api)
+    if (apiKey) {
+      partial.apis[apiKey] = toBool(row.allow_use ?? row.allowUse ?? row.allow_view ?? 0)
+    }
+
+    if (Array.isArray(row.paginas)) {
+      row.paginas.forEach((p) => {
+        const key = normalizePageKey(p?.pagina_key ?? p?.key ?? p)
+        if (!key) return
+        partial.pages[key] = toBool(p?.allow_view ?? p?.allow ?? true)
+      })
+    }
+
+    if (Array.isArray(row.apis)) {
+      row.apis.forEach((a) => {
+        const key = normalizeApiKey(a?.api_key ?? a?.key ?? a)
+        if (!key) return
+        partial.apis[key] = toBool(a?.allow_use ?? a?.allow ?? true)
+      })
+    }
+
+    upsertPreset(scope, target, partial)
+  })
+
+  const hasAnyTarget = Object.values(targetsByScope).some((list) => list.length > 0)
+  if (!hasAnyTarget) return null
+
+  return { targetsByScope, presetsByScope, appliedRows }
+}
 
 export default function Permissoes() {
+  const { user } = useAuth()
   const [scope, setScope] = useState('hierarquia')
   const [target, setTarget] = useState(TARGETS_BY_SCOPE.hierarquia[0])
   const [config, setConfig] = useState(() => cloneConfig(MOCK_PRESETS.hierarquia.Master))
   const [statusMsg, setStatusMsg] = useState('')
+  const [loadingRemote, setLoadingRemote] = useState(false)
+  const [apiTargetsByScope, setApiTargetsByScope] = useState(null)
+  const [apiPresetsByScope, setApiPresetsByScope] = useState(null)
 
-  const scopeTargets = TARGETS_BY_SCOPE[scope] || []
+  const scopeTargets = useMemo(() => {
+    const remoteTargets = apiTargetsByScope?.[scope]
+    if (Array.isArray(remoteTargets) && remoteTargets.length > 0) return remoteTargets
+    return TARGETS_BY_SCOPE[scope] || []
+  }, [scope, apiTargetsByScope])
+
+  const resolvePreset = (scopeKey, targetKey) => {
+    const remote = apiPresetsByScope?.[scopeKey]?.[targetKey]
+    if (remote) return remote
+    return MOCK_PRESETS?.[scopeKey]?.[targetKey] ?? MOCK_PRESETS.hierarquia.Operador
+  }
 
   useEffect(() => {
-    const first = scopeTargets[0] || ''
-    setTarget(first)
-  }, [scope]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!scopeTargets.includes(target)) {
+      setTarget(scopeTargets[0] || '')
+    }
+  }, [scopeTargets, target])
 
   useEffect(() => {
-    const preset = MOCK_PRESETS?.[scope]?.[target] ?? MOCK_PRESETS.hierarquia.Operador
+    const preset = resolvePreset(scope, target)
     setConfig(cloneConfig(preset))
-    setStatusMsg('')
-  }, [scope, target])
+  }, [scope, target, apiPresetsByScope])
+
+  const loadPermissionsFromApi = async () => {
+    setLoadingRemote(true)
+    try {
+      const requestUrl = new URL(PERMISSIONS_GET_API_URL)
+      if (user?.id) requestUrl.searchParams.set('id_user', String(user.id))
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+      const json = await response.json()
+      const parsed = parsePermissionsFromPayload(json)
+
+      if (!parsed) {
+        setStatusMsg('API de permissoes ainda sem estrutura final. Mantido modo local.')
+        return
+      }
+
+      setApiTargetsByScope(parsed.targetsByScope)
+      setApiPresetsByScope(parsed.presetsByScope)
+      setStatusMsg(`Permissoes carregadas da API (${parsed.appliedRows} registros).`)
+    } catch (error) {
+      setStatusMsg(`Falha ao carregar API de permissoes: ${error?.message || 'erro desconhecido'}`)
+    } finally {
+      setLoadingRemote(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPermissionsFromApi()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pagesEnabledCount = useMemo(
     () => Object.values(config.pages || {}).filter(Boolean).length,
@@ -198,7 +471,7 @@ export default function Permissoes() {
             <div className="neo-card p-4 h-100 permissions-kanban-card">
               <div className="d-flex align-items-center gap-2 mb-3">
                 <FiLayers size={16} />
-                <div className="fw-semibold">Escopo, Setor, Usuario</div>
+                <div className="fw-semibold">Definicao da Regra de Acesso</div>
               </div>
 
               <div className="small text-uppercase opacity-75 mb-2">Escopo</div>
@@ -253,6 +526,9 @@ export default function Permissoes() {
                 <button type="button" className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2" onClick={saveMock}>
                   <FiCheck size={15} />
                   <span>Salvar</span>
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={loadPermissionsFromApi} disabled={loadingRemote}>
+                  {loadingRemote ? 'Carregando API...' : 'Atualizar API'}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={restorePreset}>
                   Restaurar
