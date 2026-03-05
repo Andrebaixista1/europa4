@@ -15,6 +15,10 @@ const CORS_HEADERS = {
 const UPSTREAM_URL = String(
   process.env.HEALTH_CONSULT_FORCE_UPSTREAM_URL || 'http://85.31.61.242:3002/api/health-consult/force-backup'
 ).trim()
+const UPSTREAM_TIMEOUT_MS = Math.max(
+  10000,
+  Number(process.env.HEALTH_CONSULT_FORCE_PROXY_TIMEOUT_MS || 90000)
+)
 
 export default async function handler(req, res) {
   const origin = req.headers.origin || '*'
@@ -48,6 +52,9 @@ export default async function handler(req, res) {
   }
   const body = Buffer.concat(chunks)
 
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
+
   let upstream
   try {
     upstream = await fetch(UPSTREAM_URL, {
@@ -55,13 +62,22 @@ export default async function handler(req, res) {
       headers,
       body,
       redirect: 'manual',
+      signal: controller.signal,
     })
   } catch (err) {
-    res.status(502)
+    const status = err.name === 'AbortError' ? 504 : 502
+    res.status(status)
     res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Content-Type', 'application/json; charset=utf-8')
     Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
-    res.end(`Upstream error: ${err.message || err.toString()}`)
+    res.end(JSON.stringify({
+      ok: false,
+      message: 'Erro ao enviar força de backup para o upstream.',
+      error: String(err?.message || err || 'erro'),
+    }))
     return
+  } finally {
+    clearTimeout(timeout)
   }
 
   const buffer = Buffer.from(await upstream.arrayBuffer())
@@ -76,4 +92,3 @@ export default async function handler(req, res) {
   Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
   res.end(buffer)
 }
-

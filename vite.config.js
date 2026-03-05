@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
   const BMG_SOAP_URL = env.BMG_SOAP_URL || env.VITE_BMG_SOAP_URL || process.env.BMG_SOAP_URL || process.env.VITE_BMG_SOAP_URL || ''
   const PRESENCA_API_BASE = env.PRESENCA_API_BASE_URL || process.env.PRESENCA_API_BASE_URL || 'http://85.31.61.242:3011'
   const V8_IMPORT_API_BASE = env.V8_IMPORT_API_BASE_URL || process.env.V8_IMPORT_API_BASE_URL || 'http://85.31.61.242:3002'
+  const HEALTH_CONSULT_PROXY_BASE =
+    env.HEALTH_CONSULT_PROXY_BASE_URL ||
+    process.env.HEALTH_CONSULT_PROXY_BASE_URL ||
+    'https://europa4.vercel.app'
 
   return {
     plugins: [react()],
@@ -46,7 +50,7 @@ export default defineConfig(({ mode }) => {
           secure: false,
         },
         '/api/health-consult': {
-          target: V8_IMPORT_API_BASE,
+          target: HEALTH_CONSULT_PROXY_BASE,
           changeOrigin: true,
           secure: false,
         },

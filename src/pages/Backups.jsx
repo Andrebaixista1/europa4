@@ -7,7 +7,7 @@ import { notify } from '../utils/notify.js'
 
 const BACKUPS_HEALTH_URL = String(import.meta.env.VITE_BACKUPS_HEALTH_URL || '/api/health-consult').trim()
 const BACKUPS_FORCE_URL = String(import.meta.env.VITE_BACKUPS_FORCE_URL || '/api/health-consult/force-backup').trim()
-const REQUEST_TIMEOUT_MS = 20000
+const REQUEST_TIMEOUT_MS = Math.max(10000, Number(import.meta.env.VITE_BACKUPS_TIMEOUT_MS || 45000))
 const FORCE_POLL_INTERVAL_MS = 5000
 const FORCE_POLL_MAX_TRIES = 90
 const FORCE_TYPE_OPTIONS = [
@@ -204,6 +204,7 @@ export default function Backups() {
   const [forcingBackup, setForcingBackup] = useState(false)
   const [pollingForce, setPollingForce] = useState(false)
   const [error, setError] = useState('')
+  const [warning, setWarning] = useState('')
   const [generatedAt, setGeneratedAt] = useState('')
   const [servers, setServers] = useState([])
   const [expandedServerKey, setExpandedServerKey] = useState('')
@@ -224,6 +225,7 @@ export default function Backups() {
     if (!silent) {
       setLoading(true)
       setError('')
+      setWarning('')
     }
     try {
       const response = await fetch(BACKUPS_HEALTH_URL, {
@@ -238,6 +240,13 @@ export default function Backups() {
       const normalizedServers = normalizeServers(payload)
       setGeneratedAt(String(payload?.generated_at || ''))
       setServers(normalizedServers)
+      const source = String(payload?.meta?.source || '').trim()
+      const isPartial = Boolean(payload?.meta?.partial)
+      setWarning(
+        isPartial || source === 'legacy-proxy'
+          ? 'Dados parcialmente indisponíveis no momento. Atualize novamente em alguns instantes.'
+          : ''
+      )
       const runningCount = normalizedServers.reduce((sum, row) => sum + Number(row?.running_backup_count || 0), 0)
       return {
         servers: normalizedServers,
@@ -245,9 +254,8 @@ export default function Backups() {
       }
     } catch (err) {
       if (err?.name === 'AbortError') return
-      setServers([])
-      setGeneratedAt('')
       setError('Erro ao carregar status dos backups.')
+      setWarning('Mantendo o último resultado carregado para evitar perda da visualização.')
       return null
     } finally {
       clearTimeout(timeoutId)
@@ -433,6 +441,7 @@ export default function Backups() {
         </div>
 
         {error && <div className="alert alert-danger py-2 px-3 mb-3 small">{error}</div>}
+        {warning && <div className="alert alert-warning py-2 px-3 mb-3 small">{warning}</div>}
 
         <div className="row g-3">
           <div className="col-12">
