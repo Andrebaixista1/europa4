@@ -9,6 +9,8 @@ import { notify } from '../utils/notify.js'
 
 const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
 const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
+const PRATA_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-prata'
+const PRATA_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-prata'
 const PRESENCA_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
 const PRESENCA_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
 const HANDMAIS_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-handmais'
@@ -16,6 +18,7 @@ const HANDMAIS_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/
 const LOG_SOURCE = {
   IN100: 'in100',
   V8: 'v8',
+  PRATA: 'prata',
   PRESENCA: 'presenca',
   HANDMAIS: 'handmais'
 }
@@ -29,6 +32,8 @@ export default function Dashboard() {
   const [loadingSaldo, setLoadingSaldo] = useState(false)
   const [saldoV8, setSaldoV8] = useState({ total: '-', usado: '-', restantes: '-' })
   const [loadingSaldoV8, setLoadingSaldoV8] = useState(false)
+  const [saldoPrata, setSaldoPrata] = useState({ total: '-', usado: '-', restantes: '-' })
+  const [loadingSaldoPrata, setLoadingSaldoPrata] = useState(false)
   const [saldoPresenca, setSaldoPresenca] = useState({ total: '-', usado: '-', restantes: '-' })
   const [loadingSaldoPresenca, setLoadingSaldoPresenca] = useState(false)
   const [saldoHandMais, setSaldoHandMais] = useState({ total: '-', usado: '-', restantes: '-' })
@@ -37,18 +42,21 @@ export default function Dashboard() {
   const [logsBySource, setLogsBySource] = useState({
     [LOG_SOURCE.IN100]: [],
     [LOG_SOURCE.V8]: [],
+    [LOG_SOURCE.PRATA]: [],
     [LOG_SOURCE.PRESENCA]: [],
     [LOG_SOURCE.HANDMAIS]: []
   })
   const [loadingLogsBySource, setLoadingLogsBySource] = useState({
     [LOG_SOURCE.IN100]: false,
     [LOG_SOURCE.V8]: false,
+    [LOG_SOURCE.PRATA]: false,
     [LOG_SOURCE.PRESENCA]: false,
     [LOG_SOURCE.HANDMAIS]: false
   })
   const [logsErrorBySource, setLogsErrorBySource] = useState({
     [LOG_SOURCE.IN100]: '',
     [LOG_SOURCE.V8]: '',
+    [LOG_SOURCE.PRATA]: '',
     [LOG_SOURCE.PRESENCA]: '',
     [LOG_SOURCE.HANDMAIS]: ''
   })
@@ -217,6 +225,45 @@ export default function Dashboard() {
       setSaldoV8({ total: '-', usado: '-', restantes: '-' })
     } finally {
       setLoadingSaldoV8(false)
+    }
+  }
+
+  const fetchSaldoPrata = async () => {
+    if (!user?.id) return
+    setLoadingSaldoPrata(true)
+    try {
+      const requestUrl = new URL(PRATA_LIMITES_GET_API_URL)
+      requestUrl.searchParams.set('id_user', String(user?.id))
+      const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
+      if (equipeId !== null && equipeId !== undefined && equipeId !== '') {
+        requestUrl.searchParams.set('equipe_id', String(equipeId))
+      }
+
+      const roleId = user?.id_role ?? user?.role_id ?? user?.roleId ?? user?.level ?? null
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
+
+      if (roleId !== null && roleId !== undefined && roleId !== '') {
+        requestUrl.searchParams.set('id_role', String(roleId))
+        requestUrl.searchParams.set('role_id', String(roleId))
+      }
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const payload = await response.json().catch(() => ({}))
+      const rows = normalizeRows(payload)
+      setSaldoPrata(buildV8SummaryFromRows(rows))
+    } catch (_) {
+      setSaldoPrata({ total: '-', usado: '-', restantes: '-' })
+    } finally {
+      setLoadingSaldoPrata(false)
     }
   }
 
@@ -418,14 +465,34 @@ export default function Dashboard() {
   }
 
   const getStatusToken = (row) => String(
+    row?.status_consulta ??
+    row?.status_consulta_prata ??
+    row?.status_consulta_v8 ??
+    row?.status_consulta_hand ??
     row?.status ??
     row?.status_api ??
-    row?.status_consulta_v8 ??
     row?.status_presenca ??
     row?.situacao ??
     row?.final_status ??
     ''
   ).trim()
+
+  const getStatusTooltip = (row) => {
+    const raw = String(
+      row?.status_consulta ??
+      row?.status_consulta_prata ??
+      row?.status_consulta_v8 ??
+      row?.status_consulta_hand ??
+      row?.status ??
+      row?.status_api ??
+      row?.status_presenca ??
+      row?.situacao ??
+      row?.final_status ??
+      ''
+    ).trim()
+
+    return raw || '(vazio)'
+  }
 
   const getTimestampValue = (row) => String(
     row?.data_hora_registro ??
@@ -488,6 +555,7 @@ export default function Dashboard() {
       const normalized = sortByLatest(deduped).map((item) => ({
         timestamp: getTimestampValue(item),
         status: getStatusToken(item),
+        statusTooltip: getStatusTooltip(item),
         detail: String(item?.resposta_api ?? '').trim() || '-',
         cpf: String(item?.numero_documento ?? ''),
         nb: String(item?.numero_beneficio ?? '')
@@ -542,6 +610,7 @@ export default function Dashboard() {
       const normalized = sortByLatest(deduped).map((item) => ({
         timestamp: getTimestampValue(item),
         status: getStatusToken(item),
+        statusTooltip: getStatusTooltip(item),
         detail: String(item?.cliente_nome ?? item?.nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
         cpf: String(item?.cliente_cpf ?? item?.cpf ?? ''),
         nb: String(item?.valor_liberado ?? item?.valorLiberado ?? item?.valor ?? item?.numero_beneficio ?? item?.nb ?? '')
@@ -552,6 +621,61 @@ export default function Dashboard() {
       setLogsError(LOG_SOURCE.V8, e?.message || 'Erro ao carregar')
     } finally {
       setLogsLoading(LOG_SOURCE.V8, false)
+    }
+  }
+
+  const fetchLogsPrata = async () => {
+    if (!user?.id) return
+    setLogsLoading(LOG_SOURCE.PRATA, true)
+    setLogsError(LOG_SOURCE.PRATA, '')
+    try {
+      const requestUrl = new URL(PRATA_CONSULTAS_GET_API_URL)
+      requestUrl.searchParams.set('id_user', String(user.id))
+      const equipeId = resolveUserEquipeId(user)
+      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
+      const roleId = resolveUserRoleId(user)
+      const roleLabel = String(user?.role ?? '').trim()
+      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
+      if (roleId !== null && roleId !== undefined && roleId !== '') {
+        requestUrl.searchParams.set('id_role', String(roleId))
+        requestUrl.searchParams.set('role_id', String(roleId))
+      }
+      if (roleLabel) {
+        requestUrl.searchParams.set('role', roleLabel)
+        requestUrl.searchParams.set('hierarquia', roleLabel)
+      }
+      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
+        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
+      }
+      if (Number(user?.id) === 1) requestUrl.searchParams.set('all', '1')
+
+      const response = await fetch(requestUrl.toString(), { method: 'GET' })
+      const raw = await response.text().catch(() => '')
+      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
+      const rows = parseRowsFromRaw(raw)
+      const deduped = dedupeByKey(rows, (item) => {
+        const cpf = String(item?.cliente_cpf ?? item?.cpf ?? '').replace(/\D/g, '')
+        return [
+          getTimestampValue(item),
+          getStatusToken(item),
+          String(item?.cliente_nome ?? item?.nome ?? '').trim(),
+          cpf
+        ].join('|')
+      })
+      const normalized = sortByLatest(deduped).map((item) => ({
+        timestamp: getTimestampValue(item),
+        status: getStatusToken(item),
+        statusTooltip: getStatusTooltip(item),
+        detail: String(item?.cliente_nome ?? item?.nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
+        cpf: String(item?.cliente_cpf ?? item?.cpf ?? ''),
+        nb: String(item?.valor_liberado ?? item?.valorLiberado ?? item?.valor ?? item?.numero_beneficio ?? item?.nb ?? '')
+      }))
+      setLogsData(LOG_SOURCE.PRATA, dedupeByCpf(normalized).slice(0, 10))
+    } catch (e) {
+      setLogsData(LOG_SOURCE.PRATA, [])
+      setLogsError(LOG_SOURCE.PRATA, e?.message || 'Erro ao carregar')
+    } finally {
+      setLogsLoading(LOG_SOURCE.PRATA, false)
     }
   }
 
@@ -590,6 +714,7 @@ export default function Dashboard() {
       const normalized = sortByLatest(deduped).map((item) => ({
         timestamp: getTimestampValue(item),
         status: getStatusToken(item),
+        statusTooltip: getStatusTooltip(item),
         detail: String(item?.nome ?? item?.cliente_nome ?? item?.tipoConsulta ?? '-').trim() || '-',
         cpf: String(item?.cpf ?? item?.cliente_cpf ?? item?.numero_documento ?? ''),
         nb: String(item?.valorMargemDisponivel ?? item?.valor_margem_disponivel ?? item?.valorMargem ?? item?.numero_beneficio ?? item?.nb ?? '')
@@ -634,6 +759,7 @@ export default function Dashboard() {
       const normalized = sortByLatest(deduped).map((item) => ({
         timestamp: getTimestampValue(item),
         status: getStatusToken(item),
+        statusTooltip: getStatusTooltip(item),
         detail: String(item?.nome ?? item?.cliente_nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
         cpf: String(item?.cpf ?? item?.cliente_cpf ?? ''),
         nb: String(item?.valor_margem ?? item?.valorMargem ?? ''),
@@ -649,6 +775,7 @@ export default function Dashboard() {
 
   const fetchLogsBySource = async (source) => {
     if (source === LOG_SOURCE.V8) return fetchLogsV8()
+    if (source === LOG_SOURCE.PRATA) return fetchLogsPrata()
     if (source === LOG_SOURCE.PRESENCA) return fetchLogsPresenca()
     if (source === LOG_SOURCE.HANDMAIS) return fetchLogsHandMais()
     return fetchLogsIn100()
@@ -663,10 +790,12 @@ export default function Dashboard() {
   useEffect(() => {
     fetchSaldo()
     fetchSaldoV8()
+    fetchSaldoPrata()
     fetchSaldoPresenca()
     fetchSaldoHandMais()
     fetchLogsIn100()
     fetchLogsV8()
+    fetchLogsPrata()
     fetchLogsPresenca()
     fetchLogsHandMais()
   }, [user])
@@ -706,6 +835,9 @@ export default function Dashboard() {
     [LOG_SOURCE.V8]: {
       title: 'Últimas consultas V8'
     },
+    [LOG_SOURCE.PRATA]: {
+      title: 'Últimas consultas Prata'
+    },
     [LOG_SOURCE.PRESENCA]: {
       title: 'Últimas consultas Presença'
     },
@@ -716,6 +848,7 @@ export default function Dashboard() {
   const rightColumnMeta = {
     [LOG_SOURCE.IN100]: { label: 'NB', copyLabel: 'NB copiado!', copyTitle: 'Copiar NB' },
     [LOG_SOURCE.V8]: { label: 'Valor liberado', copyLabel: 'Valor liberado copiado!', copyTitle: 'Copiar valor liberado' },
+    [LOG_SOURCE.PRATA]: { label: 'Valor liberado', copyLabel: 'Valor liberado copiado!', copyTitle: 'Copiar valor liberado' },
     [LOG_SOURCE.PRESENCA]: { label: 'Margem disponível', copyLabel: 'Margem disponível copiada!', copyTitle: 'Copiar margem disponível' },
     [LOG_SOURCE.HANDMAIS]: { label: 'Valor margem', copyLabel: 'Valor margem copiado!', copyTitle: 'Copiar valor margem' }
   }
@@ -756,6 +889,165 @@ export default function Dashboard() {
   const fmtLastColumn = (value, source) => {
     if (source === LOG_SOURCE.IN100) return fmtNb(value)
     return fmtMoneyBRL(value)
+  }
+
+  const logsTabs = [
+    { source: LOG_SOURCE.IN100, label: 'IN100' },
+    { source: LOG_SOURCE.V8, label: 'V8' },
+    { source: LOG_SOURCE.PRATA, label: 'Prata' },
+    { source: LOG_SOURCE.HANDMAIS, label: 'Hand+' },
+    { source: LOG_SOURCE.PRESENCA, label: 'Presença' }
+  ]
+
+  const renderSaldoPanel = () => {
+    if (activeLogsSource === LOG_SOURCE.V8) {
+      return (
+        <>
+          <div className="small text-uppercase opacity-75">Saldo V8</div>
+          <div className="d-flex align-items-center gap-2">
+            <div className="display-5 fw-bold mb-0">{saldoV8.total}</div>
+            {loadingSaldoV8 && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+          </div>
+          <div className="small opacity-75">Limite total disponível para consultas V8.</div>
+          <div className="mt-2 d-flex gap-3 flex-wrap">
+            <div>
+              <div className="small text-uppercase opacity-75">Usado</div>
+              <div className="fw-semibold">{saldoV8.usado}</div>
+            </div>
+            <div>
+              <div className="small text-uppercase opacity-75">Restante</div>
+              <div className="fw-semibold">{saldoV8.restantes}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm mt-3"
+            onClick={fetchSaldoV8}
+            disabled={loadingSaldoV8}
+          >
+            Atualizar saldo V8
+          </button>
+        </>
+      )
+    }
+
+    if (activeLogsSource === LOG_SOURCE.PRATA) {
+      return (
+        <>
+          <div className="small text-uppercase opacity-75">Saldo Prata</div>
+          <div className="d-flex align-items-center gap-2">
+            <div className="display-5 fw-bold mb-0">{saldoPrata.total}</div>
+            {loadingSaldoPrata && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+          </div>
+          <div className="small opacity-75">Limite total disponível para consultas Prata.</div>
+          <div className="mt-2 d-flex gap-3 flex-wrap">
+            <div>
+              <div className="small text-uppercase opacity-75">Usado</div>
+              <div className="fw-semibold">{saldoPrata.usado}</div>
+            </div>
+            <div>
+              <div className="small text-uppercase opacity-75">Restante</div>
+              <div className="fw-semibold">{saldoPrata.restantes}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm mt-3"
+            onClick={fetchSaldoPrata}
+            disabled={loadingSaldoPrata}
+          >
+            Atualizar saldo Prata
+          </button>
+        </>
+      )
+    }
+
+    if (activeLogsSource === LOG_SOURCE.HANDMAIS) {
+      return (
+        <>
+          <div className="small text-uppercase opacity-75">Saldo Hand+</div>
+          <div className="d-flex align-items-center gap-2">
+            <div className="display-5 fw-bold mb-0">{saldoHandMais.total}</div>
+            {loadingSaldoHandMais && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+          </div>
+          <div className="small opacity-75">Limite total disponível para consultas Hand+.</div>
+          <div className="mt-2 d-flex gap-3 flex-wrap">
+            <div>
+              <div className="small text-uppercase opacity-75">Usado</div>
+              <div className="fw-semibold">{saldoHandMais.usado}</div>
+            </div>
+            <div>
+              <div className="small text-uppercase opacity-75">Restante</div>
+              <div className="fw-semibold">{saldoHandMais.restantes}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm mt-3"
+            onClick={fetchSaldoHandMais}
+            disabled={loadingSaldoHandMais}
+          >
+            Atualizar saldo Hand+
+          </button>
+        </>
+      )
+    }
+
+    if (activeLogsSource === LOG_SOURCE.PRESENCA) {
+      return (
+        <>
+          <div className="small text-uppercase opacity-75">Saldo Presença</div>
+          <div className="d-flex align-items-center gap-2">
+            <div className="display-5 fw-bold mb-0">{saldoPresenca.total}</div>
+            {loadingSaldoPresenca && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+          </div>
+          <div className="small opacity-75">Limite total disponível para consultas Presença.</div>
+          <div className="mt-2 d-flex gap-3 flex-wrap">
+            <div>
+              <div className="small text-uppercase opacity-75">Usado</div>
+              <div className="fw-semibold">{saldoPresenca.usado}</div>
+            </div>
+            <div>
+              <div className="small text-uppercase opacity-75">Restante</div>
+              <div className="fw-semibold">{saldoPresenca.restantes}</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm mt-3"
+            onClick={fetchSaldoPresenca}
+            disabled={loadingSaldoPresenca}
+          >
+            Atualizar saldo Presença
+          </button>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuário)</div>
+        <div className="d-flex align-items-center gap-2">
+          <div className="display-5 fw-bold mb-0">{Number(saldo.disponivel ?? 0)}</div>
+          {loadingSaldo && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
+        </div>
+        <div className="small opacity-75">Disponível para consultas IN100.</div>
+        <div className="mt-2 d-flex gap-3 flex-wrap">
+          <div>
+            <div className="small text-uppercase opacity-75">Realizadas</div>
+            <div className="fw-semibold">{saldo.realizadas}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm mt-3"
+          onClick={fetchSaldo}
+          disabled={loadingSaldo}
+        >
+          Atualizar saldo
+        </button>
+      </>
+    )
   }
 
   return (
@@ -819,157 +1111,23 @@ export default function Dashboard() {
 
         <section className="row g-3 mt-4 align-items-start">
           <div className="col-12 col-lg-4">
-            <div className="d-flex flex-column gap-3">
-              <div
-                className="neo-card neo-lg p-4"
-                role="button"
-                tabIndex={0}
-                onClick={() => handleSelectLogsSource(LOG_SOURCE.IN100)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    handleSelectLogsSource(LOG_SOURCE.IN100)
-                  }
-                }}
-                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.IN100 ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
-              >
-                <div className="small text-uppercase opacity-75">Saldo IN100 (equipe/usuário)</div>
-                <div className="d-flex align-items-center gap-2">
-                  <div className="display-5 fw-bold mb-0">{Number(saldo.disponivel ?? 0)}</div>
-                  {loadingSaldo && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
-                </div>
-                <div className="small opacity-75">Disponível para consultas IN100.</div>
-                <div className="mt-2 d-flex gap-3 flex-wrap">
-                  <div>
-                    <div className="small text-uppercase opacity-75">Realizadas</div>
-                    <div className="fw-semibold">{saldo.realizadas}</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm mt-3"
-                  onClick={(event) => { event.stopPropagation(); fetchSaldo() }}
-                  disabled={loadingSaldo}
-                >
-                  Atualizar saldo
-                </button>
+            <div className="dashboard-balance-shell">
+              <div className="dashboard-chrome-tabs" role="tablist" aria-label="Sistemas de consulta">
+                {logsTabs.map((tab) => (
+                  <button
+                    key={tab.source}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeLogsSource === tab.source}
+                    className={`dashboard-chrome-tab ${activeLogsSource === tab.source ? 'active' : ''}`}
+                    onClick={() => handleSelectLogsSource(tab.source)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-
-              <div
-                className="neo-card neo-lg p-4"
-                role="button"
-                tabIndex={0}
-                onClick={() => handleSelectLogsSource(LOG_SOURCE.V8)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    handleSelectLogsSource(LOG_SOURCE.V8)
-                  }
-                }}
-                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.V8 ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
-              >
-                <div className="small text-uppercase opacity-75">Saldo V8</div>
-                <div className="d-flex align-items-center gap-2">
-                  <div className="display-5 fw-bold mb-0">{saldoV8.total}</div>
-                  {loadingSaldoV8 && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
-                </div>
-                <div className="small opacity-75">Limite total disponível para consultas V8.</div>
-                <div className="mt-2 d-flex gap-3 flex-wrap">
-                  <div>
-                    <div className="small text-uppercase opacity-75">Usado</div>
-                    <div className="fw-semibold">{saldoV8.usado}</div>
-                  </div>
-                  <div>
-                    <div className="small text-uppercase opacity-75">Restante</div>
-                    <div className="fw-semibold">{saldoV8.restantes}</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm mt-3"
-                  onClick={(event) => { event.stopPropagation(); fetchSaldoV8() }}
-                  disabled={loadingSaldoV8}
-                >
-                  Atualizar saldo V8
-                </button>
-              </div>
-
-              <div
-                className="neo-card neo-lg p-4"
-                role="button"
-                tabIndex={0}
-                onClick={() => handleSelectLogsSource(LOG_SOURCE.HANDMAIS)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    handleSelectLogsSource(LOG_SOURCE.HANDMAIS)
-                  }
-                }}
-                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.HANDMAIS ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
-              >
-                <div className="small text-uppercase opacity-75">Saldo Hand+</div>
-                <div className="d-flex align-items-center gap-2">
-                  <div className="display-5 fw-bold mb-0">{saldoHandMais.total}</div>
-                  {loadingSaldoHandMais && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
-                </div>
-                <div className="small opacity-75">Limite total disponível para consultas Hand+.</div>
-                <div className="mt-2 d-flex gap-3 flex-wrap">
-                  <div>
-                    <div className="small text-uppercase opacity-75">Usado</div>
-                    <div className="fw-semibold">{saldoHandMais.usado}</div>
-                  </div>
-                  <div>
-                    <div className="small text-uppercase opacity-75">Restante</div>
-                    <div className="fw-semibold">{saldoHandMais.restantes}</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm mt-3"
-                  onClick={(event) => { event.stopPropagation(); fetchSaldoHandMais() }}
-                  disabled={loadingSaldoHandMais}
-                >
-                  Atualizar saldo Hand+
-                </button>
-              </div>
-
-              <div
-                className="neo-card neo-lg p-4"
-                role="button"
-                tabIndex={0}
-                onClick={() => handleSelectLogsSource(LOG_SOURCE.PRESENCA)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    handleSelectLogsSource(LOG_SOURCE.PRESENCA)
-                  }
-                }}
-                style={{ cursor: 'pointer', boxShadow: activeLogsSource === LOG_SOURCE.PRESENCA ? 'inset 0 0 0 1px rgba(13, 202, 240, 0.65)' : undefined }}
-              >
-                <div className="small text-uppercase opacity-75">Saldo Presença</div>
-                <div className="d-flex align-items-center gap-2">
-                  <div className="display-5 fw-bold mb-0">{saldoPresenca.total}</div>
-                  {loadingSaldoPresenca && <div className="spinner-border spinner-border-sm text-light" role="status" aria-hidden="true"></div>}
-                </div>
-                <div className="small opacity-75">Limite total disponível para consultas Presença.</div>
-                <div className="mt-2 d-flex gap-3 flex-wrap">
-                  <div>
-                    <div className="small text-uppercase opacity-75">Usado</div>
-                    <div className="fw-semibold">{saldoPresenca.usado}</div>
-                  </div>
-                  <div>
-                    <div className="small text-uppercase opacity-75">Restante</div>
-                    <div className="fw-semibold">{saldoPresenca.restantes}</div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm mt-3"
-                  onClick={(event) => { event.stopPropagation(); fetchSaldoPresenca() }}
-                  disabled={loadingSaldoPresenca}
-                >
-                  Atualizar saldo Presença
-                </button>
+              <div className="neo-card neo-lg p-4 dashboard-balance-panel">
+                {renderSaldoPanel()}
               </div>
             </div>
           </div>
@@ -1007,8 +1165,8 @@ export default function Dashboard() {
                           {log ? (
                             <span
                               className={`badge rounded-pill px-2 status-badge ${getStatusBadgeClass(log?.status, log?.detail)}`}
-                              title={String(log?.status ?? '')}
-                              aria-label={String(log?.status ?? '')}
+                              title={String(log?.statusTooltip ?? log?.status ?? '(vazio)')}
+                              aria-label={String(log?.statusTooltip ?? log?.status ?? '(vazio)')}
                             >
                               i
                             </span>

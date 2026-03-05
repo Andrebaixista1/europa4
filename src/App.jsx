@@ -1,5 +1,4 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import Landing from './pages/Landing.jsx'
 import Login from './pages/Login2.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import SupervisionPanel from './pages/SupervisionPanel.jsx'
@@ -13,6 +12,7 @@ import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import Relatorios from './pages/Relatorios.jsx'
 import Backups from './pages/Backups.jsx'
+import Permissoes from './pages/Permissoes.jsx'
 import GeradorSites from './pages/GeradorSites.jsx'
 import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
@@ -78,7 +78,17 @@ function ConsultaClientesRoute() {
   return <ConsultaClientes />
 }
 
+function PermissoesRoute() {
+  const { user } = useAuth()
+  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
+  if (loggedUserId !== 1) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <Permissoes />
+}
+
 function App() {
+  const { isAuthenticated } = useAuth()
   const location = useLocation()
   const hideSidebar = location.pathname === '/' || location.pathname.startsWith('/login')
 
@@ -88,7 +98,7 @@ function App() {
         {!hideSidebar && <SidebarNav />}
         <div className={`app-main ${hideSidebar ? '' : 'with-sidebar'}`}>
           <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
           <Route path="/login" element={<Login />} />
           <Route
             path="/dashboard"
@@ -136,6 +146,14 @@ function App() {
           element={
             <ProtectedRoute roles={['Master']}>
               <Backups />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/permissoes"
+          element={
+            <ProtectedRoute>
+              <PermissoesRoute />
             </ProtectedRoute>
           }
         />
@@ -283,7 +301,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
           </Routes>
         </div>
       </div>

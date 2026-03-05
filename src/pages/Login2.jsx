@@ -1,11 +1,11 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import TopNav from '../components/TopNav.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { defaultRouteFor } from '../utils/roles.js'
 import { notify } from '../utils/notify.js'
-import { novidadesList } from '../components/NovidadesModal.jsx'
+
 
 export default function Login() {
   const { login: doLogin } = useAuth()
@@ -57,59 +57,6 @@ export default function Login() {
     } catch {}
   }, [])
 
-  const novidades = useMemo(() => {
-    const hiddenInLoginPattern = /(campanhas?\s*zap|zapresponder|business manager|abrir campanhas? do zap|zap)/i
-    const latest = (novidadesList || [])
-      .filter((item) => {
-        const text = `${item?.titulo || ''} ${item?.descricao || ''}`
-        return !hiddenInLoginPattern.test(text)
-      })
-      .slice(0, 4)
-      .map((item) => {
-        const title = String(item?.titulo || '').trim()
-        const description = String(item?.descricao || '').trim()
-        return title && description ? `${title}: ${description}` : description
-      })
-      .filter(Boolean)
-
-    if (latest.length > 0) {
-      return latest
-    }
-
-    return [
-      'Estabilidade e performance melhoradas.',
-      'Aprimoramentos no fluxo de autenticacao.',
-      'Atualizacoes visuais e de usabilidade.',
-    ]
-  }, [])
-
-  // Typewriter state machine (one item at a time)
-  const [twIndex, setTwIndex] = useState(0)
-  const [twText, setTwText] = useState('')
-  const [twPhase, setTwPhase] = useState('typing') // typing | pausing | deleting
-
-  useEffect(() => {
-    const full = novidades[twIndex % novidades.length] || ''
-    let t
-    if (twPhase === 'typing') {
-      if (twText.length < full.length) {
-        t = setTimeout(() => setTwText(full.slice(0, twText.length + 1)), 45)
-      } else {
-        t = setTimeout(() => setTwPhase('pausing'), 1100)
-      }
-    } else if (twPhase === 'pausing') {
-      t = setTimeout(() => setTwPhase('deleting'), 650)
-    } else if (twPhase === 'deleting') {
-      if (twText.length > 0) {
-        t = setTimeout(() => setTwText(twText.slice(0, -1)), 28)
-      } else {
-        setTwIndex(i => (i + 1) % novidades.length)
-        setTwPhase('typing')
-      }
-    }
-    return () => { if (t) clearTimeout(t) }
-  }, [twText, twPhase, twIndex, novidades.length])
-
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
@@ -117,10 +64,6 @@ export default function Login() {
         <div className="row w-100 g-4 align-items-center">
           <div className="col-lg-6">
             <h2 className="fw-bold gradient-text mb-3">Bem-vindo(a) ao Nova Europa 4</h2>
-            <p className="opacity-75">
-              <span className="me-2">Novidade:</span>
-              <span>{twText}</span>
-            </p>
           </div>
           <div className="col-lg-5 ms-lg-auto">
             <form onSubmit={handleSubmit} className="neo-card p-4">
