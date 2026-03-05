@@ -1,9 +1,5 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" },
-    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
-  ],
   "functions": {
     "api/health-consult.js": { "maxDuration": 60 },
     "api/health-consult/force-backup.js": { "maxDuration": 120 }

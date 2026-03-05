@@ -28,3 +28,5 @@ dist-ssr
 
 # Codex CLI
 .codex_known_hosts
+
+.vercel
