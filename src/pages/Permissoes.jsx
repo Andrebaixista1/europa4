@@ -646,7 +646,7 @@ export default function Permissoes() {
             <div className="neo-card p-0 h-100 permissions-wix-panel">
               <div className="permissions-wix-panel-head">
                 <FiLayers size={16} />
-                <span>Escopo da Regra e Publico-alvo</span>
+                <span>Escopo de Regras</span>
               </div>
               <div className="permissions-wix-panel-body">
                 <div className="small text-uppercase opacity-75 mb-2">Escopo</div>
