@@ -1034,7 +1034,7 @@ class ConsultaV8Controller extends Controller
             return $detail === '' ? $prefix : $prefix.': '.$detail;
         }
 
-        $summary = 'Validacao V8: borrowerDocumentNumber (CPF invalido/formato), gender fora do esperado (male/female), birthDate invalida, signerPhone invalido (DDD/numero), provider nao permitido para a conta, ou combinacao de dados nao aceita para o usuario.';
+        $summary = 'Validacao V8: documento do tomador (CPF) invalido ou em formato incorreto; genero fora do esperado (masculino/feminino); data de nascimento invalida; telefone do assinante invalido (DDD/numero); provedor nao permitido para a conta; ou combinacao de dados nao aceita para o usuario.';
 
         if ($detail === '') {
             return $prefix.': '.$summary;
