@@ -1062,7 +1062,8 @@ class ConsultaV8Controller extends Controller
             $consultId = data_get($createResponse->json(), 'id');
         } elseif ($createStatus !== 400) {
             $errorMessage = $this->extractHttpErrorMessage($createResponse);
-            $this->markClientAsError((int) $client->id, 'API1 HTTP_'.$createStatus.': '.$errorMessage);
+            $api1Description = $this->formatApi1ErrorDescription($createStatus, $errorMessage);
+            $this->markClientAsError((int) $client->id, $api1Description);
             return ['duplicates_created' => 0, 'should_increment_limit' => false];
         }
 
@@ -1496,6 +1497,24 @@ class ConsultaV8Controller extends Controller
         }
 
         return 'Sem detalhe retornado pela API';
+    }
+
+    private function formatApi1ErrorDescription(int $status, string $errorMessage): string
+    {
+        $prefix = 'API1 HTTP_'.$status;
+        $detail = trim($errorMessage);
+
+        if ($status !== 422) {
+            return $detail === '' ? $prefix : $prefix.': '.$detail;
+        }
+
+        $summary = 'Validacao V8: borrowerDocumentNumber (CPF invalido/formato), gender fora do esperado (male/female), birthDate invalida, signerPhone invalido (DDD/numero), provider nao permitido para a conta, ou combinacao de dados nao aceita para o usuario.';
+
+        if ($detail === '') {
+            return $prefix.': '.$summary;
+        }
+
+        return $prefix.': '.$summary.' Detalhe V8: '.mb_substr($detail, 0, 300);
     }
 
 
