@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 
 class ConsultaV8Controller extends Controller
 {
@@ -246,10 +247,7 @@ class ConsultaV8Controller extends Controller
             $telefoneDigits = $this->generateRandomPhoneNumber();
         }
 
-        $clienteSexo = trim((string) ($validated['cliente_sexo'] ?? self::DEFAULT_CLIENT_SEX));
-        if ($clienteSexo === '') {
-            $clienteSexo = self::DEFAULT_CLIENT_SEX;
-        }
+        $clienteSexo = $this->normalizeGenderForV8($validated['cliente_sexo'] ?? self::DEFAULT_CLIENT_SEX);
 
         $email = $this->toNullableString($validated['email'] ?? null);
         if ($email === null) {
@@ -576,8 +574,8 @@ class ConsultaV8Controller extends Controller
         $shouldIncrementLimit = false;
 
         $createResponse = $this->v8Http($accessToken)->post('/private-consignment/consult', [
-            'borrowerDocumentNumber' => (string) ($client->cliente_cpf ?? ''),
-            'gender' => (string) ($client->cliente_sexo ?? ''),
+            'borrowerDocumentNumber' => $this->normalizeDocumentNumber($client->cliente_cpf ?? null),
+            'gender' => $this->normalizeGenderForV8($client->cliente_sexo ?? null),
             'birthDate' => $this->toBirthDate($client->nascimento ?? null),
             'signerName' => (string) ($client->cliente_nome ?? ''),
             'signerEmail' => (string) ($client->email ?? ''),
@@ -589,7 +587,8 @@ class ConsultaV8Controller extends Controller
         if ($createStatus >= 200 && $createStatus < 300) {
             $consultId = data_get($createResponse->json(), 'id');
         } elseif ($createStatus !== 400) {
-            $this->markClientAsError((int) $client->id, 'API1 HTTP_'.$createStatus);
+            $errorMessage = $this->extractHttpErrorMessage($createResponse);
+            $this->markClientAsError((int) $client->id, 'API1 HTTP_'.$createStatus.': '.$errorMessage);
             return ['duplicates_created' => 0, 'should_increment_limit' => false];
         }
 
@@ -614,7 +613,7 @@ class ConsultaV8Controller extends Controller
                 'endDate' => Carbon::now('UTC')->endOfDay()->format('Y-m-d\TH:i:s\Z'),
                 'limit' => 50,
                 'page' => 1,
-                'search' => (string) ($client->cliente_cpf ?? ''),
+                'search' => $this->normalizeDocumentNumber($client->cliente_cpf ?? null),
                 'provider' => (string) env('V8_PROVIDER', self::PROVIDER_DEFAULT),
             ]);
 
@@ -958,6 +957,71 @@ class ConsultaV8Controller extends Controller
             'areaCode' => $areaCode,
             'phoneNumber' => $phoneNumber,
         ];
+    }
+
+    private function normalizeDocumentNumber($value): string
+    {
+        return preg_replace('/\D+/', '', (string) $value) ?? '';
+    }
+
+    private function normalizeGenderForV8($value): string
+    {
+        $raw = mb_strtolower(trim((string) $value), 'UTF-8');
+        if ($raw === '') {
+            return self::DEFAULT_CLIENT_SEX;
+        }
+
+        if (in_array($raw, ['m', 'male', 'masculino', 'masculina'], true)) {
+            return 'male';
+        }
+
+        if (in_array($raw, ['f', 'female', 'feminino', 'feminina'], true)) {
+            return 'female';
+        }
+
+        return self::DEFAULT_CLIENT_SEX;
+    }
+
+    private function extractHttpErrorMessage(Response $response): string
+    {
+        $json = $response->json();
+        if (is_array($json)) {
+            $candidates = [
+                data_get($json, 'message'),
+                data_get($json, 'error_description'),
+                data_get($json, 'error'),
+                data_get($json, 'detail'),
+            ];
+
+            foreach ($candidates as $candidate) {
+                if (is_string($candidate) && trim($candidate) !== '') {
+                    return mb_substr(trim($candidate), 0, 300);
+                }
+            }
+
+            $errors = data_get($json, 'errors');
+            if (is_array($errors)) {
+                foreach ($errors as $errorValue) {
+                    if (is_string($errorValue) && trim($errorValue) !== '') {
+                        return mb_substr(trim($errorValue), 0, 300);
+                    }
+                    if (is_array($errorValue)) {
+                        foreach ($errorValue as $nestedError) {
+                            if (is_string($nestedError) && trim($nestedError) !== '') {
+                                return mb_substr(trim($nestedError), 0, 300);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        $body = trim((string) $response->body());
+        if ($body !== '') {
+            return mb_substr($body, 0, 300);
+        }
+
+        return 'Sem detalhe retornado pela API';
     }
 
 
