@@ -15,22 +15,75 @@ const toBool = (value) => {
   return ['1', 'true', 'sim', 'yes', 'on'].includes(token)
 }
 
-const unwrapPayload = (payload) => {
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.value)) return payload.value
-  if (Array.isArray(payload?.data)) return payload.data
-  if (payload && typeof payload === 'object') return [payload]
+const parseJsonSafe = (value) => {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+const unwrapN8nPayload = (payload) => {
+  let value = payload
+
+  if (typeof value === 'string') {
+    const parsed = parseJsonSafe(value)
+    if (parsed !== null) value = parsed
+  }
+
+  if (Array.isArray(value) && value.length === 1 && value[0] && typeof value[0] === 'object') {
+    const jsonKey = Object.keys(value[0]).find((key) => key.toUpperCase().startsWith('JSON_'))
+    if (jsonKey && typeof value[0][jsonKey] === 'string') {
+      const parsed = parseJsonSafe(value[0][jsonKey])
+      if (parsed !== null) value = parsed
+    }
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const jsonKey = Object.keys(value).find((key) => key.toUpperCase().startsWith('JSON_'))
+    if (jsonKey && typeof value[jsonKey] === 'string') {
+      const parsed = parseJsonSafe(value[jsonKey])
+      if (parsed !== null) value = parsed
+    }
+  }
+
+  return value
+}
+
+const unwrapPayload = (payload, preferredKeys = []) => {
+  const source = unwrapN8nPayload(payload)
+
+  if (Array.isArray(source)) {
+    if (source.length === 1 && source[0] && typeof source[0] === 'object' && !Array.isArray(source[0])) {
+      const keys = [...preferredKeys, 'equipes', 'usuarios', 'rows', 'data', 'value']
+      for (const key of keys) {
+        const candidate = unwrapN8nPayload(source[0]?.[key])
+        if (Array.isArray(candidate)) return candidate
+      }
+    }
+    return source
+  }
+
+  if (source && typeof source === 'object') {
+    const keys = [...preferredKeys, 'equipes', 'usuarios', 'rows', 'data', 'value']
+    for (const key of keys) {
+      const candidate = unwrapN8nPayload(source?.[key])
+      if (Array.isArray(candidate)) return candidate
+    }
+    return [source]
+  }
+
   return []
 }
 
-const parseResponseArray = async (response) => {
+const parseResponseArray = async (response, preferredKeys = []) => {
   const text = await response.text()
   const trimmed = String(text ?? '').trim()
   if (!trimmed) return []
 
   try {
     const json = JSON.parse(trimmed)
-    return unwrapPayload(json)
+    return unwrapPayload(json, preferredKeys)
   } catch {
     return []
   }
@@ -66,14 +119,13 @@ export default function AdminUsuariosCadastro() {
   const [modalError, setModalError] = useState('')
   const [isLoginDirty, setIsLoginDirty] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false)
   const [form, setForm] = useState({
     nome: '',
     login: '',
     equipe_id: '',
-    ativo: true,
+    responsavel: false,
+    inativo: false,
     senha: '',
-    senha_confirmacao: ''
   })
 
   const load = async () => {
@@ -89,8 +141,8 @@ export default function AdminUsuariosCadastro() {
       if (!usersResp.ok) throw new Error(`Usuários HTTP ${usersResp.status}`)
       if (!teamsResp.ok) throw new Error(`Equipes HTTP ${teamsResp.status}`)
 
-      const usersJson = await parseResponseArray(usersResp)
-      const teamsJson = await parseResponseArray(teamsResp)
+      const usersJson = await parseResponseArray(usersResp, ['usuarios'])
+      const teamsJson = await parseResponseArray(teamsResp, ['equipes'])
 
       const teamRows = teamsJson
         .map((item) => ({
@@ -111,7 +163,8 @@ export default function AdminUsuariosCadastro() {
             login: String(item?.login ?? '').trim().toLowerCase(),
             equipe_id: equipeId,
             equipe_nome: String(item?.equipe_nome ?? teamNameById.get(equipeId) ?? '-').trim(),
-            ativo: toBool(item?.ativo ?? true)
+            ativo: toBool(item?.ativo ?? true),
+            responsavel: toBool(item?.responsavel ?? item?.is_supervisor ?? item?.isSupervisor ?? false)
           }
         })
         .filter((item) => Number.isFinite(item.id) && item.id > 0)
@@ -170,13 +223,12 @@ export default function AdminUsuariosCadastro() {
       nome: '',
       login: '',
       equipe_id: '',
-      ativo: true,
+      responsavel: false,
+      inativo: false,
       senha: '',
-      senha_confirmacao: ''
     })
     setIsLoginDirty(false)
     setShowPassword(false)
-    setShowPasswordConfirm(false)
     setModalError('')
     setShowModal(true)
   }
@@ -187,13 +239,12 @@ export default function AdminUsuariosCadastro() {
       nome: normalizeName(row.nome || ''),
       login: String(row.login || '').toLowerCase(),
       equipe_id: row.equipe_id ? String(row.equipe_id) : '',
-      ativo: Boolean(row.ativo),
+      responsavel: Boolean(row.responsavel),
+      inativo: !Boolean(row.ativo),
       senha: '',
-      senha_confirmacao: ''
     })
     setIsLoginDirty(true)
     setShowPassword(false)
-    setShowPasswordConfirm(false)
     setModalError('')
     setShowModal(true)
   }
@@ -215,7 +266,6 @@ export default function AdminUsuariosCadastro() {
   const closeModal = () => {
     setShowModal(false)
     setShowPassword(false)
-    setShowPasswordConfirm(false)
     setModalError('')
   }
 
@@ -227,7 +277,6 @@ export default function AdminUsuariosCadastro() {
     const equipeId = form.equipe_id ? Number(form.equipe_id) : null
     const equipeNome = teams.find((team) => team.id === equipeId)?.nome || '-'
     const senha = String(form.senha ?? '').trim()
-    const confirmacao = String(form.senha_confirmacao ?? '').trim()
 
     if (!trimmedNome || !trimmedLogin) {
       setModalError('Preencha Nome e Login.')
@@ -239,14 +288,10 @@ export default function AdminUsuariosCadastro() {
       return
     }
 
-    const shouldValidatePassword = !editingRow || senha || confirmacao
+    const shouldValidatePassword = !editingRow || senha
     if (shouldValidatePassword) {
-      if (senha.length < 4 || confirmacao.length < 4) {
-        setModalError('Senha e confirmação precisam ter no mínimo 4 caracteres.')
-        return
-      }
-      if (senha !== confirmacao) {
-        setModalError('Senha e confirmação precisam ser iguais.')
+      if (senha.length < 4) {
+        setModalError('A senha precisa ter no mínimo 4 caracteres.')
         return
       }
     }
@@ -262,7 +307,8 @@ export default function AdminUsuariosCadastro() {
               login: trimmedLogin,
               equipe_id: equipeId,
               equipe_nome: equipeNome,
-              ativo: Boolean(form.ativo)
+              responsavel: Boolean(form.responsavel),
+              ativo: !Boolean(form.inativo)
             }
           : row
       )))
@@ -275,7 +321,8 @@ export default function AdminUsuariosCadastro() {
           login: trimmedLogin,
           equipe_id: equipeId,
           equipe_nome: equipeNome,
-          ativo: Boolean(form.ativo)
+          responsavel: Boolean(form.responsavel),
+          ativo: !Boolean(form.inativo)
         },
         ...prev
       ])
@@ -284,7 +331,8 @@ export default function AdminUsuariosCadastro() {
     closeModal()
   }
 
-  const statusSwitchId = `admin-user-ativo-${editingRow?.id ?? 'new'}`
+  const inativoSwitchId = `admin-user-inativo-${editingRow?.id ?? 'new'}`
+  const responsavelSwitchId = `admin-user-responsavel-${editingRow?.id ?? 'new'}`
 
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
@@ -415,131 +463,123 @@ export default function AdminUsuariosCadastro() {
 
       {showModal && (
         <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-3" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 2200 }}>
-          <div className="neo-card neo-lg p-0 admin-modal-card admin-users-modal-card" style={{ maxWidth: 760, width: '95%', maxHeight: '88vh' }}>
-            <div className="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
-              <h5 className="mb-0">{editingRow ? 'Editar Usuário' : 'Novo Usuário'}</h5>
-              <button className="btn btn-ghost btn-icon" onClick={closeModal} aria-label="Fechar">
+          <div className="neo-card neo-lg p-0 admin-modal-card admin-users-modal-card admin-users-modal-v2" style={{ maxWidth: 980, width: '94%', maxHeight: '88vh' }}>
+            <div className="admin-users-modal-head-v2">
+              <h5 className="mb-0">{editingRow ? 'Editar Usuário' : 'Cadastrar Usuário'}</h5>
+              <button className="btn btn-ghost btn-icon admin-users-modal-close-v2" onClick={closeModal} aria-label="Fechar">
                 <Fi.FiX />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="admin-modal-body admin-users-modal-body p-4">
-              <div className="row g-3">
-                <div className="col-12 col-md-6">
-                  <label className="form-label small">Nome</label>
-                  <input
-                    className="form-control text-uppercase"
-                    value={form.nome}
-                    onChange={(event) => updateNome(event.target.value)}
-                    placeholder="NOME SOBRENOME"
-                    required
-                  />
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small">Login</label>
-                  <input
-                    className="form-control"
-                    value={form.login}
-                    onChange={(event) => updateLogin(event.target.value)}
-                    placeholder="nomesobrenome"
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    required
-                  />
-                </div>
 
-                <div className="col-12 col-md-9">
-                  <label className="form-label small">Equipe</label>
-                  <select
-                    className="form-select"
-                    value={form.equipe_id}
-                    onChange={(event) => setForm((prev) => ({ ...prev, equipe_id: event.target.value }))}
-                    required
-                  >
-                    <option value="">Selecione uma equipe</option>
-                    {teams.map((team) => (
-                      <option key={team.id} value={String(team.id)}>{team.nome}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-12 col-md-3 d-flex align-items-end">
-                  <div className="admin-users-active-wrap w-100">
-                    <label className="form-label small mb-2" htmlFor={statusSwitchId}>Status</label>
-                    <div className="form-check form-switch m-0">
+            <form onSubmit={handleSubmit} className="admin-modal-body admin-users-modal-body admin-users-modal-body-v2 p-4">
+              <div className="admin-users-grid-v2">
+                <section className="admin-users-main-v2">
+                  <div className="row g-3">
+                    <div className="col-12">
+                      <label className="form-label">Nome</label>
                       <input
-                        id={statusSwitchId}
-                        className="form-check-input"
-                        type="checkbox"
-                        checked={Boolean(form.ativo)}
-                        onChange={(event) => setForm((prev) => ({ ...prev, ativo: event.target.checked }))}
+                        className="form-control text-uppercase"
+                        value={form.nome}
+                        onChange={(event) => updateNome(event.target.value)}
+                        placeholder="Insira o nome do usuário"
+                        required
                       />
-                      <label className="form-check-label fw-semibold" htmlFor={statusSwitchId}>
-                        {form.ativo ? 'Ativo' : 'Inativo'}
-                      </label>
+                    </div>
+
+                    <div className="col-12 col-lg-6">
+                      <label className="form-label">Login</label>
+                      <input
+                        className="form-control"
+                        value={form.login}
+                        onChange={(event) => updateLogin(event.target.value)}
+                        placeholder="Insira um usuário"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        required
+                      />
+                    </div>
+
+                    <div className="col-12 col-lg-6">
+                      <label className="form-label">Senha</label>
+                      <div className="input-group">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          className="form-control"
+                          value={form.senha}
+                          onChange={(event) => setForm((prev) => ({ ...prev, senha: event.target.value }))}
+                          placeholder={editingRow ? 'Preencha para alterar' : 'Insira uma senha'}
+                          minLength={4}
+                          required={!editingRow}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                          aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                        >
+                          {showPassword ? <Fi.FiEyeOff /> : <Fi.FiEye />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label">Equipe</label>
+                      <select
+                        className="form-select"
+                        value={form.equipe_id}
+                        onChange={(event) => setForm((prev) => ({ ...prev, equipe_id: event.target.value }))}
+                        required
+                      >
+                        <option value="">Selecione uma equipe</option>
+                        {teams.map((team) => (
+                          <option key={team.id} value={String(team.id)}>{team.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-12">
+                      <div className="admin-users-switch-row-v2">
+                        <label className="admin-users-switch-item-v2" htmlFor={responsavelSwitchId}>
+                          <input
+                            id={responsavelSwitchId}
+                            className="admin-users-switch-input-v2"
+                            type="checkbox"
+                            checked={Boolean(form.responsavel)}
+                            onChange={(event) => setForm((prev) => ({ ...prev, responsavel: event.target.checked }))}
+                          />
+                          <span className="admin-users-switch-track-v2" aria-hidden="true" />
+                          <span>Responsável</span>
+                        </label>
+
+                        <label className="admin-users-switch-item-v2" htmlFor={inativoSwitchId}>
+                          <input
+                            id={inativoSwitchId}
+                            className="admin-users-switch-input-v2"
+                            type="checkbox"
+                            checked={Boolean(form.inativo)}
+                            onChange={(event) => setForm((prev) => ({ ...prev, inativo: event.target.checked }))}
+                          />
+                          <span className="admin-users-switch-track-v2" aria-hidden="true" />
+                          <span>Usuário inativo</span>
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="col-12 col-md-6">
-                  <label className="form-label small">Senha</label>
-                  <div className="input-group">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      className="form-control"
-                      value={form.senha}
-                      onChange={(event) => setForm((prev) => ({ ...prev, senha: event.target.value }))}
-                      placeholder={editingRow ? 'Preencha para alterar' : 'Mínimo 4 caracteres'}
-                      minLength={4}
-                      required={!editingRow}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                    >
-                      {showPassword ? <Fi.FiEyeOff /> : <Fi.FiEye />}
+                  {modalError && (
+                    <div className="alert alert-danger py-2 px-3 mt-3 mb-0 small">
+                      {modalError}
+                    </div>
+                  )}
+
+                  <div className="admin-users-submit-v2">
+                    <button type="submit" className="btn btn-primary w-100">
+                      {editingRow ? 'Salvar Usuário' : 'Criar Usuário'}
                     </button>
                   </div>
-                </div>
-                <div className="col-12 col-md-6">
-                  <label className="form-label small">Confirmar senha</label>
-                  <div className="input-group">
-                    <input
-                      type={showPasswordConfirm ? 'text' : 'password'}
-                      className="form-control"
-                      value={form.senha_confirmacao}
-                      onChange={(event) => setForm((prev) => ({ ...prev, senha_confirmacao: event.target.value }))}
-                      placeholder={editingRow ? 'Repita para confirmar' : 'Repita a senha'}
-                      minLength={4}
-                      required={!editingRow}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-outline-secondary"
-                      onClick={() => setShowPasswordConfirm((prev) => !prev)}
-                      title={showPasswordConfirm ? 'Ocultar senha' : 'Mostrar senha'}
-                      aria-label={showPasswordConfirm ? 'Ocultar senha' : 'Mostrar senha'}
-                    >
-                      {showPasswordConfirm ? <Fi.FiEyeOff /> : <Fi.FiEye />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="small opacity-75 mt-2">
-                Nome em maiúsculo e login sem espaços. Exemplo: JOÃO SILVA -> joaosilva.
-              </div>
-              {modalError && (
-                <div className="alert alert-danger py-2 px-3 mt-3 mb-0 small">
-                  {modalError}
-                </div>
-              )}
-
-              <div className="d-flex justify-content-end gap-2 admin-modal-actions admin-users-modal-actions">
-                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={closeModal}>Cancelar</button>
-                <button type="submit" className="btn btn-primary btn-sm">{editingRow ? 'Salvar' : 'Adicionar'}</button>
+                </section>
               </div>
             </form>
           </div>

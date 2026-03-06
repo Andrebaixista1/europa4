@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
+import { notify } from '../utils/notify.js'
 
 const SCOPE_OPTIONS = [
   { key: 'setor', label: 'Equipe', icon: FiShield }
@@ -110,7 +111,11 @@ const API_CATALOG = [
 
 const PERMISSIONS_API_ENDPOINTS = {
   equipes: 'https://n8n.apivieiracred.store/webhook/api/getequipes',
-  usuarios: 'https://n8n.apivieiracred.store/webhook/api/getusuarios'
+  usuarios: 'https://n8n.apivieiracred.store/webhook/api/getusuarios',
+  paginasCatalogo: 'https://n8n.apivieiracred.store/webhook/api/getpagcat',
+  regrasPaginas: 'https://n8n.apivieiracred.store/webhook/api/getregraspag',
+  regras: 'https://n8n.apivieiracred.store/webhook/api/getregras',
+  addEquipe: 'https://n8n.apivieiracred.store/webhook/api/addequipes2'
 }
 
 const PERMISSION_GROUPS = [
@@ -132,6 +137,11 @@ const PERMISSION_GROUPS = [
   { key: 'gestao', label: 'Gestão', pages: ['recargas', 'controle_planejamento'] },
   { key: 'configuracoes', label: 'Configurações', pages: ['usuarios', 'equipes', 'usuarios2', 'permissoes', 'backups'] }
 ]
+
+const FIXED_GROUP_KEY = 'visao_geral'
+const ALWAYS_ENABLED_PAGE_KEYS = PERMISSION_GROUPS
+  .find((group) => group.key === FIXED_GROUP_KEY)
+  ?.pages || []
 
 const GROUP_ICON_MAP = {
   visao_geral: FiGrid,
@@ -303,7 +313,7 @@ const normalizeApiKey = (value) => {
 }
 
 const createEmptyPreset = () => ({
-  pages: createFlags(PAGE_CATALOG, []),
+  pages: createFlags(PAGE_CATALOG, ALWAYS_ENABLED_PAGE_KEYS),
   apis: createFlags(API_CATALOG, []),
   extras: { readOnly: false, forceMfa: false, timeWindow: false },
   pageRules: {}
@@ -333,7 +343,9 @@ const buildPageRule = (pageKey, inputRule = {}, fallbackView = undefined) => {
 const createPageRulesFromConfig = (cfg) => {
   const next = {}
   PAGE_CATALOG.forEach((page) => {
-    const fallbackView = Boolean(cfg?.pages?.[page.key] ?? cfg?.pageRules?.[page.key]?.view)
+    const fallbackView = ALWAYS_ENABLED_PAGE_KEYS.includes(page.key)
+      ? true
+      : Boolean(cfg?.pages?.[page.key] ?? cfg?.pageRules?.[page.key]?.view)
     next[page.key] = buildPageRule(page.key, cfg?.pageRules?.[page.key], fallbackView)
   })
   return next
@@ -387,6 +399,11 @@ const ensurePresetShape = (input) => {
       next.pages[key] = Boolean(nextRule.view)
     })
   }
+
+  ALWAYS_ENABLED_PAGE_KEYS.forEach((pageKey) => {
+    next.pages[pageKey] = true
+    next.pageRules[pageKey] = buildPageRule(pageKey, next.pageRules[pageKey], true)
+  })
 
   return next
 }
@@ -494,6 +511,11 @@ const parsePermissionsFromPayload = (rawPayload) => {
     const regraById = new Map(
       regras.map((item) => [String(item?.id ?? ''), item])
     )
+    const equipeByRuleId = new Map(
+      equipes
+        .map((item) => [String(item?.regra_id ?? item?.rule_id ?? '').trim(), item])
+        .filter(([ruleId]) => Boolean(ruleId))
+    )
 
     equipes.forEach((item) => {
       const name = String(item?.nome ?? item?.descricao ?? '').trim()
@@ -514,18 +536,38 @@ const parsePermissionsFromPayload = (rawPayload) => {
     }
 
     const mergedRuleRows = regrasPaginas.map((row) => {
-      const regraId = String(row?.regra_id ?? row?.rule_id ?? '')
+      const regraId = String(row?.regra_id ?? row?.rule_id ?? '').trim()
       const regra = regraById.get(regraId)
+      const equipeFromRuleId = equipeByRuleId.get(regraId)
+      const equipeFromAnyId = equipeById.get(
+        String(
+          row?.equipe_id_alvo ??
+          row?.equipe_id ??
+          row?.setor_id ??
+          regra?.equipe_id_alvo ??
+          ''
+        )
+      )
+      const equipeAlvo = equipeFromAnyId || equipeFromRuleId || equipeById.get(String(regra?.equipe_id_alvo ?? ''))
+      const responsavelIdRaw =
+        row?.usuario_id ??
+        row?.usuario_id_alvo ??
+        regra?.usuario_id_alvo ??
+        equipeFromRuleId?.responsavel_user_id
+      const usuarioAlvo = usuarioById.get(String(responsavelIdRaw ?? ''))
       const scope = mapRegraScope(regra)
-      const equipeAlvo = equipeById.get(String(regra?.equipe_id_alvo ?? ''))
-      const usuarioAlvo = usuarioById.get(String(regra?.usuario_id_alvo ?? ''))
       return {
         ...row,
-        escopo_tipo: scope,
-        equipe_nome: row?.equipe_nome ?? equipeAlvo?.nome ?? '',
-        setor: row?.setor ?? equipeAlvo?.nome ?? '',
-        usuario_login: row?.usuario_login ?? usuarioAlvo?.login ?? usuarioAlvo?.nome ?? '',
-        usuario_id: row?.usuario_id ?? regra?.usuario_id_alvo ?? '',
+        escopo_tipo: scope || (equipeAlvo ? 'setor' : ''),
+        equipe_nome: row?.equipe_nome ?? row?.setor ?? equipeAlvo?.nome ?? '',
+        setor: row?.setor ?? row?.equipe_nome ?? equipeAlvo?.nome ?? '',
+        usuario_login:
+          row?.usuario_login ??
+          usuarioAlvo?.login ??
+          usuarioAlvo?.nome ??
+          equipeFromRuleId?.responsavel_nome ??
+          '',
+        usuario_id: responsavelIdRaw ?? '',
         role_alvo: row?.role_alvo ?? regra?.role_alvo ?? ''
       }
     })
@@ -743,6 +785,8 @@ export default function Permissoes() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState('edit')
   const [editorName, setEditorName] = useState('')
+  const [editorOriginalName, setEditorOriginalName] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [currentPage, setCurrentPage] = useState(1)
@@ -790,10 +834,11 @@ export default function Permissoes() {
   }
 
   useEffect(() => {
+    if (editorOpen && editorMode === 'create') return
     if (!scopeTargets.includes(target)) {
       setTarget(scopeTargets[0] || '')
     }
-  }, [scopeTargets, target])
+  }, [scopeTargets, target, editorOpen, editorMode])
 
   useEffect(() => {
     const preset = resolvePreset(scope, target)
@@ -803,7 +848,7 @@ export default function Permissoes() {
   }, [scope, target, apiPresetsByScope])
 
   useEffect(() => {
-    setEditorName(target || '')
+    setEditorName(String(target || '').toUpperCase())
   }, [target])
 
   useEffect(() => {
@@ -815,7 +860,7 @@ export default function Permissoes() {
     setLoadingRemote(true)
     setApiLoadError('')
       try {
-        const fetchArray = async (url) => {
+        const fetchPayload = async (url) => {
           const response = await fetch(url, { method: 'GET' })
           if (!response.ok) throw new Error(`HTTP ${response.status} em ${url}`)
           const rawText = await response.text()
@@ -823,22 +868,81 @@ export default function Permissoes() {
           const json = parseJsonSafe(rawText)
           if (!json) return []
           const unwrapped = unwrapPermissionsPayload(json)
-          return Array.isArray(unwrapped) ? unwrapped : []
+          return unwrapped
         }
 
-      const equipes = await fetchArray(PERMISSIONS_API_ENDPOINTS.equipes)
-      const usuarios = await fetchArray(PERMISSIONS_API_ENDPOINTS.usuarios)
+      const toArray = (payload, keys = []) => {
+        if (Array.isArray(payload)) return payload
+        if (payload && typeof payload === 'object') {
+          for (const key of keys) {
+            if (Array.isArray(payload?.[key])) return payload[key]
+          }
+        }
+        return []
+      }
+
+      const equipesPayload = await fetchPayload(PERMISSIONS_API_ENDPOINTS.equipes)
+
+      let equipes = []
+      let usuarios = []
+      let paginasCatalogo = []
+      let regrasPaginas = []
+      let regras = []
+
+      const hasCorrelatedShape = Boolean(
+        equipesPayload &&
+        typeof equipesPayload === 'object' &&
+        !Array.isArray(equipesPayload) &&
+        (
+          Array.isArray(equipesPayload?.equipes) ||
+          Array.isArray(equipesPayload?.paginas_catalogo) ||
+          Array.isArray(equipesPayload?.regras_paginas) ||
+          Array.isArray(equipesPayload?.regras)
+        )
+      )
+
+      if (hasCorrelatedShape) {
+        equipes = toArray(equipesPayload, ['equipes'])
+        paginasCatalogo = toArray(equipesPayload, ['paginas_catalogo', 'paginasCatalogo'])
+        regrasPaginas = toArray(equipesPayload, ['regras_paginas', 'regrasPaginas'])
+        regras = toArray(equipesPayload, ['regras'])
+
+        const usuariosPayload = await fetchPayload(PERMISSIONS_API_ENDPOINTS.usuarios)
+        usuarios = toArray(usuariosPayload, ['usuarios', 'rows', 'data', 'value'])
+      } else {
+        const [
+          usuariosPayload,
+          paginasPayload,
+          regrasPaginasPayload,
+          regrasPayload
+        ] = await Promise.all([
+          fetchPayload(PERMISSIONS_API_ENDPOINTS.usuarios),
+          fetchPayload(PERMISSIONS_API_ENDPOINTS.paginasCatalogo),
+          fetchPayload(PERMISSIONS_API_ENDPOINTS.regrasPaginas),
+          fetchPayload(PERMISSIONS_API_ENDPOINTS.regras)
+        ])
+
+        equipes = toArray(equipesPayload, ['equipes', 'rows', 'data', 'value'])
+        usuarios = toArray(usuariosPayload, ['usuarios', 'rows', 'data', 'value'])
+        paginasCatalogo = toArray(paginasPayload, ['paginas_catalogo', 'paginasCatalogo', 'rows', 'data', 'value'])
+        regrasPaginas = toArray(regrasPaginasPayload, ['regras_paginas', 'regrasPaginas', 'rows', 'data', 'value'])
+        regras = toArray(regrasPayload, ['regras', 'rows', 'data', 'value'])
+      }
 
       const parsed = parsePermissionsFromPayload({
         data: {
           equipes,
-          usuarios
+          usuarios,
+          paginas_catalogo: paginasCatalogo,
+          regras_paginas: regrasPaginas,
+          regras
         }
       })
 
       if (!parsed) {
         setApiLoaded(false)
         setApiLoadError('A API de permissões não retornou uma estrutura válida.')
+        notify.error('A API de permissões não retornou uma estrutura válida.')
         return
       }
 
@@ -852,7 +956,9 @@ export default function Permissoes() {
       setApiLoaded(true)
     } catch (error) {
       setApiLoaded(false)
-      setApiLoadError(`Falha ao carregar API de permissões: ${error?.message || 'erro desconhecido'}`)
+      const message = `Falha ao carregar API de permissões: ${error?.message || 'erro desconhecido'}`
+      setApiLoadError(message)
+      notify.error(message)
     } finally {
       setLoadingRemote(false)
     }
@@ -969,22 +1075,23 @@ export default function Permissoes() {
   }
 
   const setPageVisibility = (pageKey, nextView) => {
+    const lockedView = ALWAYS_ENABLED_PAGE_KEYS.includes(pageKey) ? true : nextView
     const cap = PAGE_CAPABILITIES[pageKey] || {}
     updatePageRule(pageKey, (current) => ({
       ...current,
-      view: nextView,
-      consultar: nextView ? Boolean(cap.consultar) : false,
-      criar: nextView ? Boolean(cap.criar) : false,
-      editar: nextView ? Boolean(cap.editar) : false,
-      excluir: nextView ? Boolean(cap.excluir) : false,
-      exportar: nextView ? Boolean(cap.exportar) : false
+      view: lockedView,
+      consultar: lockedView ? Boolean(cap.consultar) : false,
+      criar: lockedView ? Boolean(cap.criar) : false,
+      editar: lockedView ? Boolean(cap.editar) : false,
+      excluir: lockedView ? Boolean(cap.excluir) : false,
+      exportar: lockedView ? Boolean(cap.exportar) : false
     }))
 
     setConfig((prev) => ({
       ...prev,
       pages: {
         ...(prev.pages || {}),
-        [pageKey]: nextView
+        [pageKey]: lockedView
       }
     }))
   }
@@ -1075,6 +1182,7 @@ export default function Permissoes() {
     setConfig(createEmptyPreset())
     setPageRules(createPageRulesFromConfig(createEmptyPreset()))
     setEditorName('')
+    setEditorOriginalName('')
     setUsuarioResponsavel('')
     setUsuariosEquipe([])
     setResponsavelFilter('')
@@ -1088,7 +1196,9 @@ export default function Permissoes() {
     setEditorMode('edit')
     setScope(scopeKey)
     setTarget(targetKey)
-    setEditorName(targetKey || '')
+    const normalizedName = String(targetKey || '').toUpperCase()
+    setEditorName(normalizedName)
+    setEditorOriginalName(normalizedName)
     setUsuarioResponsavel('')
     setUsuariosEquipe([])
     setResponsavelFilter('')
@@ -1098,8 +1208,87 @@ export default function Permissoes() {
     setEditorOpen(true)
   }
 
-  const saveMock = () => {
-    setEditorOpen(false)
+  const findUserIdByName = (name) => {
+    const token = normalizeToken(name)
+    if (!token) return null
+    const found = (Array.isArray(apiUsers) ? apiUsers : []).find((userItem) => {
+      const options = [
+        userItem?.nome,
+        userItem?.login,
+        userItem?.name,
+        userItem?.username
+      ]
+      return options.some((value) => normalizeToken(value) === token)
+    })
+    if (!found) return null
+    const idValue = Number(found?.id ?? found?.id_user ?? found?.usuario_id)
+    return Number.isFinite(idValue) ? idValue : null
+  }
+
+  const saveMock = async () => {
+    const nome = String(editorName || '').trim().toUpperCase()
+    if (!nome) {
+      notify.error('Preencha o nome da equipe.')
+      return
+    }
+
+    const responsavelId = findUserIdByName(usuarioResponsavel)
+
+    const equipeUsersIds = usuariosEquipe
+      .map((userName) => findUserIdByName(userName))
+      .filter((userId) => Number.isFinite(userId))
+
+    const usuariosEquipeIds = [...new Set([
+      ...(Number.isFinite(responsavelId) ? [responsavelId] : []),
+      ...equipeUsersIds
+    ])]
+
+    const permissoes = PAGE_CATALOG.map((page) => {
+      const rule = pageRules?.[page.key] || buildPageRule(page.key, {}, ALWAYS_ENABLED_PAGE_KEYS.includes(page.key))
+      return {
+        pagina_key: page.key,
+        allow_view: Boolean(rule.view),
+        allow_consultar: Boolean(rule.consultar),
+        allow_criar: Boolean(rule.criar),
+        allow_editar: Boolean(rule.editar),
+        allow_excluir: Boolean(rule.excluir),
+        allow_exportar: Boolean(rule.exportar)
+      }
+    })
+
+    const payload = {
+      nome,
+      nome_original: editorMode === 'edit' ? String(editorOriginalName || nome).trim().toUpperCase() : null,
+      modo: editorMode,
+      descricao: `Equipe ${nome}`,
+      ativo: true,
+      responsavel_user_id: Number.isFinite(responsavelId) ? responsavelId : null,
+      created_by_user_id: 1,
+      usuarios_equipe: usuariosEquipeIds,
+      permissoes
+    }
+
+    setIsSaving(true)
+    try {
+      const response = await fetch(PERMISSIONS_API_ENDPOINTS.addEquipe, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      const responseText = await response.text()
+      if (!response.ok) {
+        throw new Error(responseText || `HTTP ${response.status}`)
+      }
+
+      notify.success('Equipe salva com sucesso.')
+      await loadPermissionsFromApi()
+      setEditorOpen(false)
+    } catch (error) {
+      notify.error(`Falha ao salvar equipe: ${error?.message || 'erro desconhecido'}`)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const visiblePageNumbers = useMemo(() => {
@@ -1153,7 +1342,6 @@ export default function Permissoes() {
             )}
             {apiLoadError && (
               <div className="d-flex flex-column align-items-center gap-3">
-                <div className="alert alert-warning py-2 px-3 mb-0 small">{apiLoadError}</div>
                 <button type="button" className="btn btn-primary btn-sm" onClick={loadPermissionsFromApi} disabled={loadingRemote}>
                   {loadingRemote ? 'Tentando novamente...' : 'Tentar novamente'}
                 </button>
@@ -1293,163 +1481,169 @@ export default function Permissoes() {
         )}
 
         {apiLoaded && editorOpen && (
-          <div
-            className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center p-3"
-            style={{ background: 'rgba(0,0,0,0.58)', zIndex: 2200 }}
-            onClick={() => setEditorOpen(false)}
-          >
+          <div className="permissions-corban-modal-backdrop" onClick={() => setEditorOpen(false)}>
             <div
-              className="neo-card neo-lg p-0 permissions-modal-standard permissions-modal-standard-card permissions-modal-simple"
-              style={{ maxWidth: 700, width: '95%', maxHeight: '86vh', overflow: 'hidden' }}
+              className="permissions-corban-modal permissions-corban-modal-v2"
               role="dialog"
               aria-modal="true"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="d-flex align-items-center justify-content-between px-4 py-3 border-bottom">
-                <h5 className="mb-0">{editorMode === 'create' ? 'Nova Equipe e Permissões' : 'Editar Permissão'}</h5>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setEditorOpen(false)} aria-label="Fechar modal">
-                  <FiX />
+              <div className="permissions-corban-modal-head">
+                <h5>{editorMode === 'create' ? 'Nova Equipe e Permissões' : 'Editar Permissão'}</h5>
+                <button
+                  type="button"
+                  className="permissions-corban-close-btn permissions-corban-close-btn-square"
+                  onClick={() => setEditorOpen(false)}
+                  aria-label="Fechar modal"
+                >
+                  <FiX size={22} />
                 </button>
               </div>
 
-              <div className="p-4 permissions-modal-standard-body permissions-modal-simple-body">
-                <div className="row g-2">
-                  <div className="col-12">
-                    <label className="form-label small">Nome</label>
-                    <input
-                      className="form-control"
-                      type="text"
-                      value={editorName}
-                      onChange={(event) => setEditorName(event.target.value)}
-                      placeholder="Insira um nome do grupo."
-                    />
-                  </div>
+              <div className="permissions-corban-modal-body permissions-corban-modal-body-v2">
+                <div className="permissions-corban-field">
+                  <span>Nome</span>
+                  <input
+                    className="permissions-corban-input text-uppercase"
+                    type="text"
+                    value={editorName}
+                    onChange={(event) => setEditorName(String(event.target.value || '').toUpperCase())}
+                    placeholder="Insira o nome da equipe"
+                  />
+                </div>
 
-                  <div className="col-12">
-                    <label className="form-label small">Usuário responsável</label>
-                    <div className="permissions-picker">
-                      <button
-                        type="button"
-                        className="permissions-picker-trigger"
-                        onClick={() => {
-                          setResponsavelDropdownOpen((prev) => !prev)
-                          setUsuariosDropdownOpen(false)
-                        }}
-                      >
-                        <span className={usuarioResponsavel ? '' : 'opacity-75'}>
-                          {usuarioResponsavel || 'Selecione o responsável'}
-                        </span>
-                        <FiChevronDown size={14} />
-                      </button>
-                      {responsavelDropdownOpen && (
-                        <div className="permissions-picker-panel">
-                          <input
-                            type="text"
-                            className="form-control permissions-picker-search"
-                            placeholder="Filtrar usuário..."
-                            value={responsavelFilter}
-                            onChange={(event) => setResponsavelFilter(event.target.value)}
-                          />
-                          <div className="permissions-picker-list">
-                            {usuariosResponsavelFiltrados.map((nome) => (
-                              <button
-                                key={`resp-${nome}`}
-                                type="button"
-                                className="permissions-picker-item"
-                                onClick={() => {
-                                  setUsuarioResponsavel(nome)
-                                  setResponsavelDropdownOpen(false)
-                                }}
-                              >
-                                <span>{nome}</span>
-                                {usuarioResponsavel === nome && <FiCheck size={16} />}
-                              </button>
-                            ))}
-                            {usuariosResponsavelFiltrados.length === 0 && (
-                              <div className="permissions-picker-empty">Sem usuários</div>
-                            )}
-                          </div>
+                <div className="permissions-corban-field">
+                  <span>Usuário responsável</span>
+                  <div className="permissions-picker permissions-picker-corban">
+                    <button
+                      type="button"
+                      className="permissions-picker-trigger"
+                      onClick={() => {
+                        setResponsavelDropdownOpen((prev) => !prev)
+                        setUsuariosDropdownOpen(false)
+                      }}
+                    >
+                      <span className={usuarioResponsavel ? '' : 'opacity-75'}>
+                        {usuarioResponsavel || 'Selecione o responsável'}
+                      </span>
+                      <FiChevronDown size={14} />
+                    </button>
+                    {responsavelDropdownOpen && (
+                      <div className="permissions-picker-panel">
+                        <input
+                          type="text"
+                          className="permissions-picker-search"
+                          placeholder="Filtrar usuário..."
+                          value={responsavelFilter}
+                          onChange={(event) => setResponsavelFilter(event.target.value)}
+                        />
+                        <div className="permissions-picker-list">
+                          {usuariosResponsavelFiltrados.map((nome) => (
+                            <button
+                              key={`resp-${nome}`}
+                              type="button"
+                              className="permissions-picker-item"
+                              onClick={() => {
+                                setUsuarioResponsavel(nome)
+                                setResponsavelDropdownOpen(false)
+                              }}
+                            >
+                              <span>{nome}</span>
+                              {usuarioResponsavel === nome && <FiCheck size={16} />}
+                            </button>
+                          ))}
+                          {usuariosResponsavelFiltrados.length === 0 && (
+                            <div className="permissions-picker-empty">Sem usuários</div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-12">
-                    <label className="form-label small">Usuários equipe</label>
-                    <div className="permissions-picker">
-                      <button
-                        type="button"
-                        className="permissions-picker-trigger"
-                        onClick={() => {
-                          setUsuariosDropdownOpen((prev) => !prev)
-                          setResponsavelDropdownOpen(false)
-                        }}
-                      >
-                        <span className={usuariosEquipe.length > 0 ? '' : 'opacity-75'}>
-                          {usuariosEquipe.length > 0 ? usuariosEquipe.join(', ') : 'Selecione os usuários da equipe'}
-                        </span>
-                        <FiChevronDown size={14} />
-                      </button>
-                      {usuariosDropdownOpen && (
-                        <div className="permissions-picker-panel">
-                          <input
-                            type="text"
-                            className="form-control permissions-picker-search"
-                            placeholder="Filtrar usuário..."
-                            value={usuariosFilter}
-                            onChange={(event) => setUsuariosFilter(event.target.value)}
-                          />
-                          <div className="permissions-picker-list">
-                            {usuariosEquipeFiltrados.map((nome) => (
-                              <button
-                                key={`usr-${nome}`}
-                                type="button"
-                                className="permissions-picker-item"
-                                onClick={() => toggleUsuarioEquipe(nome)}
-                              >
-                                <span>{nome}</span>
-                                {usuariosEquipe.includes(nome) && <FiCheck size={16} />}
-                              </button>
-                            ))}
-                            {usuariosEquipeFiltrados.length === 0 && (
-                              <div className="permissions-picker-empty">Sem usuários</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="mt-3">
-                  <div className="d-flex align-items-center gap-2 fw-semibold mb-2">
+                <div className="permissions-corban-field">
+                  <span>Usuários equipe</span>
+                  <div className="permissions-picker permissions-picker-corban">
+                    <button
+                      type="button"
+                      className="permissions-picker-trigger"
+                      onClick={() => {
+                        setUsuariosDropdownOpen((prev) => !prev)
+                        setResponsavelDropdownOpen(false)
+                      }}
+                    >
+                      <span className={usuariosEquipe.length > 0 ? '' : 'opacity-75'}>
+                        {usuariosEquipe.length > 0 ? usuariosEquipe.join(', ') : 'Selecione os usuários da equipe'}
+                      </span>
+                      <FiChevronDown size={14} />
+                    </button>
+                    {usuariosDropdownOpen && (
+                      <div className="permissions-picker-panel">
+                        <input
+                          type="text"
+                          className="permissions-picker-search"
+                          placeholder="Filtrar usuário..."
+                          value={usuariosFilter}
+                          onChange={(event) => setUsuariosFilter(event.target.value)}
+                        />
+                        <div className="permissions-picker-list">
+                          {usuariosEquipeFiltrados.map((nome) => (
+                            <button
+                              key={`usr-${nome}`}
+                              type="button"
+                              className="permissions-picker-item"
+                              onClick={() => toggleUsuarioEquipe(nome)}
+                            >
+                              <span>{nome}</span>
+                              {usuariosEquipe.includes(nome) && <FiCheck size={16} />}
+                            </button>
+                          ))}
+                          {usuariosEquipeFiltrados.length === 0 && (
+                            <div className="permissions-picker-empty">Sem usuários</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="permissions-corban-tree-wrap">
+                  <div className="permissions-corban-tree-title">
                     <FiSliders size={14} />
                     <span>Permissões</span>
                   </div>
-                  <div className="permissions-tree permissions-tree-simple permissions-tree-legacy" style={{ maxHeight: 320, overflowY: 'auto' }}>
+                  <div className="permissions-tree permissions-tree-legacy permissions-tree-corban" style={{ maxHeight: 360, overflowY: 'auto' }}>
                     {PERMISSION_GROUPS.map((group) => {
+                      const isFixedGroup = group.key === FIXED_GROUP_KEY
                       const isOpen = Boolean(openGroups[group.key])
                       const groupPages = PAGE_CATALOG.filter((page) => group.pages.includes(page.key))
-                      const allEnabled = groupPages.length > 0 && groupPages.every((page) => Boolean(pageRules?.[page.key]?.view || config?.pages?.[page.key]))
+                      const allEnabled = isFixedGroup
+                        ? true
+                        : groupPages.length > 0 && groupPages.every((page) => Boolean(pageRules?.[page.key]?.view || config?.pages?.[page.key]))
                       const GroupIcon = GROUP_ICON_MAP[group.key] || FiShield
                       return (
                         <div key={group.key} className={`permissions-tree-group permissions-tree-branch ${allEnabled ? 'is-active' : ''}`}>
                           <div
                             className={`permissions-tree-node permissions-tree-node-group permissions-tree-node-clickable ${allEnabled ? 'is-active' : ''}`}
                             onClick={() => {
+                              if (isFixedGroup) return
                               groupPages.forEach((page) => setPageVisibility(page.key, !allEnabled))
                             }}
                           >
-                            <button
-                              type="button"
-                              className="permissions-tree-toggle"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                toggleGroup(group.key)
-                              }}
-                            >
-                              {isOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-                            </button>
+                            {isFixedGroup
+                              ? <span className="permissions-tree-toggle" aria-hidden="true" />
+                              : (
+                                  <button
+                                    type="button"
+                                    className="permissions-tree-toggle"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      toggleGroup(group.key)
+                                    }}
+                                  >
+                                    {isOpen ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                                  </button>
+                                )}
                             <label
                               className="d-inline-flex align-items-center gap-2 mb-0 permissions-tree-check permissions-tree-check-group"
                               onClick={(event) => event.stopPropagation()}
@@ -1457,7 +1651,9 @@ export default function Permissoes() {
                               <input
                                 type="checkbox"
                                 checked={allEnabled}
+                                disabled={isFixedGroup}
                                 onChange={(event) => {
+                                  if (isFixedGroup) return
                                   groupPages.forEach((page) => setPageVisibility(page.key, event.target.checked))
                                 }}
                               />
@@ -1466,7 +1662,7 @@ export default function Permissoes() {
                             </label>
                           </div>
 
-                          {isOpen && (
+                          {!isFixedGroup && isOpen && (
                             <div className="permissions-tree-children">
                               {groupPages.map((page) => {
                                 const pageRule = pageRules?.[page.key] || buildPageRule(page.key, {}, false)
@@ -1522,14 +1718,12 @@ export default function Permissoes() {
                     })}
                   </div>
                 </div>
+
               </div>
 
-              <div className="d-flex justify-content-end gap-2 px-4 py-3 border-top permissions-modal-standard-footer">
-                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setEditorOpen(false)}>
-                  Cancelar
-                </button>
-                <button type="button" className="btn btn-primary btn-sm" onClick={saveMock}>
-                  {editorMode === 'create' ? 'Criar Cargo' : 'Salvar Cargo'}
+              <div className="permissions-corban-modal-foot">
+                <button type="button" className="btn permissions-corban-save-btn w-100" onClick={saveMock} disabled={isSaving}>
+                  {isSaving ? 'Salvando...' : 'Salvar Equipe e Permissões'}
                 </button>
               </div>
             </div>

@@ -3343,6 +3343,246 @@ html, body {
   background: rgba(15, 23, 42, 0.35);
 }
 
+/* Usuários 2 modal v2 (estilo referência) */
+.admin-users-modal-v2 {
+  border-radius: 14px;
+}
+
+.admin-users-modal-head-v2 {
+  min-height: 54px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(180deg, #2aaeff 0%, #2499e8 100%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.admin-users-modal-head-v2 h5 {
+  margin: 0;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.admin-users-modal-close-v2 {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  color: rgba(248, 250, 252, 0.95);
+}
+
+.admin-users-modal-close-v2:hover {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+}
+
+.admin-users-modal-body-v2 {
+  background: rgba(10, 13, 20, 0.98);
+}
+
+.admin-users-grid-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.admin-users-side-v2 {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.admin-users-avatar-panel-v2,
+.admin-users-note-panel-v2 {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(30, 32, 40, 0.45);
+  border-radius: 0;
+  padding: 12px;
+}
+
+.admin-users-avatar-panel-v2 {
+  min-height: 210px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-users-avatar-circle-v2 {
+  width: 126px;
+  height: 126px;
+  border-radius: 50%;
+  border: 4px solid #2aaeff;
+  background: #cfd8e3;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-users-note-panel-v2 {
+  color: rgba(226, 232, 240, 0.92);
+  line-height: 1.45;
+  font-size: 1.03rem;
+}
+
+.admin-users-main-v2 {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(30, 32, 40, 0.45);
+  padding: 12px;
+}
+
+.admin-users-main-v2 .form-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+
+.admin-users-main-v2 .form-control,
+.admin-users-main-v2 .form-select {
+  min-height: 38px;
+  border-radius: 4px;
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(44, 46, 56, 0.96);
+  color: #f8fafc;
+  font-size: 0.95rem;
+}
+
+.admin-users-main-v2 .form-control::placeholder {
+  color: rgba(203, 213, 225, 0.72);
+}
+
+.admin-users-main-v2 .input-group .btn-outline-secondary {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(20, 23, 33, 0.9);
+  color: rgba(226, 232, 240, 0.92);
+}
+
+.admin-users-main-v2 .input-group .btn-outline-secondary:hover {
+  border-color: rgba(96, 165, 250, 0.72);
+  color: #dbeafe;
+}
+
+.admin-users-switch-row-v2 {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.admin-users-switch-item-v2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-users-switch-input-v2 {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.admin-users-switch-track-v2 {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  position: relative;
+  transition: all 0.18s ease;
+}
+
+.admin-users-switch-track-v2::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f8fafc;
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  transition: transform 0.18s ease;
+}
+
+.admin-users-switch-input-v2:checked + .admin-users-switch-track-v2 {
+  background: rgba(37, 99, 235, 0.62);
+  border-color: rgba(96, 165, 250, 0.8);
+}
+
+.admin-users-switch-input-v2:checked + .admin-users-switch-track-v2::after {
+  transform: translateX(16px);
+}
+
+.admin-users-switch-input-v2:focus-visible + .admin-users-switch-track-v2 {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.45);
+}
+
+.admin-users-switch-item-v2 small {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: rgba(186, 230, 253, 0.95);
+}
+
+.admin-users-submit-v2 {
+  margin-top: 12px;
+}
+
+.admin-users-submit-v2 .btn {
+  min-height: 42px;
+  border: 0;
+  border-radius: 4px;
+  background: #0f93bd;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.admin-users-submit-v2 .btn:hover {
+  background: #14a2d4;
+}
+
+/* remove estilos antigos de checkbox quadrado no modal v2 */
+.admin-users-switch-item-v2 .form-check-input {
+  cursor: pointer;
+  margin-top: 0;
+}
+
+@media (max-width: 1200px) {
+  .admin-users-grid-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-users-avatar-panel-v2 {
+    min-height: 170px;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-users-modal-head-v2 h5 {
+    font-size: 1rem;
+  }
+
+  .admin-users-main-v2 .form-label {
+    font-size: 0.9rem;
+  }
+
+  .admin-users-main-v2 .form-control,
+  .admin-users-main-v2 .form-select {
+    font-size: 0.9rem;
+  }
+
+  .admin-users-submit-v2 .btn {
+    font-size: 0.95rem;
+  }
+}
+
 /* Permissions tree layout (modal) */
 .permissions-tree {
   border-radius: 12px;
@@ -3650,7 +3890,7 @@ html, body {
 
 .permissions-tree-legacy .permissions-tree-node-group.is-active,
 .permissions-tree-legacy .permissions-tree-page.is-active {
-  background: rgba(66, 103, 112, 0.48);
+  background: transparent;
 }
 
 .permissions-tree-legacy .permissions-tree-toggle {
@@ -3745,5 +3985,296 @@ html, body {
 
 [data-theme='dark'] .permissions-tree-legacy .permissions-tree-node-group.is-active,
 [data-theme='dark'] .permissions-tree-legacy .permissions-tree-page.is-active {
-  background: rgba(75, 117, 127, 0.44);
+  background: transparent;
+}
+
+/* Equipes e Permissões modal (padrão Corban) */
+.permissions-corban-modal-v2 {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 18px;
+  background: #090b10;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.permissions-corban-modal-v2 .permissions-corban-modal-head {
+  min-height: 64px;
+  padding: 0 18px;
+  background: #0e1117;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.34);
+}
+
+.permissions-corban-modal-v2 .permissions-corban-modal-head h5 {
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.permissions-corban-close-btn-square {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #94a3b8;
+  transition: all 0.18s ease;
+}
+
+.permissions-corban-close-btn-square:hover {
+  border-color: rgba(96, 165, 250, 0.7);
+  color: #dbeafe;
+}
+
+.permissions-corban-modal-body-v2 {
+  padding: 14px 18px;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.permissions-corban-logo-block {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.permissions-corban-logo-brand {
+  display: inline-block;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #19b8ff;
+  text-transform: uppercase;
+}
+
+.permissions-corban-modal-v2 .permissions-corban-field {
+  gap: 6px;
+}
+
+.permissions-corban-modal-v2 .permissions-corban-field > span {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.permissions-corban-input,
+.permissions-corban-modal-v2 .permissions-picker-trigger {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  background: #2b2e36;
+  color: #f8fafc;
+  padding: 0 14px;
+  font-size: 0.96rem;
+}
+
+.permissions-corban-input::placeholder {
+  color: rgba(203, 213, 225, 0.58);
+}
+
+.permissions-corban-modal-v2 .permissions-picker {
+  position: relative;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-trigger span {
+  display: inline-block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 8px;
+  background: #1f2129;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-search {
+  width: 100%;
+  height: 38px;
+  border: 1px solid rgba(96, 165, 250, 0.72);
+  border-radius: 6px;
+  background: #474952;
+  color: #f8fafc;
+  padding: 0 10px;
+  margin-bottom: 6px;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-search::placeholder {
+  color: rgba(226, 232, 240, 0.62);
+}
+
+.permissions-corban-modal-v2 .permissions-picker-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.permissions-corban-modal-v2 .permissions-picker-item:hover {
+  background: rgba(71, 85, 105, 0.45);
+}
+
+.permissions-corban-modal-v2 .permissions-picker-empty {
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 0.95rem;
+  padding: 8px 10px;
+}
+
+.permissions-corban-modal-v2 .permissions-corban-tree-wrap {
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 10px;
+}
+
+.permissions-corban-modal-v2 .permissions-corban-tree-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.permissions-tree-corban {
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 10px;
+  background: #06080d;
+  padding: 6px 0;
+}
+
+.permissions-tree-corban input[type='checkbox'] {
+  width: 14px;
+  height: 14px;
+  margin-top: 0;
+  accent-color: #2f7cff;
+}
+
+.permissions-tree-corban .permissions-tree-group {
+  margin-bottom: 1px;
+}
+
+.permissions-tree-corban .permissions-tree-node-group,
+.permissions-tree-corban .permissions-tree-page {
+  padding: 1px 14px 1px 10px;
+}
+
+.permissions-tree-corban .permissions-tree-node-group.is-active,
+.permissions-tree-corban .permissions-tree-page.is-active,
+.permissions-tree-corban .permissions-tree-action-row.is-active {
+  background: transparent;
+}
+
+.permissions-tree-corban .permissions-tree-toggle {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.permissions-tree-corban .permissions-tree-check-group span,
+.permissions-tree-corban .permissions-tree-check-page span {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.permissions-tree-corban .permissions-tree-item-icon {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.permissions-tree-corban .permissions-tree-children {
+  margin-left: 18px;
+  padding-left: 10px;
+  gap: 1px;
+}
+
+.permissions-tree-corban .permissions-tree-children::before,
+.permissions-tree-corban .permissions-tree-page::before {
+  content: none;
+}
+
+.permissions-tree-corban .permissions-tree-actions-list {
+  margin-left: 30px;
+  margin-top: -2px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.permissions-tree-corban .permissions-tree-action-row {
+  padding: 0;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.permissions-tree-corban .permissions-tree-action-row::before {
+  content: none;
+}
+
+.permissions-tree-corban .permissions-tree-check-action span {
+  font-size: 0.95rem;
+}
+
+.permissions-corban-modal-v2 .permissions-corban-modal-foot {
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+  background: #141820;
+}
+
+.permissions-corban-save-btn {
+  min-height: 44px;
+  border: 0;
+  border-radius: 4px;
+  background: #0e8db8;
+  color: #f8fafc;
+  font-size: 0.97rem;
+  font-weight: 600;
+}
+
+.permissions-corban-save-btn:hover {
+  background: #14a2d4;
+  color: #ffffff;
+}
+
+@media (max-width: 768px) {
+  .permissions-corban-modal-v2 .permissions-corban-modal-head {
+    min-height: 56px;
+    padding: 0 16px;
+  }
+
+  .permissions-corban-modal-v2 .permissions-corban-modal-head h5 {
+    font-size: 1rem;
+  }
+
+  .permissions-corban-modal-body-v2 {
+    padding: 14px 14px;
+  }
+
+  .permissions-corban-logo-brand {
+    font-size: 1rem;
+  }
 }
