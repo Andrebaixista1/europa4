@@ -2603,8 +2603,15 @@ export default function ConsultasV8() {
           </button>
         </div>
 
-        <div className="alert alert-warning border-warning-subtle bg-warning bg-opacity-10 text-warning-emphasis mb-3" role="alert">
-          Estamos em manutenção. Por isso, algumas funcionalidades desta página podem parar de funcionar temporariamente.
+        <div className="maintenance-banner mb-3" role="alert" aria-live="polite">
+          <div className="maintenance-banner__icon-wrap" aria-hidden="true">
+            <FiAlertCircle className="maintenance-banner__icon maintenance-banner__icon--pulse" />
+            <FiRefreshCw className="maintenance-banner__spinner" />
+          </div>
+          <div className="maintenance-banner__content">
+            <strong className="maintenance-banner__title">Sistema em manutenção</strong>
+            <span className="maintenance-banner__text">Algumas funcionalidades desta página podem parar de funcionar temporariamente.</span>
+          </div>
         </div>
 
         <section className="mb-3">

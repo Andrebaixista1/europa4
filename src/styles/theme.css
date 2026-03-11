@@ -4260,6 +4260,111 @@ html, body {
   color: #ffffff;
 }
 
+.maintenance-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(251, 191, 36, 0.58);
+  background: linear-gradient(120deg, rgba(251, 191, 36, 0.2), rgba(250, 204, 21, 0.12));
+  color: #fef3c7;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.08), 0 8px 24px rgba(2, 6, 23, 0.32);
+}
+
+.maintenance-banner__icon-wrap {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(251, 191, 36, 0.7);
+  background: rgba(2, 6, 23, 0.48);
+}
+
+.maintenance-banner__icon {
+  color: #fde68a;
+  font-size: 1rem;
+}
+
+.maintenance-banner__spinner {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  color: #facc15;
+  font-size: 0.72rem;
+  animation: maintenanceSpin 2s linear infinite;
+}
+
+.maintenance-banner__icon--pulse {
+  animation: maintenancePulse 1.8s ease-in-out infinite;
+}
+
+.maintenance-banner__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.maintenance-banner__title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.maintenance-banner__text {
+  font-size: 0.9rem;
+  line-height: 1.3;
+  color: rgba(254, 243, 199, 0.96);
+}
+
+@keyframes maintenancePulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.82;
+  }
+}
+
+@keyframes maintenanceSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+[data-theme='light'] .maintenance-banner {
+  border-color: rgba(217, 119, 6, 0.4);
+  background: linear-gradient(120deg, rgba(251, 191, 36, 0.2), rgba(253, 186, 116, 0.16));
+  color: #7c2d12;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.08), 0 6px 16px rgba(30, 41, 59, 0.08);
+}
+
+[data-theme='light'] .maintenance-banner__icon-wrap {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(255, 255, 255, 0.64);
+}
+
+[data-theme='light'] .maintenance-banner__icon {
+  color: #b45309;
+}
+
+[data-theme='light'] .maintenance-banner__spinner {
+  color: #c2410c;
+}
+
+[data-theme='light'] .maintenance-banner__text {
+  color: rgba(124, 45, 18, 0.92);
+}
+
 @media (max-width: 768px) {
   .permissions-corban-modal-v2 .permissions-corban-modal-head {
     min-height: 56px;
