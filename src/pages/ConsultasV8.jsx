@@ -2603,6 +2603,10 @@ export default function ConsultasV8() {
           </button>
         </div>
 
+        <div className="alert alert-warning border-warning-subtle bg-warning bg-opacity-10 text-warning-emphasis mb-3" role="alert">
+          Estamos em manutenção. Por isso, algumas funcionalidades desta página podem parar de funcionar temporariamente.
+        </div>
+
         <section className="mb-3">
           <div className="row g-3">
             <div className="col-12 col-xxl-3">
