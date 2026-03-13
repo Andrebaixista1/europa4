@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
   const HEALTH_CONSULT_PROXY_BASE =
     env.HEALTH_CONSULT_PROXY_BASE_URL ||
     process.env.HEALTH_CONSULT_PROXY_BASE_URL ||
-    'https://europa4.vercel.app'
+    'http://85.31.61.242:8011'
 
   return {
     plugins: [react()],
