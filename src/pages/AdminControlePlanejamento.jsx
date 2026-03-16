@@ -6,6 +6,13 @@ import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
 
+const API_BASE = 'http://85.31.61.242:8011/api'
+const GETALL_VANGUARD_ENDPOINT = `${API_BASE}/getall-vanguard`
+const ADD_VANGUARD_ENDPOINT = `${API_BASE}/add-vanguard`
+const EDIT_VANGUARD_ENDPOINT = `${API_BASE}/edit-vanguard`
+const RENEW_VANGUARD_ENDPOINT = `${API_BASE}/up-vanguard`
+const DELETE_VANGUARD_ENDPOINT = `${API_BASE}/del-vanguard`
+
 function StatCard({ title, value, icon: Icon, accent = 'primary' }) {
   return (
     <div className={`neo-card neo-lg p-4 neo-accent-${accent} h-100`}>
@@ -61,6 +68,8 @@ export default function AdminControlePlanejamento() {
   const [vencimentoDe, setVencimentoDe] = useState('')
   const [vencimentoAte, setVencimentoAte] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  const [formMode, setFormMode] = useState('add')
+  const [editingId, setEditingId] = useState(null)
   const [addAgencia, setAddAgencia] = useState('') // codigo
   const ADD_NEW_AGENCIA = '__NEW__'
   const [addNovaAgencia, setAddNovaAgencia] = useState('')
@@ -69,6 +78,9 @@ export default function AdminControlePlanejamento() {
   const [addNome, setAddNome] = useState('')
   const [addCargo, setAddCargo] = useState('')
   const [addLogin, setAddLogin] = useState('')
+  const [formRenovacao, setFormRenovacao] = useState('')
+  const [formStatus, setFormStatus] = useState('Ativo')
+  const [formVencimento, setFormVencimento] = useState('')
   const ymdLocal = (d) => {
     const yyyy = d.getFullYear()
     const mm = String(d.getMonth() + 1).padStart(2, '0')
@@ -104,6 +116,33 @@ export default function AdminControlePlanejamento() {
     d.setDate(d.getDate() - 1)
     return ymdLocal(d)
   }, [])
+  const isEditing = formMode === 'edit'
+
+  const calcVencimento = (baseValue) => {
+    const baseStr = toDateOnly(baseValue)
+    if (!baseStr) return ''
+    const [yyyy, mm, dd] = baseStr.split('-').map(Number)
+    const base = new Date(yyyy, mm - 1, dd)
+    const next = new Date(base.getFullYear(), base.getMonth() + 1, base.getDate())
+    return ymdLocal(next)
+  }
+
+  const resetForm = () => {
+    setFormMode('add')
+    setEditingId(null)
+    setAddAgencia('')
+    setAddNovaAgencia('')
+    setAddEmpresa('')
+    setAddGrupo('')
+    setAddNome('')
+    setAddCargo('')
+    setAddLogin('')
+    const today = ymdLocal(new Date())
+    setAddDataCadastro(today)
+    setFormRenovacao(today)
+    setFormStatus('Ativo')
+    setFormVencimento(calcVencimento(today))
+  }
 
   const shouldShowVencimentoAlert = (item) => {
     const vencStr = toDateOnly(item?.vencimento)
@@ -117,7 +156,7 @@ export default function AdminControlePlanejamento() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/getall-vanguard')
+      const res = await fetch(GETALL_VANGUARD_ENDPOINT)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
@@ -132,6 +171,14 @@ export default function AdminControlePlanejamento() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (!isEditing) {
+      setFormRenovacao(addDataCadastro)
+      setFormStatus('Ativo')
+      setFormVencimento(calcVencimento(addDataCadastro))
+    }
+  }, [addDataCadastro, isEditing])
 
   // Opções derivadas para o modal de Adicionar
   const agencias = useMemo(() => {
@@ -181,6 +228,7 @@ export default function AdminControlePlanejamento() {
 
   // Atualiza empresa/grupo ao escolher agência (preserva seleção do usuário quando válida)
   useEffect(() => {
+    if (isEditing) return
     if (!addAgencia) {
       setAddEmpresa('')
       setAddGrupo('')
@@ -211,7 +259,7 @@ export default function AdminControlePlanejamento() {
       if (fromFound && agenciaNomes.includes(fromFound)) return fromFound
       return agenciaNomes[0] || ''
     })
-  }, [addAgencia, agencias, agenciaGrupos, agenciaNomes, isAgencia19930])
+  }, [addAgencia, agencias, agenciaGrupos, agenciaNomes, isAgencia19930, isEditing])
 
   const isNewAgencia = useMemo(() => addAgencia === ADD_NEW_AGENCIA, [addAgencia])
   const shouldChooseNome = useMemo(() => !isNewAgencia && agenciaNomes.length > 1, [isNewAgencia, agenciaNomes.length])
@@ -221,69 +269,54 @@ export default function AdminControlePlanejamento() {
     if (addAgencia === ADD_NEW_AGENCIA) return String(addNovaAgencia || '').trim()
     return String(addAgencia).trim()
   }, [addAgencia, addNovaAgencia])
-
-
-  // Datas derivadas
-  const addRenovacao = useMemo(() => addDataCadastro, [addDataCadastro])
-  const addVencimento = useMemo(() => {
-    const baseStr = toDateOnly(addRenovacao)
-    if (!baseStr) return ''
-    const [yyyy, mm, dd] = baseStr.split('-').map(Number)
-    const base = new Date(yyyy, mm - 1, dd)
-    const v = new Date(base.getFullYear(), base.getMonth() + 1, base.getDate())
-    return ymdLocal(v)
-  }, [addRenovacao])
-
-  async function handleAddSubmit(e) {
+  async function handleFormSubmit(e) {
     e?.preventDefault?.()
     if (!isMaster) {
-      notify.error('Apenas Master pode adicionar usuários')
+      notify.error(`Apenas Master pode ${isEditing ? 'editar' : 'adicionar'} usuarios`)
       return
     }
-    // Validações simples
-    if (!addAgencia) return notify.error('Selecione uma agência')
-    if (isNewAgencia) {
-      if (!addNovaAgencia?.trim()) return notify.error('Informe o nome da nova agência')
+    if (!addAgencia) return notify.error('Selecione uma agencia')
+    if (!isEditing && isNewAgencia) {
+      if (!addNovaAgencia?.trim()) return notify.error('Informe o nome da nova agencia')
       if (!addEmpresa?.trim()) return notify.error('Informe a empresa')
       if (!addGrupo?.trim()) return notify.error('Selecione o grupo')
     }
-    if (!isNewAgencia && shouldChooseNome && !addNome) return notify.error('Selecione o nome')
-    if (!isNewAgencia && shouldChooseGrupo && !addGrupo) return notify.error('Selecione o grupo')
+    if (!isEditing && !isNewAgencia && shouldChooseNome && !addNome) return notify.error('Selecione o nome')
+    if (!isEditing && !isNewAgencia && shouldChooseGrupo && !addGrupo) return notify.error('Selecione o grupo')
     if (!addLogin) return notify.error('Informe o login')
-    // nome será enviado igual ao campo empresa
     if (!addCargo) return notify.error('Selecione um cargo')
     if (!addDataCadastro) return notify.error('Informe a data de cadastro')
 
     const payload = {
+      ...(isEditing ? { id: editingId } : {}),
       cargo: addCargo,
-      codigo: isNewAgencia ? addNovaAgencia.trim() : addAgencia,
+      codigo: isEditing ? String(addAgencia).trim() : (isNewAgencia ? addNovaAgencia.trim() : addAgencia),
       data_cadastro: addDataCadastro,
       empresa: addEmpresa,
       grupo: addGrupo,
-      login: formatLoginWithAgencia(addLogin, loginAgenciaCode),
+      login: isEditing ? addLogin.trim() : formatLoginWithAgencia(addLogin, loginAgenciaCode),
       nome: addNome,
-      renovacao: addRenovacao,
-      status: 'Ativo',
-      vencimento: addVencimento,
+      renovacao: formRenovacao,
+      status: formStatus,
+      vencimento: formVencimento,
     }
 
     try {
       setIsSubmittingAdd(true)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/add-vanguard', {
+      const res = await fetch(isEditing ? EDIT_VANGUARD_ENDPOINT : ADD_VANGUARD_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      try { await res.json() } catch (_) { /* ignore */ }
-      notify.success('Usuário adicionado com sucesso')
+      try { await res.json() } catch (_) {}
+      notify.success(isEditing ? 'Usuario atualizado com sucesso' : 'Usuario adicionado com sucesso')
       setShowAdd(false)
-      // limpa form
-      setAddAgencia(''); setAddNovaAgencia(''); setAddEmpresa(''); setAddGrupo(''); setAddNome(''); setAddCargo(''); setAddLogin(''); setAddDataCadastro(ymdLocal(new Date()))
+      resetForm()
       await load()
     } catch (e) {
-      console.error('Falha ao adicionar usuário:', e)
-      notify.error(`Falha ao adicionar: ${e.message}`)
+      console.error('Falha ao salvar usuario:', e)
+      notify.error(`Falha ao salvar: ${e.message}`)
     } finally {
       setIsSubmittingAdd(false)
     }
@@ -297,7 +330,7 @@ export default function AdminControlePlanejamento() {
     }
     try {
       setInactivatingId(item.id)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/del-vanguard', {
+      const res = await fetch(DELETE_VANGUARD_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })
@@ -324,7 +357,7 @@ export default function AdminControlePlanejamento() {
     }
     try {
       setRenewingId(item.id)
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/api/up-vanguard', {
+      const res = await fetch(RENEW_VANGUARD_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id })
@@ -339,6 +372,33 @@ export default function AdminControlePlanejamento() {
     } finally {
       setRenewingId(null)
     }
+  }
+
+  function handleOpenAdd() {
+    resetForm()
+    setShowAdd(true)
+  }
+
+  function handleOpenEdit(item) {
+    if (!item || !item.id) return
+    if (!isMaster) {
+      notify.error('Apenas Master pode editar usuarios')
+      return
+    }
+    setFormMode('edit')
+    setEditingId(item.id)
+    setAddAgencia(String(item.codigo ?? '').trim())
+    setAddNovaAgencia('')
+    setAddEmpresa(String(item.empresa ?? '').trim())
+    setAddGrupo(String(item.grupo ?? '').trim())
+    setAddNome(String(item.nome ?? '').trim())
+    setAddCargo(String(item.cargo ?? '').trim())
+    setAddLogin(String(item.login ?? '').trim())
+    setAddDataCadastro(toDateOnly(item.data_cadastro) || '')
+    setFormRenovacao(toDateOnly(item.renovacao) || '')
+    setFormStatus(String(item.status ?? '').trim() || 'Ativo')
+    setFormVencimento(toDateOnly(item.vencimento) || '')
+    setShowAdd(true)
   }
 
   const grupos = useMemo(() => {
@@ -531,7 +591,7 @@ export default function AdminControlePlanejamento() {
                 className="btn btn-ghost btn-ghost-primary btn-sm"
                 disabled={!isMaster}
                 title={isMaster ? 'Adicionar' : 'Apenas Master'}
-                onClick={() => { if (isMaster) { setShowAdd(true) } else { notify.warn('Apenas Master pode adicionar') } }}
+                onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
               >
                 <Fi.FiPlus className="me-1" />
                 <span className="d-none d-sm-inline">Adicionar</span>
@@ -632,20 +692,38 @@ export default function AdminControlePlanejamento() {
                       </td>
                       <td><Badge status={i.status} /></td>
                       <td>
-                        <div className="d-flex gap-2">
-                          <button
-                            className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center"
-                            disabled={!isMaster || renewingId === i.id}
-                            title={isMaster ? 'Renovar' : 'Apenas Master'}
-                            aria-label="Renovar"
-                            onClick={() => handleRenovar(i)}
-                          >
-                            <Fi.FiRotateCcw />
-                          </button>
-                          {/*<button className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center" disabled={!isMaster || inactivatingId === i.id} title={isMaster ? 'Inativar' : 'Apenas Master'} aria-label="Inativar" onClick={() => handleInativar(i)}>
-                            <Fi.FiUserX />
-                          </button>*/}
-                        </div>
+                        {isMaster ? (
+                          <div className="d-flex gap-2">
+                            <button
+                              className="btn btn-ghost btn-ghost-info btn-icon d-inline-flex align-items-center justify-content-center"
+                              title="Editar"
+                              aria-label="Editar"
+                              onClick={() => handleOpenEdit(i)}
+                            >
+                              <Fi.FiEdit2 />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-ghost-primary btn-icon d-inline-flex align-items-center justify-content-center"
+                              disabled={renewingId === i.id}
+                              title="Renovar"
+                              aria-label="Renovar"
+                              onClick={() => handleRenovar(i)}
+                            >
+                              <Fi.FiRotateCcw />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-ghost-danger btn-icon d-inline-flex align-items-center justify-content-center"
+                              disabled={inactivatingId === i.id}
+                              title="Excluir"
+                              aria-label="Excluir"
+                              onClick={() => handleInativar(i)}
+                            >
+                              <Fi.FiTrash2 />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="opacity-50">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -659,69 +737,83 @@ export default function AdminControlePlanejamento() {
         <div className="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 1050 }}>
           <div className="neo-card neo-lg p-4" style={{ maxWidth: 720, width: '95%' }}>
             <div className="d-flex align-items-center justify-content-between mb-2">
-              <h5 className="mb-0">Adicionar Novo Usuário</h5>
-              <button className="btn btn-ghost btn-icon" onClick={() => setShowAdd(false)} aria-label="Fechar">
+              <h5 className="mb-0">{isEditing ? 'Editar Usuario' : 'Adicionar Novo Usuario'}</h5>
+              <button className="btn btn-ghost btn-icon" onClick={() => { setShowAdd(false); resetForm() }} aria-label="Fechar">
                 <Fi.FiX />
               </button>
             </div>
-            <form onSubmit={handleAddSubmit}>
+            <form onSubmit={handleFormSubmit}>
               <div className="row g-3">
                 <div className="col-12">
-                  <label className="form-label small">Agência *</label>
-                  <select className="form-select" value={addAgencia} onChange={e => setAddAgencia(e.target.value)} required>
-                    <option value="">Selecione uma opção</option>
-                    <option value={ADD_NEW_AGENCIA}>+ Adicionar Nova Empresa</option>
-                    {agencias.map(a => (
-                      <option key={a.codigo} value={a.codigo}>{a.codigo} - {a.empresa}</option>
-                    ))}
-                  </select>
+                  <label className="form-label small">Agencia *</label>
+                  {isEditing ? (
+                    <input className="form-control" value={addAgencia} onChange={e => setAddAgencia(e.target.value)} placeholder="Codigo da agencia" required />
+                  ) : (
+                    <select className="form-select" value={addAgencia} onChange={e => setAddAgencia(e.target.value)} required>
+                      <option value="">Selecione uma opcao</option>
+                      <option value={ADD_NEW_AGENCIA}>+ Adicionar Nova Empresa</option>
+                      {agencias.map(a => (
+                        <option key={a.codigo} value={a.codigo}>{a.codigo} - {a.empresa}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-                {isNewAgencia && (
+                {!isEditing && isNewAgencia && (
                   <div className="col-12">
-                    <label className="form-label small">Nova Agência *</label>
-                    <input className="form-control" value={addNovaAgencia} onChange={e => setAddNovaAgencia(e.target.value)} placeholder="Digite o nome da nova agência" required={isNewAgencia} />
+                    <label className="form-label small">Nova Agencia *</label>
+                    <input className="form-control" value={addNovaAgencia} onChange={e => setAddNovaAgencia(e.target.value)} placeholder="Digite o codigo da nova agencia" required={isNewAgencia} />
                   </div>
                 )}
                 <div className="col-12 col-md-6 col-lg-6">
-                  <label className="form-label small">Empresa {isNewAgencia ? '*' : ''}</label>
-                  <input className="form-control" value={addEmpresa} onChange={e => setAddEmpresa(e.target.value)} disabled={!isNewAgencia} placeholder={isNewAgencia ? 'Digite a empresa' : 'Selecione uma agência'} />
+                  <label className="form-label small">Empresa *</label>
+                  <input className="form-control" value={addEmpresa} onChange={e => setAddEmpresa(e.target.value)} disabled={!isEditing && !isNewAgencia} placeholder={isEditing || isNewAgencia ? 'Digite a empresa' : 'Selecione uma agencia'} />
                 </div>
                 <div className="col-12 col-md-6 col-lg-6">
-                  <label className="form-label small">Nome {shouldChooseNome ? '*' : ''}</label>
-                  {shouldChooseNome ? (
+                  <label className="form-label small">Nome</label>
+                  {(!isEditing && shouldChooseNome) ? (
                     <select className="form-select" value={addNome} onChange={e => setAddNome(e.target.value)} required={shouldChooseNome}>
                       <option value="">Selecione um nome</option>
                       {agenciaNomes.map(n => (<option key={n} value={n}>{n}</option>))}
                     </select>
                   ) : (
-                    <input className="form-control" value={addNome} disabled placeholder="Selecione uma agência para carregar o nome" />
+                    <input className="form-control" value={addNome} onChange={e => setAddNome(e.target.value)} placeholder="Digite o nome" />
                   )}
                 </div>
                 <div className="col-12 col-md-6">
-                  <label className="form-label small">Grupo {isNewAgencia ? '*' : ''}</label>
-                  {(isNewAgencia || shouldChooseGrupo) ? (
+                  <label className="form-label small">Grupo *</label>
+                  {(!isEditing && (isNewAgencia || shouldChooseGrupo)) ? (
                     <select className="form-select" value={addGrupo} onChange={e => setAddGrupo(e.target.value)} required={isNewAgencia || shouldChooseGrupo}>
                       <option value="">Selecione um grupo</option>
                       {(shouldChooseGrupo ? agenciaGrupos : grupos).map(g => (<option key={g} value={g}>{g}</option>))}
                     </select>
                   ) : (
-                    <input className="form-control" value={addGrupo} disabled placeholder="Selecione uma agência" />
+                    <input className="form-control" value={addGrupo} onChange={e => setAddGrupo(e.target.value)} placeholder="Digite o grupo" />
                   )}
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label small">Login *</label>
-                  <div className="input-group">
+                  {isEditing ? (
                     <input
                       className="form-control"
                       value={addLogin}
-                      onChange={e => setAddLogin(parseLoginBase(e.target.value))}
-                      placeholder="Digite o login"
+                      onChange={e => setAddLogin(e.target.value)}
+                      placeholder="Digite o login completo"
                       required
                     />
-                    {loginAgenciaCode && (
-                      <span className="input-group-text">@{loginAgenciaCode}</span>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="input-group">
+                      <input
+                        className="form-control"
+                        value={addLogin}
+                        onChange={e => setAddLogin(parseLoginBase(e.target.value))}
+                        placeholder="Digite o login"
+                        required
+                      />
+                      {loginAgenciaCode && (
+                        <span className="input-group-text">@{loginAgenciaCode}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="col-12">
                   <label className="form-label small">Cargo *</label>
@@ -735,26 +827,29 @@ export default function AdminControlePlanejamento() {
                   <input type="date" className="form-control" value={addDataCadastro} onChange={e => setAddDataCadastro(e.target.value)} required />
                 </div>
                 <div className="col-12 col-md-4">
-                  <label className="form-label small">Data Renovação</label>
-                  <input type="date" className="form-control" value={addRenovacao} disabled />
+                  <label className="form-label small">Data Renovacao</label>
+                  <input type="date" className="form-control" value={formRenovacao} onChange={e => setFormRenovacao(e.target.value)} />
                 </div>
                 <div className="col-12 col-md-4">
                   <label className="form-label small">Status</label>
-                  <input className="form-control" value="Ativo" disabled />
+                  <select className="form-select" value={formStatus} onChange={e => setFormStatus(e.target.value)}>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Inativo">Inativo</option>
+                  </select>
                 </div>
                 <div className="col-12 col-md-4">
                   <label className="form-label small">Data Vencimento</label>
-                  <input type="date" className="form-control" value={addVencimento} disabled />
+                  <input type="date" className="form-control" value={formVencimento} onChange={e => setFormVencimento(e.target.value)} />
                 </div>
               </div>
               <div className="d-flex justify-content-end gap-2 mt-4">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancelar</button>
+                <button type="button" className="btn btn-ghost" onClick={() => { setShowAdd(false); resetForm() }}>Cancelar</button>
                 <button type="submit" className="btn btn-primary" disabled={
                   isSubmittingAdd ||
-                  (!isNewAgencia && !addAgencia) ||
-                  (isNewAgencia && (!addNovaAgencia?.trim() || !addEmpresa?.trim() || !addGrupo?.trim())) ||
+                  (!isEditing && !isNewAgencia && !addAgencia) ||
+                  (!isEditing && isNewAgencia && (!addNovaAgencia?.trim() || !addEmpresa?.trim() || !addGrupo?.trim())) ||
                   !addCargo || !addLogin
-                }>Adicionar Usuário</button>
+                }>{isEditing ? 'Salvar Alteracoes' : 'Adicionar Usuario'}</button>
               </div>
             </form>
           </div>
