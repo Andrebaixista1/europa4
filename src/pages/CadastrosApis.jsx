@@ -1366,6 +1366,10 @@ export default function CadastrosApis() {
     setter(nextIds)
   }
 
+  const toggleCreateAllTeamSelection = (setter, allIds, checked) => {
+    setter(checked ? sortNumericList(allIds) : [])
+  }
+
   const toggleTeamAccess = (product, rowId, teamId, checked) => {
     const updater = (rows) =>
       rows.map((row) => {
@@ -2087,6 +2091,25 @@ export default function CadastrosApis() {
 
               <div className="mb-3">
                 <label className="form-label d-block">Equipes com acesso</label>
+                <label className="cadastros-api-team-option mb-2">
+                  <div className="cadastros-api-team-option-main">
+                    <input
+                      type="checkbox"
+                      checked={createTeams.length > 0 && createTeams.every((team) => in100EquipeIds.includes(team.id))}
+                      onChange={(event) =>
+                        toggleCreateAllTeamSelection(
+                          setIn100EquipeIds,
+                          createTeams.map((team) => team.id),
+                          event.target.checked
+                        )
+                      }
+                    />
+                    <div>
+                      <strong>Selecionar todas as equipes</strong>
+                      <span>{createTeams.length} equipe(s)</span>
+                    </div>
+                  </div>
+                </label>
                 <div className="cadastros-api-team-grid">
                   {createTeams.map((team) => {
                     const checked = in100EquipeIds.includes(team.id)
