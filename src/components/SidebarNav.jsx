@@ -32,13 +32,8 @@ const buildMenu = (user) => {
   const consultaChildren = filterAllowed([
     { pageKey: 'consultas_clientes', label: 'Consulta Offline', to: '/consultas/clientes' },
     { pageKey: 'consultas_online', label: 'Consulta Online', to: '/consultas/online' },
-    { pageKey: 'consultas_in100', label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
     { pageKey: 'cliente_argus', label: 'Cliente Argus', to: '/consulta/cliente-argus' },
     { pageKey: 'historico_consultas', label: 'Hist\u00f3rico de Consultas', to: '/consultas/historico' },
-    { pageKey: 'consultas_presenca', label: 'Consulta Presen\u00e7a', to: '/consultas/presenca' },
-    { pageKey: 'consultas_handmais', label: 'Consulta Hand+', to: '/consultas/handmais' },
-    { pageKey: 'consultas_prata', label: 'Consulta Prata', to: '/consultas/prata' },
-    { pageKey: 'consultas_v8', label: 'Consultas V8', to: '/consultas/v8' },
   ])
   if (consultaChildren.length > 0) {
     items.push({ label: 'Consultas', icon: 'FiSearch', children: consultaChildren })

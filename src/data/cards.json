@@ -1,22 +1,28 @@
-{
+﻿{
   "Consultas": [
     {
-      "title": "Consulta Individual (IN100)",
-      "description": "Pesquise informações específicas com precisão e resultados detalhados.",
+      "title": "Consulta Offline",
+      "description": "Consulte clientes em base local com foco operacional.",
       "icon": "FiSearch",
-      "route": "/consultas/in100"
+      "route": "/consultas/clientes"
     },
     {
-      "title": "Histórico de Consultas",
-      "description": "Acesse o histórico de consultas realizadas.",
+      "title": "Consulta Online",
+      "description": "Consulte clientes online em integracoes e bancos via API.",
+      "icon": "FiSearch",
+      "route": "/consultas/online"
+    },
+    {
+      "title": "Historico de Consultas",
+      "description": "Acesse o historico de consultas realizadas.",
       "icon": "FiClock",
       "route": "/consultas/historico"
     }
   ],
   "Disparos": [
     {
-      "title": "Múltiplos Disparos",
-      "description": "Configure e agende múltiplos disparos em massa para diferentes canais.",
+      "title": "Multiplos Disparos",
+      "description": "Configure e agende multiplos disparos em massa para diferentes canais.",
       "icon": "FiSend",
       "route": "/disparador/disparar-whats"
     },
@@ -29,21 +35,21 @@
   ],
   "Em Desenvolvimento": [
     {
-      "title": "Consulta Individual (Maciça)",
+      "title": "Consulta Individual (Macica)",
       "status": "development",
-      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+      "description": "Voce ja pode consultar nossa base interna da Macica, especialmente dedicada a clientes para portabilidade.",
       "icon": "FiDatabase"
     },
     {
-      "title": "Extração (Maciça)",
+      "title": "Extracao (Macica)",
       "status": "development",
-      "description": "Você já pode consultar nossa base interna da Maciça, especialmente dedicada a clientes para portabilidade.",
+      "description": "Voce ja pode consultar nossa base interna da Macica, especialmente dedicada a clientes para portabilidade.",
       "icon": "FiDownload"
     },
     {
-      "title": "Consulta em Lote (IN100)",
+      "title": "Consulta em Lote",
       "status": "development",
-      "description": "Faça consultas em lote para múltiplos cadastros de uma só vez.",
+      "description": "Faca consultas em lote para multiplos cadastros de uma so vez.",
       "icon": "FiLayers"
     }
   ]

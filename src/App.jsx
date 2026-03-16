@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Login from './pages/Login2.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import ConsultaIN100 from './pages/ConsultaIN100.jsx'
 import ConsultaClientes from './pages/ConsultaClientes.jsx'
 import ConsultaOnline from './pages/ConsultaOnline.jsx'
 import ClienteArgus from './pages/ClienteArgus.jsx'
@@ -12,10 +11,6 @@ import Recargas from './pages/Recargas.jsx'
 import Relatorios from './pages/Relatorios.jsx'
 import Backups from './pages/Backups.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
-import ConsultasV8 from './pages/ConsultasV8.jsx'
-import ConsultaPrata from './pages/ConsultaPrata.jsx'
-import ConsultasHandMais from './pages/ConsultasHandMais.jsx'
-import ConsultaPresenca from './pages/ConsultaPresenca.jsx'
 import CadastrosApis from './pages/CadastrosApis.jsx'
 import Permissoes from './pages/Permissoes.jsx'
 import Teste from './pages/Teste.jsx'
@@ -27,44 +22,8 @@ import { useAuth } from './context/AuthContext.jsx'
 import { getAccessibleHomeRoute } from './utils/pageAccess.js'
 import {
   canAccessConsultaClientes,
-  canAccessConsultaOnline,
-  canAccessConsultaPresenca,
-  canAccessConsultasHandMais,
-  canAccessConsultasPrata,
-  canAccessConsultasV8
+  canAccessConsultaOnline
 } from './utils/access.js'
-
-function ConsultasV8Route() {
-  const { user } = useAuth()
-  if (!canAccessConsultasV8(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultasV8 />
-}
-
-function ConsultaPresencaRoute() {
-  const { user } = useAuth()
-  if (!canAccessConsultaPresenca(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultaPresenca />
-}
-
-function ConsultasHandMaisRoute() {
-  const { user } = useAuth()
-  if (!canAccessConsultasHandMais(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultasHandMais />
-}
-
-function ConsultaPrataRoute() {
-  const { user } = useAuth()
-  if (!canAccessConsultasPrata(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultaPrata />
-}
 
 function ConsultaClientesRoute() {
   const { user } = useAuth()
@@ -206,14 +165,6 @@ function App() {
           }
         />
         <Route
-          path="/consultas/in100"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
-              <ConsultaIN100 />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/consulta/cliente-argus/*"
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
@@ -226,38 +177,6 @@ function App() {
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
               <HistoricoConsultas />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/v8"
-          element={
-            <ProtectedRoute>
-              <ConsultasV8Route />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/prata"
-          element={
-            <ProtectedRoute>
-              <ConsultaPrataRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/presenca"
-          element={
-            <ProtectedRoute>
-              <ConsultaPresencaRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/handmais"
-          element={
-            <ProtectedRoute>
-              <ConsultasHandMaisRoute />
             </ProtectedRoute>
           }
         />
