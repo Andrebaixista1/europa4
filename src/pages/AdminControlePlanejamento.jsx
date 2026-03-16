@@ -111,11 +111,6 @@ export default function AdminControlePlanejamento() {
   const [isSubmittingAdd, setIsSubmittingAdd] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [isPageAnimating, setIsPageAnimating] = useState(false)
-  const vencimentoOntem = useMemo(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 1)
-    return ymdLocal(d)
-  }, [])
   const isEditing = formMode === 'edit'
 
   const calcVencimento = (baseValue) => {
@@ -142,14 +137,6 @@ export default function AdminControlePlanejamento() {
     setFormRenovacao(today)
     setFormStatus('Ativo')
     setFormVencimento(calcVencimento(today))
-  }
-
-  const shouldShowVencimentoAlert = (item) => {
-    const vencStr = toDateOnly(item?.vencimento)
-    if (!vencStr || vencStr !== vencimentoOntem) return false
-    const st = String(item?.status || '').toLowerCase()
-    const gp = String(item?.grupo || '').toLowerCase()
-    return st === 'ativo' && gp === 'expande'
   }
 
   async function load() {
@@ -422,9 +409,7 @@ export default function AdminControlePlanejamento() {
         if (!hay.includes(q)) return false
       }
       if (gp && (String(it.grupo || '').toLowerCase() !== gp)) return false
-      if (st === 'vencido') {
-        if (!shouldShowVencimentoAlert(it)) return false
-      } else if (st && String(it.status || '').toLowerCase() !== st) {
+      if (st && String(it.status || '').toLowerCase() !== st) {
         return false
       }
       if (!inRange(it.renovacao, renovacaoDe, renovacaoAte)) return false
@@ -483,8 +468,7 @@ export default function AdminControlePlanejamento() {
     const total = base.length
     const ativos = base.filter(i => (i.status || '').toLowerCase() === 'ativo').length
     const inativos = base.filter(i => (i.status || '').toLowerCase() === 'inativo').length
-    const vencidos = base.filter(i => shouldShowVencimentoAlert(i)).length
-    return { total, ativos, inativos, vencidos }
+    return { total, ativos, inativos }
   }, [filtered])
 
   const downloadCsv = () => {
@@ -533,7 +517,6 @@ export default function AdminControlePlanejamento() {
           <div className="col-lg-3 col-md-6"><StatCard title="Total" value={stats.total} icon={Fi.FiUsers} accent="primary" /></div>
           <div className="col-lg-3 col-md-6"><StatCard title="Ativos" value={stats.ativos} icon={Fi.FiUserCheck} accent="success" /></div>
           <div className="col-lg-3 col-md-6"><StatCard title="Inativos" value={stats.inativos} icon={Fi.FiUserX} accent="danger" /></div>
-          <div className="col-lg-3 col-md-6"><StatCard title="Vencidos" value={stats.vencidos} icon={Fi.FiAlertTriangle} accent="warning" /></div>
         </div>
 
         <div className="neo-card neo-lg p-4 mb-3">
@@ -677,18 +660,7 @@ export default function AdminControlePlanejamento() {
                       <td className="text-uppercase">{i.grupo}</td>
                       <td>{i.renovacao ? formatDateDisplay(i.renovacao) : '-'}</td>
                       <td>
-                        {i.vencimento ? (
-                          <div className="d-inline-flex align-items-center gap-2">
-                            <span>{formatDateDisplay(i.vencimento)}</span>
-                            {shouldShowVencimentoAlert(i) && (
-                              <Fi.FiAlertTriangle
-                                className="text-warning"
-                                aria-label="Vencimento ontem para Ativo/EXPANDE"
-                                title="Vencimento ontem para Ativo/EXPANDE"
-                              />
-                            )}
-                          </div>
-                        ) : '-'}
+                        {i.vencimento ? formatDateDisplay(i.vencimento) : '-'}
                       </td>
                       <td><Badge status={i.status} /></td>
                       <td>
