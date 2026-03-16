@@ -833,8 +833,7 @@ export default function CadastrosApis() {
   const [isSavingPrata, setIsSavingPrata] = useState(false)
   const [isSavingAccess, setIsSavingAccess] = useState(false)
   const [isDeletingAccess, setIsDeletingAccess] = useState(false)
-  const [in100EquipeNome, setIn100EquipeNome] = useState('')
-  const [in100Total, setIn100Total] = useState('1000')
+  const [in100Total, setIn100Total] = useState('200')
   const [in100EquipeIds, setIn100EquipeIds] = useState([])
   const [v8Email, setV8Email] = useState('')
   const [v8Senha, setV8Senha] = useState('')
@@ -1100,8 +1099,7 @@ export default function CadastrosApis() {
   }, [selectedAccess, selectedHandMaisRow, selectedIn100Row, selectedPresencaRow, selectedPrataRow, selectedV8Row])
 
   const resetIn100Modal = () => {
-    setIn100EquipeNome('')
-    setIn100Total('1000')
+    setIn100Total('200')
     if (restrictCreateTeamsToOwn) {
       setIn100EquipeIds(sortNumericList(equipeId != null ? [equipeId] : []))
       return
@@ -1671,12 +1669,12 @@ export default function CadastrosApis() {
       notify.warn('Somente Master, Administrador e Supervisor podem cadastrar logins IN100.')
       return
     }
-    if (!in100EquipeNome.trim()) {
-      notify.warn('Informe o nome da equipe no QualiBanking.')
-      return
-    }
     if (!in100Total || toNumber(in100Total) <= 0) {
       notify.warn('Informe um total valido para QualiBanking.')
+      return
+    }
+    if (!Array.isArray(in100EquipeIds) || in100EquipeIds.length === 0) {
+      notify.warn('Selecione ao menos uma equipe para receber saldo.')
       return
     }
 
@@ -1689,7 +1687,6 @@ export default function CadastrosApis() {
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          equipe_nome: in100EquipeNome.trim(),
           total: Math.round(toNumber(in100Total)),
           equipe_id: sortNumericList(in100EquipeIds),
         }),
@@ -2075,19 +2072,7 @@ export default function CadastrosApis() {
             </header>
             <form className="cadastros-api-modal-body" onSubmit={handleSubmitIn100}>
               <div className="mb-3">
-                <label className="form-label">Equipe nome</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={in100EquipeNome}
-                  onChange={(event) => setIn100EquipeNome(event.target.value)}
-                  placeholder="Nome da equipe no QualiBanking"
-                  autoFocus
-                />
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label">Total</label>
+                <label className="form-label">Quantidade de saldo</label>
                 <input
                   type="number"
                   min="1"
@@ -2095,7 +2080,8 @@ export default function CadastrosApis() {
                   className="form-control"
                   value={in100Total}
                   onChange={(event) => setIn100Total(event.target.value)}
-                  placeholder="1000"
+                  placeholder="200"
+                  autoFocus
                 />
               </div>
 
