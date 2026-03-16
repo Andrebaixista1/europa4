@@ -513,72 +513,76 @@ export default function AdminControlePlanejamento() {
           </div>
         </div>
 
-        <div className="row g-3 mb-4">
-          <div className="col-lg-3 col-md-6"><StatCard title="Total" value={stats.total} icon={Fi.FiUsers} accent="primary" /></div>
-          <div className="col-lg-3 col-md-6"><StatCard title="Ativos" value={stats.ativos} icon={Fi.FiUserCheck} accent="success" /></div>
-          <div className="col-lg-3 col-md-6"><StatCard title="Inativos" value={stats.inativos} icon={Fi.FiUserX} accent="danger" /></div>
-        </div>
-
         <div className="neo-card neo-lg p-4 mb-3">
-          <div className="row g-2 align-items-end">
-            <div className="col-12 col-md-4">
-              <label className="form-label small opacity-75">Buscar</label>
-              <input className="form-control" placeholder="Buscar por login, nome ou agência..." value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="row g-4 align-items-start">
+            <div className="col-12 col-xl-3">
+              <div className="d-grid gap-3">
+                <StatCard title="Total" value={stats.total} icon={Fi.FiUsers} accent="primary" />
+                <StatCard title="Ativos" value={stats.ativos} icon={Fi.FiUserCheck} accent="success" />
+                <StatCard title="Inativos" value={stats.inativos} icon={Fi.FiUserX} accent="danger" />
+              </div>
             </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Renovação - De</label>
-              <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Renovação - Até</label>
-              <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Vencimento - De</label>
-              <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Vencimento - Até</label>
-              <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Grupos</label>
-              <select className="form-select" value={grupo} onChange={e => setGrupo(e.target.value)}>
-                <option value="">Todos os Grupos</option>
-                {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
-              </select>
-            </div>
-            <div className="col-6 col-md-2">
-              <label className="form-label small opacity-75">Status</label>
-              <select className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
-                <option value="">Todos os Status</option>
-                <option>Ativo</option>
-                <option>Inativo</option>
-                <option>Vencido</option>
-              </select>
-            </div>
-            <div className="col-12 col-md-auto ms-md-auto d-flex gap-2 justify-content-end flex-nowrap">
-              <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
-                <Fi.FiX className="me-1" />
-                <span className="d-none d-sm-inline">Limpar</span>
-              </button>
-              <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
-                <Fi.FiRefreshCcw className="me-1" />
-                <span className="d-none d-sm-inline">Atualizar</span>
-              </button>
-              <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
-                <Fi.FiDownload className="me-1" />
-                <span className="d-none d-sm-inline">Download</span>
-              </button>
-              <button
-                className="btn btn-ghost btn-ghost-primary btn-sm"
-                disabled={!isMaster}
-                title={isMaster ? 'Adicionar' : 'Apenas Master'}
-                onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
-              >
-                <Fi.FiPlus className="me-1" />
-                <span className="d-none d-sm-inline">Adicionar</span>
-              </button>
+            <div className="col-12 col-xl-9">
+              <div className="row g-2 align-items-end">
+                <div className="col-12 col-lg-4">
+                  <label className="form-label small opacity-75">Buscar</label>
+                  <input className="form-control" placeholder="Buscar por login, nome ou ag?ncia..." value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small opacity-75">Renova??o - De</label>
+                  <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small opacity-75">Renova??o - At?</label>
+                  <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small opacity-75">Vencimento - De</label>
+                  <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-2">
+                  <label className="form-label small opacity-75">Vencimento - At?</label>
+                  <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-3">
+                  <label className="form-label small opacity-75">Grupos</label>
+                  <select className="form-select" value={grupo} onChange={e => setGrupo(e.target.value)}>
+                    <option value="">Todos os Grupos</option>
+                    {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
+                  </select>
+                </div>
+                <div className="col-6 col-lg-3">
+                  <label className="form-label small opacity-75">Status</label>
+                  <select className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
+                    <option value="">Todos os Status</option>
+                    <option>Ativo</option>
+                    <option>Inativo</option>
+                  </select>
+                </div>
+                <div className="col-12 col-lg-6 d-flex gap-2 justify-content-end flex-wrap">
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
+                    <Fi.FiX className="me-1" />
+                    <span className="d-none d-sm-inline">Limpar</span>
+                  </button>
+                  <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
+                    <Fi.FiRefreshCcw className="me-1" />
+                    <span className="d-none d-sm-inline">Atualizar</span>
+                  </button>
+                  <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
+                    <Fi.FiDownload className="me-1" />
+                    <span className="d-none d-sm-inline">Download</span>
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-ghost-primary btn-sm"
+                    disabled={!isMaster}
+                    title={isMaster ? 'Adicionar' : 'Apenas Master'}
+                    onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
+                  >
+                    <Fi.FiPlus className="me-1" />
+                    <span className="d-none d-sm-inline">Adicionar</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
