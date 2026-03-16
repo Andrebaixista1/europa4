@@ -1,5 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
-import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -7,20 +6,35 @@ import { novidadesList } from '../components/NovidadesModal.jsx'
 import { Roles } from '../utils/roles.js'
 import { notify } from '../utils/notify.js'
 
-const V8_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-v8/'
-const V8_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-v8/'
-const PRATA_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-prata'
-const PRATA_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-prata'
-const PRESENCA_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank-limite/'
-const PRESENCA_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/presencabank/'
-const HANDMAIS_LIMITES_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/getconsulta-handmais'
-const HANDMAIS_CONSULTAS_GET_API_URL = 'https://n8n.apivieiracred.store/webhook/api/consulta-handmais'
+const API_BASE = 'http://85.31.61.242:8011/api'
+const IN100_LIMITES_GET_API_URL = `${API_BASE}/dashboard/saldos/in100`
+const IN100_CONSULTAS_GET_API_URL = `${API_BASE}/dashboard/consultas/in100`
+const V8_LIMITES_FALLBACK_API_URL = `${API_BASE}/logins/consultasv8`
+const V8_CONSULTAS_FALLBACK_API_URL = `${API_BASE}/dashboard/consultas/v8`
+const PRATA_LIMITES_GET_API_URL = `${API_BASE}/dashboard/saldos/prata`
+const PRATA_CONSULTAS_GET_API_URL = `${API_BASE}/dashboard/consultas/prata`
+const PRESENCA_LIMITES_GET_API_URL = `${API_BASE}/dashboard/saldos/presenca`
+const PRESENCA_CONSULTAS_GET_API_URL = `${API_BASE}/dashboard/consultas/presenca`
+const HANDMAIS_LIMITES_FALLBACK_API_URL = `${API_BASE}/logins/consultashandmais`
+const HANDMAIS_CONSULTAS_FALLBACK_API_URL = `${API_BASE}/dashboard/consultas/handmais`
+const ENABLE_IN100_API = true
+const ENABLE_PRATA_API = true
+const ENABLE_PRESENCA_API = true
 const LOG_SOURCE = {
   IN100: 'in100',
   V8: 'v8',
   PRATA: 'prata',
   PRESENCA: 'presenca',
   HANDMAIS: 'handmais'
+}
+
+const formatLastAccess = (value) => {
+  if (!value) return '-'
+  const raw = String(value).trim()
+  const normalized = raw.replace(' ', 'T').replace(/(\.\d{3})\d+$/, '$1')
+  const parsed = new Date(normalized)
+  if (Number.isNaN(parsed.getTime())) return raw
+  return parsed.toLocaleString('pt-BR')
 }
 
 export default function Dashboard() {
@@ -60,6 +74,9 @@ export default function Dashboard() {
     [LOG_SOURCE.PRESENCA]: '',
     [LOG_SOURCE.HANDMAIS]: ''
   })
+  const dashboardSaldosAvailableRef = useRef(null)
+  const dashboardConsultasAvailableRef = useRef(null)
+  const initialFetchUserRef = useRef(null)
   const copyToClipboard = async (text, successMsg = 'Copiado!') => {
     try {
       await navigator.clipboard.writeText(String(text ?? ''))
@@ -103,19 +120,21 @@ export default function Dashboard() {
 
   const fetchSaldo = async () => {
     if (!user?.id) return
+    if (!ENABLE_IN100_API) {
+      setSaldo({ carregado: 0, disponivel: 0, realizadas: 0 })
+      return
+    }
+    if (dashboardSaldosAvailableRef.current === false) {
+      setSaldo({ carregado: 0, disponivel: 0, realizadas: 0 })
+      return
+    }
     setLoadingSaldo(true)
     try {
       const payload = buildSaldoPayload()
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/get-saldos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      if (!res.ok) return
-      const data = await res.json().catch(() => null)
-      if (!data) return
+      const rows = await fetchRowsFromUrl(buildSaldoRequestUrl(IN100_LIMITES_GET_API_URL))
+      if (!Array.isArray(rows) || rows.length === 0) return
       const num = (val) => Number(val ?? 0)
-      const arr = Array.isArray(data) ? data : [data]
+      const arr = rows
       const targetTeamId = payload?.equipe_id ?? payload?.team_id ?? payload?.id_equipe ?? null
       const item =
         arr.find((row) => {
@@ -129,8 +148,11 @@ export default function Dashboard() {
         disponivel: num(item.limite_disponivel ?? item.disponivel ?? item.limite ?? item.limite_total),
         realizadas: num(item.consultas_realizada ?? item.consultas_realizadas ?? item.realizadas ?? item.qtd_consultas)
       })
-    } catch (_) {
-      /* silencioso */
+    } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardSaldosAvailableRef.current = false
+      }
+      setSaldo({ carregado: 0, disponivel: 0, realizadas: 0 })
     } finally {
       setLoadingSaldo(false)
     }
@@ -140,14 +162,6 @@ export default function Dashboard() {
     if (value === undefined || value === null || value === '') return null
     const parsed = Number(value)
     return Number.isNaN(parsed) ? null : parsed
-  }
-
-  const normalizeRows = (payload) => {
-    if (Array.isArray(payload)) return payload
-    if (Array.isArray(payload?.data)) return payload.data
-    if (Array.isArray(payload?.rows)) return payload.rows
-    if (payload && typeof payload === 'object') return [payload]
-    return []
   }
 
   const buildV8SummaryFromRows = (rows) => {
@@ -193,33 +207,7 @@ export default function Dashboard() {
     if (!user?.id) return
     setLoadingSaldoV8(true)
     try {
-      const requestUrl = new URL(V8_LIMITES_GET_API_URL)
-      requestUrl.searchParams.set('id_user', String(user?.id))
-      const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
-      if (equipeId !== null && equipeId !== undefined && equipeId !== '') {
-        requestUrl.searchParams.set('equipe_id', String(equipeId))
-      }
-
-      const roleId = user?.id_role ?? user?.role_id ?? user?.roleId ?? user?.level ?? null
-      const roleLabel = String(user?.role ?? '').trim()
-      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
-
-      if (roleId !== null && roleId !== undefined && roleId !== '') {
-        requestUrl.searchParams.set('id_role', String(roleId))
-        requestUrl.searchParams.set('role_id', String(roleId))
-      }
-      if (roleLabel) {
-        requestUrl.searchParams.set('role', roleLabel)
-        requestUrl.searchParams.set('hierarquia', roleLabel)
-      }
-      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
-        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
-      }
-
-      const response = await fetch(requestUrl.toString(), { method: 'GET' })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const payload = await response.json().catch(() => ({}))
-      const rows = normalizeRows(payload)
+      const rows = await fetchRowsFromUrl(buildSaldoRequestUrl(V8_LIMITES_FALLBACK_API_URL))
       setSaldoV8(buildV8SummaryFromRows(rows))
     } catch (_) {
       setSaldoV8({ total: '-', usado: '-', restantes: '-' })
@@ -230,37 +218,22 @@ export default function Dashboard() {
 
   const fetchSaldoPrata = async () => {
     if (!user?.id) return
+    if (!ENABLE_PRATA_API) {
+      setSaldoPrata({ total: '-', usado: '-', restantes: '-' })
+      return
+    }
+    if (dashboardSaldosAvailableRef.current === false) {
+      setSaldoPrata({ total: '-', usado: '-', restantes: '-' })
+      return
+    }
     setLoadingSaldoPrata(true)
     try {
-      const requestUrl = new URL(PRATA_LIMITES_GET_API_URL)
-      requestUrl.searchParams.set('id_user', String(user?.id))
-      const equipeId = user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null
-      if (equipeId !== null && equipeId !== undefined && equipeId !== '') {
-        requestUrl.searchParams.set('equipe_id', String(equipeId))
-      }
-
-      const roleId = user?.id_role ?? user?.role_id ?? user?.roleId ?? user?.level ?? null
-      const roleLabel = String(user?.role ?? '').trim()
-      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
-
-      if (roleId !== null && roleId !== undefined && roleId !== '') {
-        requestUrl.searchParams.set('id_role', String(roleId))
-        requestUrl.searchParams.set('role_id', String(roleId))
-      }
-      if (roleLabel) {
-        requestUrl.searchParams.set('role', roleLabel)
-        requestUrl.searchParams.set('hierarquia', roleLabel)
-      }
-      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
-        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
-      }
-
-      const response = await fetch(requestUrl.toString(), { method: 'GET' })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const payload = await response.json().catch(() => ({}))
-      const rows = normalizeRows(payload)
+      const rows = await fetchRowsFromUrl(buildSaldoRequestUrl(PRATA_LIMITES_GET_API_URL))
       setSaldoPrata(buildV8SummaryFromRows(rows))
-    } catch (_) {
+    } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardSaldosAvailableRef.current = false
+      }
       setSaldoPrata({ total: '-', usado: '-', restantes: '-' })
     } finally {
       setLoadingSaldoPrata(false)
@@ -299,50 +272,66 @@ export default function Dashboard() {
     const list = Array.isArray(rows) ? rows : []
     if (list.length === 0) return { total: '-', usado: '-', restantes: '-' }
 
-    const row = list[0] || {}
-    const total = toNumberOrNull(row?.total)
-    const usado = toNumberOrNull(row?.consultados)
-    const restantesRaw = row?.restantes ?? (total !== null && usado !== null ? Math.max(total - usado, 0) : null)
-    const restantes = toNumberOrNull(restantesRaw)
+    let total = 0
+    let usado = 0
+    let hasAnyNumeric = false
 
-    return {
-      total: total !== null ? total : '-',
-      usado: usado !== null ? usado : '-',
-      restantes: restantes !== null ? Math.max(0, restantes) : '-',
+    for (const row of list) {
+      const totalValue = toNumberOrNull(row?.total ?? row?.limite)
+      const usadoValue = toNumberOrNull(row?.consultados ?? row?.usado)
+
+      if (totalValue !== null) {
+        total += totalValue
+        hasAnyNumeric = true
+      }
+      if (usadoValue !== null) {
+        usado += usadoValue
+        hasAnyNumeric = true
+      }
     }
+
+    if (!hasAnyNumeric) return { total: '-', usado: '-', restantes: '-' }
+    return { total, usado, restantes: Math.max(0, total - usado) }
   }
 
   const fetchSaldoPresenca = async () => {
     if (!user?.id) return
+    if (!ENABLE_PRESENCA_API) {
+      setSaldoPresenca({ total: '-', usado: '-', restantes: '-' })
+      return
+    }
+    if (dashboardSaldosAvailableRef.current === false) {
+      setSaldoPresenca({ total: '-', usado: '-', restantes: '-' })
+      return
+    }
     setLoadingSaldoPresenca(true)
     try {
-      const requestUrl = new URL(PRESENCA_LIMITES_GET_API_URL)
-      requestUrl.searchParams.set('id_user', String(user.id))
-      const equipeId = resolveUserEquipeId(user)
-      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
-      const roleLabel = String(user?.role ?? '').trim()
-      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? ''
-      if (roleLabel) {
-        requestUrl.searchParams.set('role', roleLabel)
-        requestUrl.searchParams.set('hierarquia', roleLabel)
-      }
-      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
-        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
-      }
-
-      const response = await fetch(requestUrl.toString(), { method: 'GET' })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const payload = await response.json().catch(() => ({}))
-      const rows = normalizeRows(payload)
+      const rows = await fetchRowsFromUrl(buildSaldoRequestUrl(PRESENCA_LIMITES_GET_API_URL))
       setSaldoPresenca(buildPresencaSummaryFromRows(rows))
-    } catch (_) {
+    } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardSaldosAvailableRef.current = false
+      }
       setSaldoPresenca({ total: '-', usado: '-', restantes: '-' })
     } finally {
       setLoadingSaldoPresenca(false)
     }
   }
 
-  const buildHandMaisRequestUrl = (baseUrl, options = {}) => {
+  const buildSaldoRequestUrl = (baseUrl) => {
+    const url = new URL(baseUrl)
+    const equipeId = resolveUserEquipeId(user)
+
+    if (equipeId !== null) {
+      url.searchParams.set('equipe_id', String(equipeId))
+    } else {
+      url.searchParams.set('all', '1')
+    }
+
+    return url.toString()
+  }
+
+  const buildLegacyRequestUrl = (baseUrl, options = {}) => {
     const url = new URL(baseUrl)
     const equipeId = resolveUserEquipeId(user)
     const roleId = resolveUserRoleId(user)
@@ -371,6 +360,10 @@ export default function Dashboard() {
       url.searchParams.set('id_consulta_hand', String(consultaId))
     }
 
+    if (Number(user?.id) === 1) {
+      url.searchParams.set('all', '1')
+    }
+
     return url.toString()
   }
 
@@ -391,23 +384,14 @@ export default function Dashboard() {
     if (!user?.id) return
     setLoadingSaldoHandMais(true)
     try {
-      const response = await fetch(buildHandMaisRequestUrl(HANDMAIS_LIMITES_GET_API_URL), { method: 'GET' })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const payload = await response.json().catch(() => ({}))
-      const rows = sortHandMaisRowsByUpdatedAtDesc(normalizeRows(payload))
+      let rows = await fetchRowsFromUrl(buildSaldoRequestUrl(HANDMAIS_LIMITES_FALLBACK_API_URL))
+      rows = sortHandMaisRowsByUpdatedAtDesc(rows)
       setSaldoHandMais(buildHandMaisSummaryFromRows(rows))
     } catch (_) {
       setSaldoHandMais({ total: '-', usado: '-', restantes: '-' })
     } finally {
       setLoadingSaldoHandMais(false)
     }
-  }
-
-  const mapNivel = (r) => {
-    if (r === Roles.Master) return 'master'
-    if (r === Roles.Administrador) return 'adm'
-    if (r === Roles.Supervisor) return 'super'
-    return 'operador'
   }
 
   const resolveUserEquipeId = (u) => {
@@ -422,6 +406,34 @@ export default function Dashboard() {
     return Number.isNaN(parsed) ? null : parsed
   }
 
+  const resolveRoleScope = () => {
+    const roleText = String(user?.role ?? '').trim().toLowerCase()
+    const isMaster =
+      Number(user?.id) === 1 ||
+      roleText === 'master' ||
+      roleText.includes('master')
+    const isAdmin = roleText === 'administrador' || roleText === 'admin' || roleText.includes('administrador')
+    const isSupervisor = roleText === 'supervisor' || roleText.includes('supervisor')
+
+    if (isMaster) return 'master'
+    if (isAdmin || isSupervisor) return 'team'
+    return 'self'
+  }
+
+  const applyLastConsultasScope = (rows) => {
+    const list = Array.isArray(rows) ? rows : []
+    const scope = resolveRoleScope()
+    if (scope !== 'self') return list
+
+    const currentUserId = toNumberOrNull(user?.id)
+    if (currentUserId === null) return []
+
+    return list.filter((row) => {
+      const rowUserId = toNumberOrNull(row?.id_user ?? row?.user_id ?? row?.usuario_id)
+      return rowUserId !== null && rowUserId === currentUserId
+    })
+  }
+
   const parseRowsFromRaw = (raw) => {
     try {
       const data = JSON.parse(raw)
@@ -433,6 +445,31 @@ export default function Dashboard() {
     } catch (_) {
       return []
     }
+  }
+
+  const fetchRowsFromUrl = async (url) => {
+    const response = await fetch(url, { method: 'GET' })
+    const raw = await response.text().catch(() => '')
+    if (!response.ok) {
+      let message = ''
+      try {
+        const parsed = raw ? JSON.parse(raw) : null
+        message = String(parsed?.message ?? '').trim()
+      } catch (_) {
+        message = ''
+      }
+      const error = new Error(message || `HTTP ${response.status}`)
+      error.status = response.status
+      throw error
+    }
+    return parseRowsFromRaw(raw)
+  }
+
+  const isMissingRouteError = (error) => {
+    const status = Number(error?.status ?? 0)
+    if (status === 404 || status === 405) return true
+    const message = String(error?.message ?? '').toUpperCase()
+    return message.includes('HTTP 404') || message.includes('HTTP 405')
   }
 
   const dedupeByKey = (list, keyBuilder) => {
@@ -528,20 +565,21 @@ export default function Dashboard() {
 
   const fetchLogsIn100 = async () => {
     if (!user?.id) return
+    if (!ENABLE_IN100_API) {
+      setLogsData(LOG_SOURCE.IN100, [])
+      setLogsError(LOG_SOURCE.IN100, '')
+      return
+    }
+    if (dashboardConsultasAvailableRef.current === false) {
+      setLogsData(LOG_SOURCE.IN100, [])
+      setLogsError(LOG_SOURCE.IN100, '')
+      return
+    }
     setLogsLoading(LOG_SOURCE.IN100, true)
     setLogsError(LOG_SOURCE.IN100, '')
     try {
-      const equipeId = resolveUserEquipeId(user)
-      const payload = { id: user.id, equipe_id: equipeId, nivel: mapNivel(user?.role) }
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-logs-in100', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-        body: JSON.stringify(payload)
-      })
-      const raw = await res.text().catch(() => '')
-      if (!res.ok) throw new Error(raw || `HTTP ${res.status}`)
-      const arr = parseRowsFromRaw(raw)
-      const deduped = dedupeByKey(arr, (item) => {
+      const rows = await fetchRowsFromUrl(buildLegacyRequestUrl(IN100_CONSULTAS_GET_API_URL))
+      const deduped = dedupeByKey(rows, (item) => {
         const cpf = String(item?.numero_documento ?? '').replace(/\D/g, '')
         const nb = String(item?.numero_beneficio ?? '').replace(/\D/g, '')
         return [
@@ -562,8 +600,11 @@ export default function Dashboard() {
       }))
       setLogsData(LOG_SOURCE.IN100, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardConsultasAvailableRef.current = false
+      }
       setLogsData(LOG_SOURCE.IN100, [])
-      setLogsError(LOG_SOURCE.IN100, e?.message || 'Erro ao carregar')
+      setLogsError(LOG_SOURCE.IN100, isMissingRouteError(e) ? '' : (e?.message || 'Erro ao carregar'))
     } finally {
       setLogsLoading(LOG_SOURCE.IN100, false)
     }
@@ -571,34 +612,17 @@ export default function Dashboard() {
 
   const fetchLogsV8 = async () => {
     if (!user?.id) return
+    if (dashboardConsultasAvailableRef.current === false) {
+      setLogsData(LOG_SOURCE.V8, [])
+      setLogsError(LOG_SOURCE.V8, '')
+      return
+    }
     setLogsLoading(LOG_SOURCE.V8, true)
     setLogsError(LOG_SOURCE.V8, '')
     try {
-      const requestUrl = new URL(V8_CONSULTAS_GET_API_URL)
-      requestUrl.searchParams.set('id_user', String(user.id))
-      const equipeId = resolveUserEquipeId(user)
-      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
-      const roleId = resolveUserRoleId(user)
-      const roleLabel = String(user?.role ?? '').trim()
-      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
-      if (roleId !== null && roleId !== undefined && roleId !== '') {
-        requestUrl.searchParams.set('id_role', String(roleId))
-        requestUrl.searchParams.set('role_id', String(roleId))
-      }
-      if (roleLabel) {
-        requestUrl.searchParams.set('role', roleLabel)
-        requestUrl.searchParams.set('hierarquia', roleLabel)
-      }
-      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
-        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
-      }
-      if (Number(user?.id) === 1) requestUrl.searchParams.set('all', '1')
-
-      const response = await fetch(requestUrl.toString(), { method: 'GET' })
-      const raw = await response.text().catch(() => '')
-      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
-      const rows = parseRowsFromRaw(raw)
-      const deduped = dedupeByKey(rows, (item) => {
+      const rows = await fetchRowsFromUrl(buildLegacyRequestUrl(V8_CONSULTAS_FALLBACK_API_URL))
+      const scopedRows = applyLastConsultasScope(rows)
+      const deduped = dedupeByKey(scopedRows, (item) => {
         const cpf = String(item?.cliente_cpf ?? item?.cpf ?? '').replace(/\D/g, '')
         return [
           getTimestampValue(item),
@@ -617,8 +641,11 @@ export default function Dashboard() {
       }))
       setLogsData(LOG_SOURCE.V8, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardConsultasAvailableRef.current = false
+      }
       setLogsData(LOG_SOURCE.V8, [])
-      setLogsError(LOG_SOURCE.V8, e?.message || 'Erro ao carregar')
+      setLogsError(LOG_SOURCE.V8, isMissingRouteError(e) ? '' : (e?.message || 'Erro ao carregar'))
     } finally {
       setLogsLoading(LOG_SOURCE.V8, false)
     }
@@ -626,33 +653,20 @@ export default function Dashboard() {
 
   const fetchLogsPrata = async () => {
     if (!user?.id) return
+    if (!ENABLE_PRATA_API) {
+      setLogsData(LOG_SOURCE.PRATA, [])
+      setLogsError(LOG_SOURCE.PRATA, '')
+      return
+    }
+    if (dashboardConsultasAvailableRef.current === false) {
+      setLogsData(LOG_SOURCE.PRATA, [])
+      setLogsError(LOG_SOURCE.PRATA, '')
+      return
+    }
     setLogsLoading(LOG_SOURCE.PRATA, true)
     setLogsError(LOG_SOURCE.PRATA, '')
     try {
-      const requestUrl = new URL(PRATA_CONSULTAS_GET_API_URL)
-      requestUrl.searchParams.set('id_user', String(user.id))
-      const equipeId = resolveUserEquipeId(user)
-      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
-      const roleId = resolveUserRoleId(user)
-      const roleLabel = String(user?.role ?? '').trim()
-      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? roleId
-      if (roleId !== null && roleId !== undefined && roleId !== '') {
-        requestUrl.searchParams.set('id_role', String(roleId))
-        requestUrl.searchParams.set('role_id', String(roleId))
-      }
-      if (roleLabel) {
-        requestUrl.searchParams.set('role', roleLabel)
-        requestUrl.searchParams.set('hierarquia', roleLabel)
-      }
-      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
-        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
-      }
-      if (Number(user?.id) === 1) requestUrl.searchParams.set('all', '1')
-
-      const response = await fetch(requestUrl.toString(), { method: 'GET' })
-      const raw = await response.text().catch(() => '')
-      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
-      const rows = parseRowsFromRaw(raw)
+      const rows = await fetchRowsFromUrl(buildLegacyRequestUrl(PRATA_CONSULTAS_GET_API_URL))
       const deduped = dedupeByKey(rows, (item) => {
         const cpf = String(item?.cliente_cpf ?? item?.cpf ?? '').replace(/\D/g, '')
         return [
@@ -668,12 +682,15 @@ export default function Dashboard() {
         statusTooltip: getStatusTooltip(item),
         detail: String(item?.cliente_nome ?? item?.nome ?? item?.descricao ?? item?.tipoConsulta ?? '-').trim() || '-',
         cpf: String(item?.cliente_cpf ?? item?.cpf ?? ''),
-        nb: String(item?.valor_liberado ?? item?.valorLiberado ?? item?.valor ?? item?.numero_beneficio ?? item?.nb ?? '')
+        nb: String(item?.valor_liberado ?? item?.valorLiberado ?? item?.valor ?? item?.margem_total_disponivel ?? item?.margem_disponivel ?? item?.numero_beneficio ?? item?.nb ?? '')
       }))
       setLogsData(LOG_SOURCE.PRATA, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardConsultasAvailableRef.current = false
+      }
       setLogsData(LOG_SOURCE.PRATA, [])
-      setLogsError(LOG_SOURCE.PRATA, e?.message || 'Erro ao carregar')
+      setLogsError(LOG_SOURCE.PRATA, isMissingRouteError(e) ? '' : (e?.message || 'Erro ao carregar'))
     } finally {
       setLogsLoading(LOG_SOURCE.PRATA, false)
     }
@@ -681,27 +698,20 @@ export default function Dashboard() {
 
   const fetchLogsPresenca = async () => {
     if (!user?.id) return
+    if (!ENABLE_PRESENCA_API) {
+      setLogsData(LOG_SOURCE.PRESENCA, [])
+      setLogsError(LOG_SOURCE.PRESENCA, '')
+      return
+    }
+    if (dashboardConsultasAvailableRef.current === false) {
+      setLogsData(LOG_SOURCE.PRESENCA, [])
+      setLogsError(LOG_SOURCE.PRESENCA, '')
+      return
+    }
     setLogsLoading(LOG_SOURCE.PRESENCA, true)
     setLogsError(LOG_SOURCE.PRESENCA, '')
     try {
-      const requestUrl = new URL(PRESENCA_CONSULTAS_GET_API_URL)
-      const equipeId = resolveUserEquipeId(user)
-      requestUrl.searchParams.set('id_user', String(user.id))
-      if (equipeId !== null) requestUrl.searchParams.set('equipe_id', String(equipeId))
-      const roleLabel = String(user?.role ?? '').trim()
-      const hierarchyLevel = user?.nivel_hierarquia ?? user?.NivelHierarquia ?? user?.level ?? ''
-      if (roleLabel) {
-        requestUrl.searchParams.set('role', roleLabel)
-        requestUrl.searchParams.set('hierarquia', roleLabel)
-      }
-      if (hierarchyLevel !== null && hierarchyLevel !== undefined && hierarchyLevel !== '') {
-        requestUrl.searchParams.set('nivel_hierarquia', String(hierarchyLevel))
-      }
-
-      const response = await fetch(requestUrl.toString(), { method: 'GET' })
-      const raw = await response.text().catch(() => '')
-      if (!response.ok) throw new Error(raw || `HTTP ${response.status}`)
-      const rows = parseRowsFromRaw(raw)
+      const rows = await fetchRowsFromUrl(buildLegacyRequestUrl(PRESENCA_CONSULTAS_GET_API_URL))
       const deduped = dedupeByKey(rows, (item) => {
         const cpf = String(item?.cpf ?? item?.cliente_cpf ?? item?.numero_documento ?? '').replace(/\D/g, '')
         return [
@@ -721,8 +731,11 @@ export default function Dashboard() {
       }))
       setLogsData(LOG_SOURCE.PRESENCA, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardConsultasAvailableRef.current = false
+      }
       setLogsData(LOG_SOURCE.PRESENCA, [])
-      setLogsError(LOG_SOURCE.PRESENCA, e?.message || 'Erro ao carregar')
+      setLogsError(LOG_SOURCE.PRESENCA, isMissingRouteError(e) ? '' : (e?.message || 'Erro ao carregar'))
     } finally {
       setLogsLoading(LOG_SOURCE.PRESENCA, false)
     }
@@ -730,23 +743,17 @@ export default function Dashboard() {
 
   const fetchLogsHandMais = async () => {
     if (!user?.id) return
+    if (dashboardConsultasAvailableRef.current === false) {
+      setLogsData(LOG_SOURCE.HANDMAIS, [])
+      setLogsError(LOG_SOURCE.HANDMAIS, '')
+      return
+    }
     setLogsLoading(LOG_SOURCE.HANDMAIS, true)
     setLogsError(LOG_SOURCE.HANDMAIS, '')
     try {
-      const limitsResponse = await fetch(buildHandMaisRequestUrl(HANDMAIS_LIMITES_GET_API_URL), { method: 'GET' })
-      const limitsRaw = await limitsResponse.text().catch(() => '')
-      if (!limitsResponse.ok) throw new Error(limitsRaw || `HTTP ${limitsResponse.status}`)
-      const limitsRows = sortHandMaisRowsByUpdatedAtDesc(parseRowsFromRaw(limitsRaw))
-      const latestConsultaId = toNumberOrNull(limitsRows?.[0]?.id)
-
-      const consultasResponse = await fetch(
-        buildHandMaisRequestUrl(HANDMAIS_CONSULTAS_GET_API_URL, { idConsultaHand: latestConsultaId ?? 0 }),
-        { method: 'GET' }
-      )
-      const raw = await consultasResponse.text().catch(() => '')
-      if (!consultasResponse.ok) throw new Error(raw || `HTTP ${consultasResponse.status}`)
-      const rows = parseRowsFromRaw(raw)
-      const deduped = dedupeByKey(rows, (item) => {
+      const rows = await fetchRowsFromUrl(buildLegacyRequestUrl(HANDMAIS_CONSULTAS_FALLBACK_API_URL))
+      const scopedRows = applyLastConsultasScope(rows)
+      const deduped = dedupeByKey(scopedRows, (item) => {
         const cpf = String(item?.cpf ?? item?.cliente_cpf ?? '').replace(/\D/g, '')
         return [
           getTimestampValue(item),
@@ -766,8 +773,11 @@ export default function Dashboard() {
       }))
       setLogsData(LOG_SOURCE.HANDMAIS, dedupeByCpf(normalized).slice(0, 10))
     } catch (e) {
+      if (isMissingRouteError(e)) {
+        dashboardConsultasAvailableRef.current = false
+      }
       setLogsData(LOG_SOURCE.HANDMAIS, [])
-      setLogsError(LOG_SOURCE.HANDMAIS, e?.message || 'Erro ao carregar')
+      setLogsError(LOG_SOURCE.HANDMAIS, isMissingRouteError(e) ? '' : (e?.message || 'Erro ao carregar'))
     } finally {
       setLogsLoading(LOG_SOURCE.HANDMAIS, false)
     }
@@ -788,16 +798,16 @@ export default function Dashboard() {
   }, [news.length])
 
   useEffect(() => {
+    if (!user?.id) return
+    if (initialFetchUserRef.current === user.id) return
+    initialFetchUserRef.current = user.id
+
     fetchSaldo()
     fetchSaldoV8()
     fetchSaldoPrata()
     fetchSaldoPresenca()
     fetchSaldoHandMais()
-    fetchLogsIn100()
-    fetchLogsV8()
-    fetchLogsPrata()
-    fetchLogsPresenca()
-    fetchLogsHandMais()
+    fetchLogsBySource(activeLogsSource)
   }, [user])
 
   const fmtCpf = (v) => {
@@ -891,12 +901,42 @@ export default function Dashboard() {
     return fmtMoneyBRL(value)
   }
 
-  const logsTabs = [
-    { source: LOG_SOURCE.IN100, label: 'IN100' },
-    { source: LOG_SOURCE.V8, label: 'V8' },
-    { source: LOG_SOURCE.PRATA, label: 'Prata' },
-    { source: LOG_SOURCE.HANDMAIS, label: 'Hand+' },
-    { source: LOG_SOURCE.PRESENCA, label: 'Presença' }
+  const dashboardRows = [
+    {
+      source: LOG_SOURCE.IN100,
+      nome: 'IN100',
+      saldo: Number(saldo?.disponivel ?? 0),
+      disponiveis: Number(saldo?.disponivel ?? 0),
+      realizadas: Number(saldo?.realizadas ?? 0)
+    },
+    {
+      source: LOG_SOURCE.V8,
+      nome: 'V8 Bank',
+      saldo: Number(saldoV8?.total ?? 0),
+      disponiveis: Number(saldoV8?.restantes ?? 0),
+      realizadas: Number(saldoV8?.usado ?? 0)
+    },
+    {
+      source: LOG_SOURCE.PRATA,
+      nome: 'Prata',
+      saldo: Number(saldoPrata?.total ?? 0),
+      disponiveis: Number(saldoPrata?.restantes ?? 0),
+      realizadas: Number(saldoPrata?.usado ?? 0)
+    },
+    {
+      source: LOG_SOURCE.HANDMAIS,
+      nome: 'Hand+',
+      saldo: Number(saldoHandMais?.total ?? 0),
+      disponiveis: Number(saldoHandMais?.restantes ?? 0),
+      realizadas: Number(saldoHandMais?.usado ?? 0)
+    },
+    {
+      source: LOG_SOURCE.PRESENCA,
+      nome: 'Presença',
+      saldo: Number(saldoPresenca?.total ?? 0),
+      disponiveis: Number(saldoPresenca?.restantes ?? 0),
+      realizadas: Number(saldoPresenca?.usado ?? 0)
+    }
   ]
 
   const renderSaldoPanel = () => {
@@ -1053,90 +1093,84 @@ export default function Dashboard() {
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
-      <main className="container-xxl py-4 flex-grow-1">
+      <main className="container-xxl py-4 flex-grow-1 dashboard-php dashboard-v2">
         <div className="d-flex align-items-baseline justify-content-between mb-4">
           <div>
             <h2 className="fw-bold mb-1">Dashboard</h2>
-            <div className="opacity-75 small">Bem-vindo(a), {user?.name} - Perfil: {role}</div>
           </div>
         </div>
 
-        {news.length > 0 && (
-          <section className="news-carousel">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <div>
-                <div className="small opacity-75 text-uppercase">Últimas novidades</div>
-                <h5 className="mb-0">O que temos de mais novo na Europa</h5>
-              </div>
-              <div className="d-flex gap-2">
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setCurrent((i) => (i - 1 + news.length) % news.length)}
-                  aria-label="Anterior"
-                >
-                  <FiChevronLeft />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setCurrent((i) => (i + 1) % news.length)}
-                  aria-label="Próximo"
-                >
-                  <FiChevronRight />
-                </button>
-              </div>
-            </div>
-            <div className="news-card">
-              <div className="news-thumb" style={bgStyle} />
-              <div className="news-card-body">
-                <div className="small opacity-85">{card.data}</div>
-                <h5 className="fw-bold mb-2">{card.titulo}</h5>
-                <p className="mb-0 opacity-85">{card.descricao}</p>
-              </div>
-            </div>
-            <div className="news-dots mt-3">
-              {news.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className={`news-dot ${idx === current ? 'active' : ''}`}
-                  onClick={() => setCurrent(idx)}
-                  aria-label={`Ir para novidade ${idx + 1}`}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="row g-3 mt-4 align-items-start">
+        <section className="row g-3 mb-3">
           <div className="col-12 col-lg-4">
-            <div className="dashboard-balance-shell">
-              <div className="dashboard-chrome-tabs" role="tablist" aria-label="Sistemas de consulta">
-                {logsTabs.map((tab) => (
-                  <button
-                    key={tab.source}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeLogsSource === tab.source}
-                    className={`dashboard-chrome-tab ${activeLogsSource === tab.source ? 'active' : ''}`}
-                    onClick={() => handleSelectLogsSource(tab.source)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-              <div className="neo-card neo-lg p-4 dashboard-balance-panel">
-                {renderSaldoPanel()}
+            <div className="neo-card neo-lg p-4 h-100">
+              <div className="small opacity-75 text-uppercase mb-3">Informações usuário</div>
+              <div className="d-flex flex-column gap-2">
+                <div><span className="opacity-75">Perfil:</span> <span className="fw-semibold">{role}</span></div>
+                <div><span className="opacity-75">Equipe:</span> <span className="fw-semibold">{user?.equipe_nome ?? user?.team_name ?? '-'}</span></div>
+                <div><span className="opacity-75">Último acesso:</span> <span className="fw-semibold">{formatLastAccess(user?.data_ultimo_login ?? user?.lastLogin)}</span></div>
               </div>
             </div>
           </div>
 
           <div className="col-12 col-lg-8">
             <div className="neo-card neo-lg p-4 h-100">
+              <div className="small opacity-75 text-uppercase mb-2">Últimas novidades</div>
+              {card ? (
+                <div className="d-flex gap-3 align-items-start">
+                  <div className="dashboard-v2-news-thumb" style={bgStyle} />
+                  <div>
+                    <div className="small opacity-75 mb-1">{card.data}</div>
+                    <h5 className="fw-bold mb-1">{card.titulo}</h5>
+                    <p className="mb-0 opacity-85">{card.descricao}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="opacity-75 small">Sem novidades disponíveis no momento.</div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="row g-3 align-items-start dashboard-main-grid">
+          <div className="col-12 col-xl-7 dashboard-main-left">
+            <div className="neo-card neo-lg p-3 p-lg-4 h-100">
+              <div className="small opacity-75 text-uppercase mb-3">Sistemas (saldo)</div>
+              <div className="table-responsive dashboard-v2-summary-table">
+                <table className="table table-dark table-sm align-middle mb-0">
+                  <thead>
+                    <tr>
+                      <th>Nome</th>
+                      <th>Saldo</th>
+                      <th>Disponíveis</th>
+                      <th>Realizadas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dashboardRows.map((row) => (
+                      <tr
+                        key={row.source}
+                        className={activeLogsSource === row.source ? 'is-active' : ''}
+                        onClick={() => handleSelectLogsSource(row.source)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td className="fw-semibold">{row.nome}</td>
+                        <td>{Number.isFinite(row.saldo) ? row.saldo.toLocaleString('pt-BR') : '-'}</td>
+                        <td>{Number.isFinite(row.disponiveis) ? row.disponiveis.toLocaleString('pt-BR') : '-'}</td>
+                        <td>{Number.isFinite(row.realizadas) ? row.realizadas.toLocaleString('pt-BR') : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-12 col-xl-5 dashboard-main-right">
+            <div className="neo-card neo-lg p-4 h-100">
               <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                 <div>
-                  <div className="small text-uppercase opacity-75">{sourceMeta[activeLogsSource]?.title || 'Últimas consultas'}</div>
+                  <div className="small text-uppercase opacity-75">Top 10 consultas</div>
+                  <div className="fw-semibold">{sourceMeta[activeLogsSource]?.title || 'Últimas consultas'}</div>
                   <div className="fw-semibold">Exibindo até 10 mais recentes</div>
                 </div>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => fetchLogsBySource(activeLogsSource)} disabled={activeLoading}>
@@ -1150,9 +1184,9 @@ export default function Dashboard() {
                     <tr>
                       <th style={{ width: '12%' }}>Hora</th>
                       <th style={{ width: '12%' }}>Status</th>
-                      <th style={{ width: '30%' }}>Pesquisa</th>
-                      <th style={{ width: '23%' }}>CPF</th>
-                      <th style={{ width: '23%' }}>{activeRightMeta.label}</th>
+                      <th style={{ width: '26%' }}>Pesquisa</th>
+                      <th style={{ width: '25%' }}>CPF</th>
+                      <th style={{ width: '25%' }}>{activeRightMeta.label}</th>
                     </tr>
                   </thead>
                   <tbody>
