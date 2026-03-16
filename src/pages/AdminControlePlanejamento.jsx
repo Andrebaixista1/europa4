@@ -508,41 +508,51 @@ export default function AdminControlePlanejamento() {
             </Link>
             <div>
               <h2 className="fw-bold mb-1">Controle Planejamento</h2>
-              <div className="opacity-75 small">Vanguard - Sistema de Controle de Usuários</div>
+              <div className="opacity-75 small">{'Vanguard - Sistema de Controle de Usuários'}</div>
             </div>
           </div>
         </div>
 
         <div className="neo-card neo-lg p-4 mb-3">
-          <div className="row g-4 align-items-start">
+          <div className="row g-3 align-items-start">
             <div className="col-12 col-xl-3">
-              <div className="d-grid gap-3">
-                <StatCard title="Total" value={stats.total} icon={Fi.FiUsers} accent="primary" />
-                <StatCard title="Ativos" value={stats.ativos} icon={Fi.FiUserCheck} accent="success" />
-                <StatCard title="Inativos" value={stats.inativos} icon={Fi.FiUserX} accent="danger" />
+              <div className="small opacity-75 text-uppercase mb-2">Resumo</div>
+              <div className="d-grid gap-2">
+                <div className="d-flex align-items-center justify-content-between border rounded-3 px-3 py-3" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)' }}>
+                  <div>
+                    <div className="small opacity-75">Total</div>
+                    <div className="fs-2 fw-bold lh-1">{stats.total}</div>
+                  </div>
+                  <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
+                    <Fi.FiUsers size={24} />
+                  </div>
+                </div>
+                <div className="d-flex align-items-center justify-content-between border rounded-3 px-3 py-3" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)' }}>
+                  <div>
+                    <div className="small opacity-75">Ativos</div>
+                    <div className="fs-2 fw-bold lh-1">{stats.ativos}</div>
+                  </div>
+                  <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
+                    <Fi.FiUserCheck size={24} />
+                  </div>
+                </div>
+                <div className="d-flex align-items-center justify-content-between border rounded-3 px-3 py-3" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)' }}>
+                  <div>
+                    <div className="small opacity-75">Inativos</div>
+                    <div className="fs-2 fw-bold lh-1">{stats.inativos}</div>
+                  </div>
+                  <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
+                    <Fi.FiUserX size={24} />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="col-12 col-xl-9">
+              <div className="small opacity-75 text-uppercase mb-2">Filtros</div>
               <div className="row g-2 align-items-end">
-                <div className="col-12 col-lg-4">
+                <div className="col-12 col-lg-5">
                   <label className="form-label small opacity-75">Buscar</label>
-                  <input className="form-control" placeholder="Buscar por login, nome ou ag?ncia..." value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-2">
-                  <label className="form-label small opacity-75">Renova??o - De</label>
-                  <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-2">
-                  <label className="form-label small opacity-75">Renova??o - At?</label>
-                  <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-2">
-                  <label className="form-label small opacity-75">Vencimento - De</label>
-                  <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-2">
-                  <label className="form-label small opacity-75">Vencimento - At?</label>
-                  <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
+                  <input className="form-control" placeholder={'Buscar por login, nome ou agência...'} value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
                 <div className="col-6 col-lg-3">
                   <label className="form-label small opacity-75">Grupos</label>
@@ -551,7 +561,7 @@ export default function AdminControlePlanejamento() {
                     {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
                   </select>
                 </div>
-                <div className="col-6 col-lg-3">
+                <div className="col-6 col-lg-4">
                   <label className="form-label small opacity-75">Status</label>
                   <select className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
                     <option value="">Todos os Status</option>
@@ -559,7 +569,23 @@ export default function AdminControlePlanejamento() {
                     <option>Inativo</option>
                   </select>
                 </div>
-                <div className="col-12 col-lg-6 d-flex gap-2 justify-content-end flex-wrap">
+                <div className="col-6 col-lg-3">
+                  <label className="form-label small opacity-75">{'Renovação - De'}</label>
+                  <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-3">
+                  <label className="form-label small opacity-75">{'Renovação - Até'}</label>
+                  <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-3">
+                  <label className="form-label small opacity-75">Vencimento - De</label>
+                  <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
+                </div>
+                <div className="col-6 col-lg-3">
+                  <label className="form-label small opacity-75">{'Vencimento - Até'}</label>
+                  <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
+                </div>
+                <div className="col-12 d-flex gap-2 justify-content-end flex-wrap pt-2">
                   <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
                     <Fi.FiX className="me-1" />
                     <span className="d-none d-sm-inline">Limpar</span>
@@ -587,7 +613,7 @@ export default function AdminControlePlanejamento() {
           </div>
         </div>
 
-        <div className="small opacity-75 mb-2">Mostrando {filtered.length} de {items.length} usuários</div>
+        <div className="small opacity-75 mb-2">{`Mostrando ${filtered.length} de ${items.length} usuários`}</div>
 
         <div className="neo-card neo-lg p-0">
           {isLoading && (<div className="p-4 text-center opacity-75">Carregando...</div>)}
