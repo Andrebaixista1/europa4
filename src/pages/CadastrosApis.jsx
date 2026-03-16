@@ -1159,8 +1159,8 @@ export default function CadastrosApis() {
   }
 
   const openIn100Modal = () => {
-    if (!canCreateLogins) {
-      notify.warn('Somente Master, Administrador e Supervisor podem cadastrar logins das APIs.')
+    if (!canEditAccess) {
+      notify.warn('Somente Master pode cadastrar saldo do QualiBanking.')
       return
     }
     resetIn100Modal()
@@ -1669,8 +1669,8 @@ export default function CadastrosApis() {
 
   const handleSubmitIn100 = async (event) => {
     event.preventDefault()
-    if (!canCreateLogins) {
-      notify.warn('Somente Master, Administrador e Supervisor podem cadastrar logins IN100.')
+    if (!canEditAccess) {
+      notify.warn('Somente Master pode cadastrar saldo do QualiBanking.')
       return
     }
     if (!in100Total || toNumber(in100Total) <= 0) {
@@ -1953,7 +1953,7 @@ export default function CadastrosApis() {
             onToggleTeam={(rowId, teamId, checked) => toggleTeamAccess('in100', rowId, teamId, checked)}
             currentTeamId={equipeId}
             canEditAccess={canEditAccess}
-            canAdd={canCreateLogins}
+            canAdd={canEditAccess}
           />
           <ProductCard
             title="V8 Bank"
