@@ -24,7 +24,6 @@ export const PAGE_ACCESS_ORDER = [
   'consultas_clientes',
   'consultas_online',
   'cliente_argus',
-  'historico_consultas',
   'usuarios',
   'equipes',
   'permissoes',
@@ -59,10 +58,6 @@ export const PAGE_ACCESS_DEFINITIONS = Object.freeze({
   cliente_argus: createDefinition('cliente_argus', '/consulta/cliente-argus', [
     'cliente.argus',
     'cliente_argus.view',
-  ]),
-  historico_consultas: createDefinition('historico_consultas', '/consultas/historico', [
-    'historico.consultas',
-    'historico_consultas.view',
   ]),
   recargas: createDefinition('recargas', '/recargas', ['recargas.view']),
   controle_planejamento: createDefinition('controle_planejamento', '/admin/controle-planejamento', [

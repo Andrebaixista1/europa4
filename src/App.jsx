@@ -10,7 +10,6 @@ import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import Relatorios from './pages/Relatorios.jsx'
 import Backups from './pages/Backups.jsx'
-import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import CadastrosApis from './pages/CadastrosApis.jsx'
 import Permissoes from './pages/Permissoes.jsx'
 import Teste from './pages/Teste.jsx'
@@ -169,14 +168,6 @@ function App() {
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
               <ClienteArgus />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/historico"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
-              <HistoricoConsultas />
             </ProtectedRoute>
           }
         />

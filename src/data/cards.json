@@ -11,12 +11,6 @@
       "description": "Consulte clientes online em integracoes e bancos via API.",
       "icon": "FiSearch",
       "route": "/consultas/online"
-    },
-    {
-      "title": "Historico de Consultas",
-      "description": "Acesse o historico de consultas realizadas.",
-      "icon": "FiClock",
-      "route": "/consultas/historico"
     }
   ],
   "Disparos": [

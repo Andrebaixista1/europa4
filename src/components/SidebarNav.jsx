@@ -33,7 +33,6 @@ const buildMenu = (user) => {
     { pageKey: 'consultas_clientes', label: 'Consulta Offline', to: '/consultas/clientes' },
     { pageKey: 'consultas_online', label: 'Consulta Online', to: '/consultas/online' },
     { pageKey: 'cliente_argus', label: 'Cliente Argus', to: '/consulta/cliente-argus' },
-    { pageKey: 'historico_consultas', label: 'Hist\u00f3rico de Consultas', to: '/consultas/historico' },
   ])
   if (consultaChildren.length > 0) {
     items.push({ label: 'Consultas', icon: 'FiSearch', children: consultaChildren })
