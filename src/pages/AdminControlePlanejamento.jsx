@@ -585,28 +585,30 @@ export default function AdminControlePlanejamento() {
                   <label className="form-label small opacity-75">{'Vencimento - Até'}</label>
                   <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
                 </div>
-                <div className="col-12 d-flex gap-2 justify-content-end flex-wrap pt-2">
-                  <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
-                    <Fi.FiX className="me-1" />
-                    <span className="d-none d-sm-inline">Limpar</span>
-                  </button>
-                  <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
-                    <Fi.FiRefreshCcw className="me-1" />
-                    <span className="d-none d-sm-inline">Atualizar</span>
-                  </button>
-                  <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
-                    <Fi.FiDownload className="me-1" />
-                    <span className="d-none d-sm-inline">Download</span>
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-ghost-primary btn-sm"
-                    disabled={!isMaster}
-                    title={isMaster ? 'Adicionar' : 'Apenas Master'}
-                    onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
-                  >
-                    <Fi.FiPlus className="me-1" />
-                    <span className="d-none d-sm-inline">Adicionar</span>
-                  </button>
+                <div className="col-12">
+                  <div className="d-flex gap-2 justify-content-end flex-wrap pt-3 mt-2 border-top" style={{ borderColor: 'var(--border)' }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
+                      <Fi.FiX className="me-1" />
+                      <span className="d-none d-sm-inline">Limpar</span>
+                    </button>
+                    <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
+                      <Fi.FiRefreshCcw className="me-1" />
+                      <span className="d-none d-sm-inline">Atualizar</span>
+                    </button>
+                    <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
+                      <Fi.FiDownload className="me-1" />
+                      <span className="d-none d-sm-inline">Download</span>
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-ghost-primary btn-sm"
+                      disabled={!isMaster}
+                      title={isMaster ? 'Adicionar' : 'Apenas Master'}
+                      onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
+                    >
+                      <Fi.FiPlus className="me-1" />
+                      <span className="d-none d-sm-inline">Adicionar</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
