@@ -2,15 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext.jsx'
-import { Roles, normalizeRole } from '../utils/roles.js'
 import { useSidebar } from '../context/SidebarContext.jsx'
-import {
-  canAccessConsultaClientes,
-  canAccessConsultaPresenca,
-  canAccessConsultasHandMais,
-  canAccessConsultasPrata,
-  canAccessConsultasV8
-} from '../utils/access.js'
+import { canAccessPage } from '../utils/pageAccess.js'
 
 function Icon({ name, size = 20 }) {
   const Comp = Fi[name] || Fi.FiSquare
@@ -27,6 +20,42 @@ function SubItemIcon({ child }) {
   return null
 }
 
+const buildMenu = (user) => {
+  const isAllowed = (pageKey) => canAccessPage(user, pageKey)
+  const filterAllowed = (items) => items.filter((item) => isAllowed(item.pageKey))
+  const items = []
+
+  if (isAllowed('dashboard')) {
+    items.push({ label: 'Vis\u00e3o Geral', icon: 'FiHome', to: '/dashboard' })
+  }
+
+  const consultaChildren = filterAllowed([
+    { pageKey: 'consultas_clientes', label: 'Consulta Offline', to: '/consultas/clientes' },
+    { pageKey: 'consultas_online', label: 'Consulta Online', to: '/consultas/online' },
+    { pageKey: 'consultas_in100', label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
+    { pageKey: 'cliente_argus', label: 'Cliente Argus', to: '/consulta/cliente-argus' },
+    { pageKey: 'historico_consultas', label: 'Hist\u00f3rico de Consultas', to: '/consultas/historico' },
+    { pageKey: 'consultas_presenca', label: 'Consulta Presen\u00e7a', to: '/consultas/presenca' },
+    { pageKey: 'consultas_handmais', label: 'Consulta Hand+', to: '/consultas/handmais' },
+    { pageKey: 'consultas_prata', label: 'Consulta Prata', to: '/consultas/prata' },
+    { pageKey: 'consultas_v8', label: 'Consultas V8', to: '/consultas/v8' },
+  ])
+  if (consultaChildren.length > 0) {
+    items.push({ label: 'Consultas', icon: 'FiSearch', children: consultaChildren })
+  }
+
+  const gestaoChildren = filterAllowed([
+    { pageKey: 'recargas', label: 'Gest\u00e3o de Recargas', to: '/recargas' },
+    { pageKey: 'controle_planejamento', label: 'Controle Planejamento', to: '/admin/controle-planejamento' },
+    { pageKey: 'extracoes', label: 'Extra\u00e7\u00f5es', to: '/admin/relatorios' },
+  ])
+  if (gestaoChildren.length > 0) {
+    items.push({ label: 'Gest\u00e3o', icon: 'FiBriefcase', children: gestaoChildren })
+  }
+
+  return items
+}
+
 export default function SidebarNav() {
   const { user } = useAuth()
   const location = useLocation()
@@ -35,15 +64,6 @@ export default function SidebarNav() {
   const [hoveredMenu, setHoveredMenu] = useState(null)
   const [showToggleHint, setShowToggleHint] = useState(false)
   const { isOpen: mobileOpen, close: closeSidebar } = useSidebar()
-  const role = user?.role
-  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
-  const level = Number(user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia ?? null)
-  const normalizedRole = normalizeRole(role, level)
-  const allowConsultaClientes = canAccessConsultaClientes(user)
-  const allowConsultasV8 = canAccessConsultasV8(user)
-  const allowConsultasPrata = canAccessConsultasPrata(user)
-  const allowConsultasHandMais = canAccessConsultasHandMais(user)
-  const allowConsultaPresenca = canAccessConsultaPresenca(user)
   const prevPath = useRef(location.pathname)
   const hoverCloseTimerRef = useRef(null)
   const hintTimerRef = useRef(null)
@@ -62,65 +82,7 @@ export default function SidebarNav() {
     }
   }
 
-  const menu = useMemo(() => {
-    const isMaster = normalizedRole === Roles.Master
-    const isAdmin = normalizedRole === Roles.Administrador
-    const isSupervisor = normalizedRole === Roles.Supervisor
-
-    const items = [
-      { label: 'Visão Geral', icon: 'FiHome', to: '/dashboard' }
-    ]
-
-    items.push({
-      label: 'Consultas',
-      icon: 'FiSearch',
-      children: [
-        ...(allowConsultaClientes ? [{ label: 'Consulta Clientes', to: '/consultas/clientes' }] : []),
-        { label: 'Consulta Individual (IN100)', to: '/consultas/in100' },
-        { label: 'Cliente Argus', to: '/consulta/cliente-argus' },
-        { label: 'Histórico de Consultas', to: '/consultas/historico' },
-        ...(allowConsultaPresenca ? [{ label: 'Consulta Presença', to: '/consultas/presenca' }] : []),
-        ...(allowConsultasHandMais ? [{ label: 'Consulta Hand+', to: '/consultas/handmais' }] : []),
-        ...(allowConsultasPrata ? [{ label: 'Consulta Prata', to: '/consultas/prata' }] : []),
-        ...(allowConsultasV8 ? [{ label: 'Consultas V8', to: '/consultas/v8' }] : [])
-      ]
-    })
-
-    if (isMaster) {
-      items.push({
-        label: 'Gestão',
-        icon: 'FiBriefcase',
-        children: [
-          { label: 'Gestão de Recargas', to: '/recargas' },
-          { label: 'Controle Planejamento', to: '/admin/controle-planejamento' },
-          { label: 'Relatórios', to: '/admin/relatorios' }
-        ]
-      })
-    }
-
-    if (isMaster || isAdmin || isSupervisor) {
-      items.push({
-        label: 'Configurações',
-        icon: 'FiSettings',
-        children: [
-          ...(loggedUserId === 1
-              ? [
-                { label: 'Usuários', to: '/usuarios' },
-                { label: 'Equipes', to: '/equipes' },
-                { label: 'Usuários 2', to: '/admin/usuarios-cadastro' },
-                { label: 'Equipes e Permissões', to: '/admin/permissoes' }
-              ]
-            : [
-                { label: 'Usuários', to: '/usuarios' },
-                { label: 'Equipes', to: '/equipes' }
-              ]),
-          ...(isMaster ? [{ label: 'Backups', to: '/admin/backups' }] : [])
-        ]
-      })
-    }
-
-    return items
-  }, [normalizedRole, loggedUserId, allowConsultaClientes, allowConsultasV8, allowConsultasPrata, allowConsultasHandMais, allowConsultaPresenca])
+  const menu = useMemo(() => buildMenu(user), [user])
 
   const isActive = (path) => {
     if (!path) return false
@@ -236,10 +198,11 @@ export default function SidebarNav() {
 
         <div className="dash-menu">
           {menu.map((item) => {
-            const active = isActive(item.to) || item.children?.some((c) => isActive(c.to))
+            const active = isActive(item.to) || item.children?.some((child) => isActive(child.to))
             const isOpen = openMenu === item.label
             const showInlineSubmenu = Boolean(item.children && !isCollapsed && isOpen)
             const showFlyoutSubmenu = Boolean(item.children && isCollapsed && !mobileOpen && hoveredMenu === item.label)
+
             return (
               <div
                 key={item.label}
@@ -320,7 +283,3 @@ export default function SidebarNav() {
     </>
   )
 }
-
-
-
-

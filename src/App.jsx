@@ -1,10 +1,9 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Login from './pages/Login2.jsx'
 import Dashboard from './pages/Dashboard.jsx'
-import SupervisionPanel from './pages/SupervisionPanel.jsx'
-import OperationPanel from './pages/OperationPanel.jsx'
 import ConsultaIN100 from './pages/ConsultaIN100.jsx'
 import ConsultaClientes from './pages/ConsultaClientes.jsx'
+import ConsultaOnline from './pages/ConsultaOnline.jsx'
 import ClienteArgus from './pages/ClienteArgus.jsx'
 import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
@@ -12,27 +11,23 @@ import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import Relatorios from './pages/Relatorios.jsx'
 import Backups from './pages/Backups.jsx'
-import Permissoes from './pages/Permissoes.jsx'
-import GeradorSites from './pages/GeradorSites.jsx'
-import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
-import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
-import FilaMilvus from './pages/FilaMilvus.jsx'
-import Status from './pages/Status.jsx'
 import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
 import ConsultasV8 from './pages/ConsultasV8.jsx'
 import ConsultaPrata from './pages/ConsultaPrata.jsx'
 import ConsultasHandMais from './pages/ConsultasHandMais.jsx'
 import ConsultaPresenca from './pages/ConsultaPresenca.jsx'
-import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
-import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
-import CampanhasZap from './pages/CampanhasZap.jsx'
-import AdminUsuariosCadastro from './pages/AdminUsuariosCadastro.jsx'
+import CadastrosApis from './pages/CadastrosApis.jsx'
+import Permissoes from './pages/Permissoes.jsx'
+import Teste from './pages/Teste.jsx'
+import Perfil from './pages/Perfil.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 import { SidebarProvider } from './context/SidebarContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
+import { getAccessibleHomeRoute } from './utils/pageAccess.js'
 import {
   canAccessConsultaClientes,
+  canAccessConsultaOnline,
   canAccessConsultaPresenca,
   canAccessConsultasHandMais,
   canAccessConsultasPrata,
@@ -79,28 +74,24 @@ function ConsultaClientesRoute() {
   return <ConsultaClientes />
 }
 
-function PermissoesRoute() {
+function ConsultaOnlineRoute() {
   const { user } = useAuth()
-  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
-  if (loggedUserId !== 1) {
+  if (!canAccessConsultaOnline(user)) {
     return <Navigate to="/dashboard" replace />
   }
-  return <Permissoes />
+  return <ConsultaOnline />
 }
 
-function UsuariosCadastroRoute() {
-  const { user } = useAuth()
-  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
-  if (loggedUserId !== 1) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <AdminUsuariosCadastro />
+function CadastrosApisRoute() {
+  return <CadastrosApis />
 }
 
 function App() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const location = useLocation()
   const hideSidebar = location.pathname === '/' || location.pathname.startsWith('/login')
+  const authenticatedHomeRoute = getAccessibleHomeRoute(user) || '/dashboard'
+  const defaultRedirect = isAuthenticated ? authenticatedHomeRoute : '/login'
 
   return (
     <SidebarProvider>
@@ -108,7 +99,7 @@ function App() {
         {!hideSidebar && <SidebarNav />}
         <div className={`app-main ${hideSidebar ? '' : 'with-sidebar'}`}>
           <Routes>
-          <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+          <Route path="/" element={<Navigate to={defaultRedirect} replace />} />
           <Route path="/login" element={<Login />} />
           <Route
             path="/dashboard"
@@ -118,15 +109,6 @@ function App() {
               </ProtectedRoute>
             }
           />
-        {/* <Route
-        path="/status/whatsapp"
-        element={
-          <ProtectedRoute teamIds={[1014]}>
-            <StatusWhatsapp />
-          </ProtectedRoute>
-        }
-      /> */}
-        {/* <Route path="/status" element={<Status />} /> */}
         <Route
           path="/recargas"
           element={
@@ -160,50 +142,10 @@ function App() {
           }
         />
         <Route
-          path="/admin/permissoes"
+          path="/admin/cadastros-apis"
           element={
-            <ProtectedRoute>
-              <PermissoesRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/usuarios-cadastro"
-          element={
-            <ProtectedRoute>
-              <UsuariosCadastroRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/gerador-sites"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador']}>
-              <GeradorSites />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/status-bm"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador']}>
-              <GeradorSitesV3 />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/usuarios-zapresponder"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador']}>
-              <UsuariosZapresponder />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/bm-controles"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador']}>
-              <UsuariosBmControles />
+            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor']}>
+              <CadastrosApisRoute />
             </ProtectedRoute>
           }
         />
@@ -224,26 +166,26 @@ function App() {
           }
         />
         <Route
-          path="/supervisao"
+          path="/admin/permissoes"
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor']}>
-              <SupervisionPanel />
+              <Permissoes />
             </ProtectedRoute>
           }
         />
-        {/* <Route
-        path="/fila-milvus"
-        element={
-          <ProtectedRoute roles={["Master", "Administrador", "Supervisor"]}>
-            <FilaMilvus />
-          </ProtectedRoute>
-        }
-      /> */}
         <Route
-          path="/operacao"
+          path="/admin/teste"
           element={
-            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
-              <OperationPanel />
+            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor']}>
+              <Teste />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/perfil"
+          element={
+            <ProtectedRoute pageKey="perfil">
+              <Perfil />
             </ProtectedRoute>
           }
         />
@@ -252,6 +194,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ConsultaClientesRoute />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/consultas/online"
+          element={
+            <ProtectedRoute>
+              <ConsultaOnlineRoute />
             </ProtectedRoute>
           }
         />
@@ -311,15 +261,7 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/disparador/campanhas-zap"
-          element={
-            <ProtectedRoute roles={['Master']}>
-              <CampanhasZap />
-            </ProtectedRoute>
-          }
-        />
-            <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+            <Route path="*" element={<Navigate to={defaultRedirect} replace />} />
           </Routes>
         </div>
       </div>
