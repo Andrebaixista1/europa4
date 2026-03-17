@@ -513,109 +513,90 @@ export default function AdminControlePlanejamento() {
           </div>
         </div>
 
+        <div className="row g-3 mb-4">
+          <div className="col-12 col-md-4">
+            <StatCard title="Total" value={stats.total} icon={Fi.FiUsers} accent="primary" />
+          </div>
+          <div className="col-12 col-md-4">
+            <StatCard title="Ativos" value={stats.ativos} icon={Fi.FiUserCheck} accent="success" />
+          </div>
+          <div className="col-12 col-md-4">
+            <StatCard title="Inativos" value={stats.inativos} icon={Fi.FiUserX} accent="danger" />
+          </div>
+        </div>
+
         <div className="neo-card neo-lg p-4 mb-3">
-          <div className="row g-3 align-items-start">
-            <div className="col-12 col-xl-3">
-              <div className="small opacity-75 text-uppercase mb-2">Resumo</div>
-              <div className="d-grid gap-2">
-                <div className="d-flex align-items-center justify-content-between border rounded-3 px-3 py-3" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)' }}>
-                  <div>
-                    <div className="small opacity-75">Total</div>
-                    <div className="fs-2 fw-bold lh-1">{stats.total}</div>
-                  </div>
-                  <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
-                    <Fi.FiUsers size={24} />
-                  </div>
-                </div>
-                <div className="d-flex align-items-center justify-content-between border rounded-3 px-3 py-3" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)' }}>
-                  <div>
-                    <div className="small opacity-75">Ativos</div>
-                    <div className="fs-2 fw-bold lh-1">{stats.ativos}</div>
-                  </div>
-                  <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
-                    <Fi.FiUserCheck size={24} />
-                  </div>
-                </div>
-                <div className="d-flex align-items-center justify-content-between border rounded-3 px-3 py-3" style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'var(--border)' }}>
-                  <div>
-                    <div className="small opacity-75">Inativos</div>
-                    <div className="fs-2 fw-bold lh-1">{stats.inativos}</div>
-                  </div>
-                  <div className="icon-wrap d-inline-flex align-items-center justify-content-center rounded-3" aria-hidden>
-                    <Fi.FiUserX size={24} />
-                  </div>
-                </div>
-              </div>
+          <div className="d-flex align-items-start justify-content-between gap-3 mb-3 flex-wrap">
+            <div>
+              <div className="small opacity-75 text-uppercase">Filtros</div>
+              <div className="small opacity-75">Refine por login, grupo, status e datas.</div>
             </div>
-            <div className="col-12 col-xl-9">
-              <div className="small opacity-75 text-uppercase mb-2">Filtros</div>
-              <div className="row g-2 align-items-end">
-                <div className="col-12 col-lg-5">
-                  <label className="form-label small opacity-75">Buscar</label>
-                  <input className="form-control" placeholder={'Buscar por login, nome ou agência...'} value={search} onChange={e => setSearch(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-3">
-                  <label className="form-label small opacity-75">Grupos</label>
-                  <select className="form-select" value={grupo} onChange={e => setGrupo(e.target.value)}>
-                    <option value="">Todos os Grupos</option>
-                    {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
-                  </select>
-                </div>
-                <div className="col-6 col-lg-4">
-                  <label className="form-label small opacity-75">Status</label>
-                  <select className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
-                    <option value="">Todos os Status</option>
-                    <option>Ativo</option>
-                    <option>Inativo</option>
-                  </select>
-                </div>
-                <div className="col-6 col-lg-3">
-                  <label className="form-label small opacity-75">{'Renovação - De'}</label>
-                  <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-3">
-                  <label className="form-label small opacity-75">{'Renovação - Até'}</label>
-                  <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-3">
-                  <label className="form-label small opacity-75">Vencimento - De</label>
-                  <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
-                </div>
-                <div className="col-6 col-lg-3">
-                  <label className="form-label small opacity-75">{'Vencimento - Até'}</label>
-                  <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
-                </div>
-                <div className="col-12">
-                  <div className="d-flex gap-2 justify-content-end flex-wrap pt-3 mt-2 border-top" style={{ borderColor: 'var(--border)' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
-                      <Fi.FiX className="me-1" />
-                      <span className="d-none d-sm-inline">Limpar</span>
-                    </button>
-                    <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
-                      <Fi.FiRefreshCcw className="me-1" />
-                      <span className="d-none d-sm-inline">Atualizar</span>
-                    </button>
-                    <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
-                      <Fi.FiDownload className="me-1" />
-                      <span className="d-none d-sm-inline">Download</span>
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-ghost-primary btn-sm"
-                      disabled={!isMaster}
-                      title={isMaster ? 'Adicionar' : 'Apenas Master'}
-                      onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
-                    >
-                      <Fi.FiPlus className="me-1" />
-                      <span className="d-none d-sm-inline">Adicionar</span>
-                    </button>
-                  </div>
-                </div>
+            <div className="small opacity-75 text-end">{`Mostrando ${filtered.length} de ${items.length} usuários`}</div>
+          </div>
+
+          <div className="row g-3 align-items-end">
+            <div className="col-12 col-lg-4">
+              <label className="form-label small opacity-75">Buscar</label>
+              <input className="form-control" placeholder="Buscar por login, nome ou agência..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label small opacity-75">Grupos</label>
+              <select className="form-select" value={grupo} onChange={e => setGrupo(e.target.value)}>
+                <option value="">Todos os Grupos</option>
+                {grupos.map(g => (<option key={g} value={g}>{g}</option>))}
+              </select>
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label small opacity-75">Status</label>
+              <select className="form-select" value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="">Todos os Status</option>
+                <option>Ativo</option>
+                <option>Inativo</option>
+              </select>
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label small opacity-75">Renovação - De</label>
+              <input type="date" className="form-control" value={renovacaoDe} onChange={e => setRenovacaoDe(e.target.value)} />
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label small opacity-75">Renovação - Até</label>
+              <input type="date" className="form-control" value={renovacaoAte} onChange={e => setRenovacaoAte(e.target.value)} />
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label small opacity-75">Vencimento - De</label>
+              <input type="date" className="form-control" value={vencimentoDe} onChange={e => setVencimentoDe(e.target.value)} />
+            </div>
+            <div className="col-6 col-lg-2">
+              <label className="form-label small opacity-75">Vencimento - Até</label>
+              <input type="date" className="form-control" value={vencimentoAte} onChange={e => setVencimentoAte(e.target.value)} />
+            </div>
+            <div className="col-12">
+              <div className="d-flex flex-wrap justify-content-end gap-2 mt-2">
+                <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setGrupo(''); setStatus(''); setRenovacaoDe(''); setRenovacaoAte(''); setVencimentoDe(''); setVencimentoAte(''); }}>
+                  <Fi.FiX className="me-1" />
+                  <span className="d-none d-sm-inline">Limpar</span>
+                </button>
+                <button className="btn btn-ghost btn-ghost-primary btn-sm" onClick={load} disabled={isLoading}>
+                  <Fi.FiRefreshCcw className="me-1" />
+                  <span className="d-none d-sm-inline">Atualizar</span>
+                </button>
+                <button className="btn btn-ghost btn-ghost-info btn-sm" onClick={downloadCsv} disabled={isLoading}>
+                  <Fi.FiDownload className="me-1" />
+                  <span className="d-none d-sm-inline">Download</span>
+                </button>
+                <button
+                  className="btn btn-ghost btn-ghost-primary btn-sm"
+                  disabled={!isMaster}
+                  title={isMaster ? 'Adicionar' : 'Apenas Master'}
+                  onClick={() => { if (isMaster) { handleOpenAdd() } else { notify.warn('Apenas Master pode adicionar') } }}
+                >
+                  <Fi.FiPlus className="me-1" />
+                  <span className="d-none d-sm-inline">Adicionar</span>
+                </button>
               </div>
             </div>
           </div>
         </div>
-
-        <div className="small opacity-75 mb-2">{`Mostrando ${filtered.length} de ${items.length} usuários`}</div>
 
         <div className="neo-card neo-lg p-0">
           {isLoading && (<div className="p-4 text-center opacity-75">Carregando...</div>)}
@@ -676,7 +657,7 @@ export default function AdminControlePlanejamento() {
                     <th>DATA RENOVACAO</th>
                     <th>DATA VENCIMENTO</th>
                     <th>STATUS</th>
-                    <th>AÇÕES</th>
+                    <th>{'AÇÕES'}</th>
                   </tr>
                 </thead>
                 <tbody>

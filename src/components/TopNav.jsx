@@ -1,12 +1,26 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import NovidadesModal, { novidadesList } from './NovidadesModal.jsx'
 import { notify } from '../utils/notify.js'
-import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiActivity } from 'react-icons/fi'
+import {
+  FiStar,
+  FiKey,
+  FiEye,
+  FiEyeOff,
+  FiChevronDown,
+  FiChevronRight,
+  FiUser,
+  FiSettings,
+  FiLogOut
+} from 'react-icons/fi'
 import { useSidebar } from '../context/SidebarContext.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
+import { Roles, normalizeRole } from '../utils/roles.js'
+
+const API_BASE = 'http://85.31.61.242:8011/api'
+import { canAccessPage } from '../utils/pageAccess.js'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -23,6 +37,40 @@ export default function TopNav() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [isConfigMenuOpen, setIsConfigMenuOpen] = useState(false)
+  const userMenuRef = useRef(null)
+  const normalizedRole = useMemo(
+    () => normalizeRole(user?.role, user?.level ?? user?.nivel_hierarquia ?? user?.NivelHierarquia),
+    [user?.role, user?.level, user?.nivel_hierarquia, user?.NivelHierarquia]
+  )
+  const configLinks = useMemo(() => {
+    const canSeeConfig = [Roles.Master, Roles.Administrador, Roles.Supervisor].includes(normalizedRole)
+    if (!canSeeConfig) return []
+    const links = [
+      { label: 'Usuários', to: '/usuarios' },
+      { label: 'Equipes', to: '/equipes' },
+      { label: 'Permissões', to: '/admin/permissoes' },
+      { label: 'Teste', to: '/admin/teste' },
+      { label: "Cadastros API's", to: '/admin/cadastros-apis' }
+    ]
+    if (normalizedRole === Roles.Master) {
+      links.push({ label: 'Backups', to: '/admin/backups' })
+    }
+    return links
+  }, [normalizedRole])
+  const accessibleConfigLinks = useMemo(() => {
+    const links = [
+      { pageKey: 'usuarios', label: 'Usu\u00e1rios', to: '/usuarios' },
+      { pageKey: 'equipes', label: 'Equipes', to: '/equipes' },
+      { pageKey: 'permissoes', label: 'Permiss\u00f5es', to: '/admin/permissoes' },
+      { pageKey: 'cadastros_apis', label: "Cadastros API's", to: '/admin/cadastros-apis' },
+      { pageKey: 'backups', label: 'Backups', to: '/admin/backups' },
+      { pageKey: 'teste', label: 'Teste', to: '/admin/teste' }
+    ]
+    return links.filter((item) => canAccessPage(user, item.pageKey))
+  }, [user])
+  const canAccessPerfilPage = useMemo(() => canAccessPage(user, 'perfil'), [user])
   const hasTodayNovidade = useMemo(() => {
     if (!user?.id) return false
     const today = new Date()
@@ -79,22 +127,59 @@ export default function TopNav() {
   // }, [])
 
 
-  // Abre o modal de novidades automaticamente após o login (quando o user muda de null para objeto)
+  // Abre o modal de novidades automaticamente apos o login (quando o user muda de null para objeto)
   useEffect(() => {
     if (user && isDashboard) {
       const loginTime = user.loginTime
       const now = new Date().toISOString()
-      // Se o login foi feito há menos de 2 segundos, mostra o modal
+      // Se o login foi feito ha menos de 2 segundos, mostra o modal
       if (loginTime && (new Date(now) - new Date(loginTime)) < 2000) {
         setIsNovidadesModalOpen(true)
       }
     }
   }, [user, isDashboard])
 
+  useEffect(() => {
+    setIsUserMenuOpen(false)
+    setIsConfigMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!isUserMenuOpen) return
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setIsUserMenuOpen(false)
+        setIsConfigMenuOpen(false)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsUserMenuOpen(false)
+        setIsConfigMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isUserMenuOpen])
+
   const shouldPulse = hasTodayNovidade && !isNovidadesModalOpen
 
   const handleNovidadesOpen = () => {
     setIsNovidadesModalOpen(true)
+  }
+
+  const handleLogout = () => {
+    setIsUserMenuOpen(false)
+    setIsConfigMenuOpen(false)
+    loader.showFor(400)
+    logout()
+    notify.info('Sessão encerrada')
   }
 
   const resetPasswordState = () => {
@@ -144,35 +229,31 @@ export default function TopNav() {
 
     try {
       setChangingPassword(true)
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-pass', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/passuser`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           id: user.id,
+          requester_id: user.id,
+          requester_role: user.role,
+          requester_equipe_id: user.equipe_id ?? user.team_id ?? user.equipeId ?? user.teamId ?? null,
           senha_nova: senhaNova,
           senha_atual: senhaAtual,
           confirmacao
         })
       })
 
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
+      const payload = await response.json().catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        const message = payload?.message || `Erro ${response.status}`
         throw new Error(message)
       }
 
       let successMessage = 'Senha atualizada com sucesso.'
-      if (rawBody) {
-        try {
-          const parsed = JSON.parse(rawBody)
-          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
-          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
-        } catch (_) {
-          if (rawBody.trim()) successMessage = rawBody.trim()
-        }
-      }
+      const apiMessage = payload?.mensagem ?? payload?.message ?? payload?.status
+      if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
 
       notify.success(successMessage)
       closePasswordModal()
@@ -195,7 +276,7 @@ export default function TopNav() {
               </span>
             </Link>
 
-            {/* Botão Novidades ao lado da logo */}
+            {/* Botao Novidades ao lado da logo */}
             <button
               onClick={handleNovidadesOpen}
               className={`btn btn-novidades d-flex align-items-center gap-2 p-2 rounded-2${shouldPulse ? ' is-pulsing' : ''}`}
@@ -227,12 +308,11 @@ export default function TopNav() {
           </button>
           <div className="collapse navbar-collapse" id="navbarsExample">
             <ul className="navbar-nav me-auto mb-2 mb-lg-0">
-              {/* ícones extras removidos */}
+              {/* icones extras removidos */}
             </ul>
             <div className="d-flex align-items-center gap-2">
               {isAuthenticated ? (
                 <>
-                  <span className="text-light small opacity-75">{user?.name}</span>
                   <button
                     type="button"
                     className="btn btn-outline-warning btn-sm"
@@ -244,16 +324,86 @@ export default function TopNav() {
                     <FiKey />
                   </button>
                   <ThemeToggle />
-                  <button
-                    className="btn btn-outline-light btn-sm"
-                    onClick={() => {
-                      loader.showFor(400)
-                      logout()
-                      notify.info('Sessao encerrada')
-                    }}
-                  >
-                    Sair
-                  </button>
+                  <div className="topnav-user-menu" ref={userMenuRef}>
+                    <button
+                      type="button"
+                      className={`topnav-user-trigger ${isUserMenuOpen ? 'open' : ''}`}
+                      onClick={() => {
+                        setIsUserMenuOpen((prev) => !prev)
+                        if (isUserMenuOpen || isConfigMenuOpen) setIsConfigMenuOpen(false)
+                      }}
+                      aria-expanded={isUserMenuOpen}
+                      aria-haspopup="true"
+                    >
+                      <span>{user?.name || user?.nome || user?.login || 'Conta'}</span>
+                      <FiChevronDown size={14} className="topnav-user-trigger-chevron" />
+                    </button>
+
+                    {isUserMenuOpen && (
+                      <div className="topnav-user-dropdown" role="menu">
+                        {canAccessPerfilPage && (
+                          <Link
+                            to="/perfil"
+                            className="topnav-user-dropdown-item topnav-user-dropdown-direct"
+                            onClick={() => {
+                              setIsUserMenuOpen(false)
+                              setIsConfigMenuOpen(false)
+                            }}
+                          >
+                            <span className="d-inline-flex align-items-center gap-2">
+                              <FiUser size={15} />
+                              Perfil
+                            </span>
+                          </Link>
+                        )}
+
+                        {accessibleConfigLinks.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              className={`topnav-user-dropdown-item topnav-user-dropdown-toggle ${isConfigMenuOpen ? 'open' : ''}`}
+                              onClick={() => setIsConfigMenuOpen((prev) => !prev)}
+                            >
+                              <span className="d-inline-flex align-items-center gap-2">
+                                <FiSettings size={15} />
+                                Configurações
+                              </span>
+                              <FiChevronRight size={14} className="topnav-user-dropdown-caret" />
+                            </button>
+
+                            {isConfigMenuOpen && (
+                              <div className="topnav-user-submenu">
+                                {accessibleConfigLinks.map((item) => (
+                                  <Link
+                                    key={item.to}
+                                    to={item.to}
+                                    className="topnav-user-submenu-item"
+                                    onClick={() => {
+                                      setIsUserMenuOpen(false)
+                                      setIsConfigMenuOpen(false)
+                                    }}
+                                  >
+                                    {item.label}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="topnav-user-dropdown-divider" />
+                          </>
+                        )}
+
+                        <button
+                          type="button"
+                          className="topnav-user-dropdown-item topnav-user-dropdown-danger"
+                          onClick={handleLogout}
+                        >
+                          <FiLogOut size={15} />
+                          <span>Sair</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 !isDashboard && (
@@ -352,7 +502,7 @@ export default function TopNav() {
   )
 }
 
-// suave animação da bolinha do Status no topo
+// suave animacao da bolinha do Status no topo
 if (typeof document !== 'undefined') {
   const __navDotStyleId = 'nav-status-dot-anim'
   if (!document.getElementById(__navDotStyleId)) {
@@ -362,3 +512,5 @@ if (typeof document !== 'undefined') {
     document.head && document.head.appendChild(__s)
   }
 }
+
+

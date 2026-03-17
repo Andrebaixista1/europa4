@@ -6,7 +6,10 @@ import { Link } from 'react-router-dom'
 import { notify } from '../utils/notify.js'
 import { useAuth } from '../context/AuthContext.jsx'
 
-const endpoint = 'https://n8n.apivieiracred.store/webhook/get-saldos'
+const API_BASE = 'http://85.31.61.242:8011/api'
+const SALDOS_ENDPOINT = `${API_BASE}/dashboard/saldos/in100?all=1`
+const EQUIPES_ENDPOINT = `${API_BASE}/equipes`
+const RECARGA_ENDPOINT = `${API_BASE}/recargas/in100`
 
 const ROWS_PER_PAGE = 100
 
@@ -45,6 +48,7 @@ export default function Recargas() {
   const [selectedTeamKey, setSelectedTeamKey] = useState('')
   const [addAmount, setAddAmount] = useState('200')
   const [currentPage, setCurrentPage] = useState(1)
+  const [equipes, setEquipes] = useState([])
 
   const { user } = useAuth()
   const isMaster = (user?.role || '').toLowerCase() === 'master'
@@ -56,9 +60,10 @@ export default function Recargas() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await fetch(endpoint, { cache: 'no-store' })
+      const res = await fetch(SALDOS_ENDPOINT, { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const payload = await res.json()
+      const data = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : [])
       if (!Array.isArray(data)) throw new Error('Resposta inválida da API')
       setRows(data.map(parseRow).filter(r => r.id != null))
     } catch (err) {
@@ -74,18 +79,36 @@ export default function Recargas() {
     fetchRows()
   }, [fetchRows])
 
+  const fetchEquipes = useCallback(async () => {
+    try {
+      const res = await fetch(EQUIPES_ENDPOINT, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const payload = await res.json()
+      const data = Array.isArray(payload?.data) ? payload.data : (Array.isArray(payload) ? payload : [])
+      setEquipes(Array.isArray(data) ? data : [])
+    } catch (_) {
+      setEquipes([])
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchEquipes()
+  }, [fetchEquipes])
+
   const teamOptions = useMemo(() => {
     const map = new Map()
-    rows.forEach(row => {
-      if (!row) return
-      const name = String(row.equipeNome || 'Equipe sem nome')
-      const key = row.equipeId != null ? `id:${row.equipeId}` : `nome:${name}`
+    const source = equipes.length > 0 ? equipes : rows
+    source.forEach(item => {
+      if (!item) return
+      const id = item.id ?? item.equipe_id ?? item.equipeId ?? null
+      const name = String(item.nome ?? item.equipe_nome ?? item.equipeNome ?? 'Equipe sem nome')
+      const key = id != null ? `id:${id}` : `nome:${name}`
       if (!map.has(key)) {
-        map.set(key, { key, id: row.equipeId ?? null, name })
+        map.set(key, { key, id, name })
       }
     })
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [rows])
+  }, [equipes, rows])
 
   const selectedTeam = useMemo(() => {
     return teamOptions.find(option => option.key === selectedTeamKey) ?? null
@@ -131,7 +154,7 @@ export default function Recargas() {
         equipeId: selectedTeam.id,
         quantidade: addAmountValue,
       }
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/adc-saldo', {
+      const response = await fetch(RECARGA_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

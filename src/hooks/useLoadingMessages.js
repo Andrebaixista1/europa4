@@ -4,7 +4,7 @@ export function useLoadingMessages(intervalMs = 1200) {
   const steps = useMemo(
     () => [
       'Lendo dados',
-      'Conectando ao N8N',
+      'Conectando ao servidor',
       'Verificando IN100',
       'Consultando DataPrev',
       'Sincronizando dashboards',

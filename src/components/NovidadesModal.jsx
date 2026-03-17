@@ -32,10 +32,10 @@ const novidadesListRaw = [
     imageBackground: '#ffffff',
   },
   {
-    data: '02/03/2026',
-    titulo: 'EUI 4.2.032026',
+    data: '13/03/2026',
+    titulo: 'EUI 4.7.2026 - novo design da plataforma',
     descricao:
-      'Novo pacote de interface da Europa 4 com melhorias visuais e de usabilidade em toda a plataforma, incluindo navegacao mais fluida, organizacao de menus e refinamentos de experiencia nas telas principais.',
+      'Lançamos o EUI 4.7.2026 com novo padrão visual da Nova Europa 4: layout mais quadrado, leitura mais clara, componentes padronizados e melhor organizacao das telas para acelerar a operacao do dia a dia.',
     image: '/neo-logo.svg',
     imageFit: 'contain',
     imageBackground: '#07132a',

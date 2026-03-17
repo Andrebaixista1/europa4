@@ -2,6 +2,7 @@
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { normalizeRole, Roles } from '../utils/roles.js'
+import { canAccessPage, getAccessibleHomeRoute, resolvePageKey } from '../utils/pageAccess.js'
 
 const toNumberOrNull = (value) => {
   if (value === undefined || value === null || value === '') return null
@@ -9,7 +10,7 @@ const toNumberOrNull = (value) => {
   return Number.isNaN(parsed) ? null : parsed
 }
 
-export default function ProtectedRoute({ children, roles, teamIds, allowMaster = true }) {
+export default function ProtectedRoute({ children, roles, teamIds, allowMaster = true, pageKey }) {
   const { isAuthenticated, user } = useAuth()
   const location = useLocation()
 
@@ -18,8 +19,15 @@ export default function ProtectedRoute({ children, roles, teamIds, allowMaster =
   }
 
   const normalizedUserRole = normalizeRole(user?.role)
+  const resolvedPageKey = pageKey || resolvePageKey(location.pathname)
 
-  if (Array.isArray(roles) && roles.length > 0) {
+  if (resolvedPageKey && !canAccessPage(user, resolvedPageKey)) {
+    const fallbackRoute = getAccessibleHomeRoute(user)
+    notify.warn('Acesso não permitido para esta página')
+    return <Navigate to={fallbackRoute && fallbackRoute !== location.pathname ? fallbackRoute : '/login'} replace />
+  }
+
+  if (!resolvedPageKey && Array.isArray(roles) && roles.length > 0) {
     const allowedRoles = roles.map((role) => normalizeRole(role))
     if (!allowedRoles.includes(normalizedUserRole)) {
       notify.warn('Acesso não permitido para seu perfil')

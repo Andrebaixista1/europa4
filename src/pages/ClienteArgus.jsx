@@ -6,6 +6,12 @@ import Footer from '../components/Footer.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
+import { fetchN8n, n8nUrl } from '../services/n8nClient.js'
+
+const N8N_WEBHOOK_BASE = 'https://n8n.apivieiracred.store/webhook'
+const N8N_CLIENTE_ARGUS_URL = `${N8N_WEBHOOK_BASE}/api/cliente-argus/`
+const N8N_CLIENTE_ARGUS_MACICA_URL = `${N8N_WEBHOOK_BASE}/api/cliente-argus/macica`
+const N8N_RESPOSTA_MACICA_URL = `${N8N_WEBHOOK_BASE}/resposta-macica`
 
 const formatCpf = (value) => {
   const v = String(value || '').replace(/\D/g, '').slice(0, 11)
@@ -1036,7 +1042,7 @@ export default function ClienteArgus() {
   const fetchIn100ListSingle = async (cpfDigits, nbDigits) => {
     if (!cpfDigits || !nbDigits) return []
     try {
-      const url = new URL('https://n8n.apivieiracred.store/webhook/resposta-macica')
+      const url = new URL(N8N_RESPOSTA_MACICA_URL)
       url.searchParams.set('cpf', cpfDigits)
       url.searchParams.set('nb', nbDigits)
       const res = await fetch(url.toString(), { method: 'GET' })
@@ -1084,7 +1090,7 @@ export default function ClienteArgus() {
   const fetchClienteArgusList = async (cpfDigits, nbDigits) => {
     if (!cpfDigits || !nbDigits) return []
     try {
-      const url = new URL('https://n8n.apivieiracred.store/webhook/api/cliente-argus/')
+      const url = new URL(N8N_CLIENTE_ARGUS_URL)
       url.searchParams.set('CPF', cpfDigits)
       url.searchParams.set('NB', nbDigits)
       const res = await fetch(url.toString(), { method: 'GET' })
@@ -1101,7 +1107,7 @@ export default function ClienteArgus() {
   const fetchContratosListSingle = async (cpfDigits, nbDigits) => {
     if (!cpfDigits || !nbDigits) return []
     try {
-      const url = new URL('https://n8n.apivieiracred.store/webhook/api/cliente-argus/macica')
+      const url = new URL(N8N_CLIENTE_ARGUS_MACICA_URL)
       url.searchParams.set('cpf', cpfDigits)
       url.searchParams.set('nb', nbDigits)
       const res = await fetch(url.toString(), { method: 'GET' })
@@ -1122,7 +1128,7 @@ export default function ClienteArgus() {
   const fetchClienteRespostaMacicaList = async (cpfDigits, nbDigits) => {
     if (!cpfDigits || !nbDigits) return []
     try {
-      const url = new URL('https://n8n.apivieiracred.store/webhook/resposta-macica')
+      const url = new URL(N8N_RESPOSTA_MACICA_URL)
       url.searchParams.set('cpf', cpfDigits)
       url.searchParams.set('nb', nbDigits)
       const res = await fetch(url.toString(), { method: 'GET' })
@@ -1172,7 +1178,7 @@ export default function ClienteArgus() {
   const fetchSaldoUsuario = async () => {
     if (!user || !user.id) return
     try {
-      const url = 'https://n8n.apivieiracred.store/webhook/get-saldos'
+      const url = n8nUrl('/get-saldos')
       const payload = buildSaldoPayload()
       const res = await fetch(url, {
         method: 'POST',
@@ -1561,7 +1567,7 @@ export default function ClienteArgus() {
         payload.team_id = equipeId
         payload.id_equipe = equipeId
       }
-      const res = await fetch('https://n8n.apivieiracred.store/webhook/consulta-online', {
+      const res = await fetchN8n('/consulta-online', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1571,7 +1577,7 @@ export default function ClienteArgus() {
       // Aguarda resposta API finalizar (similar ao fluxo IN100).
       await new Promise((resolve) => setTimeout(resolve, 5000))
       while (requestId === in100RequestRef.current) {
-        const resResposta = await fetch('https://n8n.apivieiracred.store/webhook/resposta-api', {
+        const resResposta = await fetchN8n('/resposta-api', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

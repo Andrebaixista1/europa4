@@ -6,12 +6,72 @@ import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
 import { notify } from '../utils/notify.js'
 
+const API_BASE = 'http://85.31.61.242:8011/api'
+const ROLE_BY_ID = {
+  1: 'Master',
+  2: 'Supervisor',
+  3: 'Operador',
+  4: 'Administrador'
+}
+
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
+
+const unwrapSqlJsonEnvelope = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) return raw
+  const first = raw[0]
+  if (!first || typeof first !== 'object') return raw
+  const key = Object.keys(first).find((item) => item.toUpperCase().startsWith('JSON_'))
+  if (!key || typeof first[key] !== 'string') return raw
+  try {
+    return JSON.parse(first[key])
+  } catch {
+    return raw
+  }
+}
+
+const normalizeApiCollection = (raw) => {
+  const data = unwrapSqlJsonEnvelope(raw)
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.data)) return data.data
+  if (Array.isArray(data?.rows)) return data.rows
+  if (Array.isArray(data?.items)) return data.items
+  return []
+}
+
+const safeJson = async (response) => {
+  const text = await response.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(text.trim() || `HTTP ${response.status}`)
+  }
+}
+
+const fetchCollection = async (path, idUser) => {
+  const url = new URL(`${API_BASE}/${path}`)
+  if (idUser !== null && idUser !== undefined && idUser !== '') {
+    url.searchParams.set('id_user', String(idUser))
+  }
+  const response = await fetch(url.toString(), { method: 'GET' })
+  if (!response.ok) {
+    throw new Error(`${path}: HTTP ${response.status}`)
+  }
+  const payload = await safeJson(response)
+  return normalizeApiCollection(payload)
+}
+
 // Página Equipes: estrutura pronta para integrar API em seguida.
 export default function Equipes() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [equipes, setEquipes] = useState([])
+  const [usuariosBase, setUsuariosBase] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [search, setSearch] = useState('')
   const [editNome, setEditNome] = useState('')
@@ -20,9 +80,10 @@ export default function Equipes() {
   const [addTeamNome, setAddTeamNome] = useState('')
   const [addTeamSupervisorId, setAddTeamSupervisorId] = useState('')
   const [addTeamDepartamento, setAddTeamDepartamento] = useState('')
-  const [addTeamSaldo, setAddTeamSaldo] = useState('200')
   const [addTeamSaving, setAddTeamSaving] = useState(false)
   const [isAddUserOpen, setIsAddUserOpen] = useState(false)
+  const [addUserMode, setAddUserMode] = useState('existente')
+  const [existingUserId, setExistingUserId] = useState('')
   const [addUserNome, setAddUserNome] = useState('')
   const [addUserLogin, setAddUserLogin] = useState('')
   const [addUserTipo, setAddUserTipo] = useState('Operador')
@@ -33,6 +94,7 @@ export default function Equipes() {
   const [transferNewTeamId, setTransferNewTeamId] = useState('')
   const [isDeleteTeamOpen, setIsDeleteTeamOpen] = useState(false)
   const [isDeletingTeam, setIsDeletingTeam] = useState(false)
+  const [deleteTeamAction, setDeleteTeamAction] = useState('desvincular')
 
   
   useEffect(() => {
@@ -41,82 +103,86 @@ export default function Equipes() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch('https://n8n.apivieiracred.store/webhook/user-team', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: user?.id }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-
-        // Desembrulha resposta do MSSQL no n8n: array com chave JSON_*
-        const unwrap = (d) => {
-          if (Array.isArray(d) && d.length > 0 && d[0] && typeof d[0] === 'object') {
-            const key = Object.keys(d[0]).find(k => k.toUpperCase().startsWith('JSON_'))
-            if (key && typeof d[0][key] === 'string') {
-              try { return JSON.parse(d[0][key]) } catch (_) { /* ignore */ }
-            }
-          }
-          return d
-        }
-
-        const payload = unwrap(data)
+        const idUser = user?.id_user ?? user?.id ?? null
+        const [usuariosRaw, equipesRaw] = await Promise.all([
+          fetchCollection('usuarios', idUser),
+          fetchCollection('equipes', idUser),
+        ])
 
         const mapUser = (u) => ({
-          id: u?.id ?? u?.user_id ?? u?.usuario_id ?? null,
+          id: toNumberOrNull(u?.id ?? u?.user_id ?? u?.usuario_id),
           nome: u?.nome ?? u?.name ?? 'Usuário',
-          role: u?.role ?? u?.papel ?? u?.perfil ?? '',
-          equipe_id: u?.equipe_id ?? u?.team_id ?? u?.equipeId ?? null,
+          role: (() => {
+            const directRole = String(u?.role ?? u?.papel ?? u?.perfil ?? '').trim()
+            if (directRole) return directRole
+            const roleNome = String(u?.role_nome ?? '').trim()
+            if (roleNome) return roleNome
+            const roleId = toNumberOrNull(u?.role_id)
+            return ROLE_BY_ID[roleId] ?? 'Operador'
+          })(),
+          equipe_id: toNumberOrNull(u?.equipe_id ?? u?.team_id ?? u?.equipeId),
+          login: u?.login ?? '',
+          ativo: (u?.ativo ?? true) ? true : false,
         })
 
         const toTeam = (t) => ({
-          id: t?.id ?? t?.team_id ?? t?.equipe_id ?? null,
+          id: toNumberOrNull(t?.id ?? t?.team_id ?? t?.equipe_id),
           nome: t?.nome ?? t?.name ?? t?.team_name ?? 'Equipe',
           descricao: t?.descricao ?? t?.description ?? '',
           ativo: (t?.ativo ?? t?.active ?? true) ? true : false,
-          supervisor: (() => {
-            const raw = t?.supervisor ?? t?.lead ?? null
-            if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return { nome: raw } } }
-            return raw
-          })(),
+          supervisor_user_id: toNumberOrNull(t?.supervisor_user_id ?? t?.supervisor_id),
           departamento: t?.departamento ?? t?.department ?? '-',
-          membros: t?.membros ?? t?.users ?? t?.usuarios ?? [],
+          membros: [],
         })
 
-        const collectUsers = () => {
-          let arr = []
-          if (Array.isArray(payload?.usuarios)) arr = payload.usuarios
-          else if (Array.isArray(payload?.users)) arr = payload.users
-          else if (Array.isArray(payload?.equipes)) arr = payload.equipes.flatMap(eq => eq.membros || [])
-          else if (Array.isArray(payload)) arr = payload
-          return arr.map(mapUser).filter(u => u.id != null)
-        }
+        const usuariosLista = (usuariosRaw || [])
+          .map(mapUser)
+          .filter((u) => u.id != null)
 
-        const usuariosLista = (() => {
-          const list = collectUsers()
-          const map = new Map()
-          list.forEach(u => {
-            if (u.id == null) return
-            if (!map.has(u.id)) map.set(u.id, u)
-          })
-          return Array.from(map.values())
-        })()
+        const usuariosById = new Map(usuariosLista.map((u) => [u.id, u]))
+        const membrosPorEquipe = new Map()
+        for (const member of usuariosLista) {
+          if (member.equipe_id == null) continue
+          if (!membrosPorEquipe.has(member.equipe_id)) {
+            membrosPorEquipe.set(member.equipe_id, [])
+          }
+          membrosPorEquipe.get(member.equipe_id).push(member)
+        }
 
         let eq = []
-        if (Array.isArray(payload?.equipes)) {
-          eq = payload.equipes.map(toTeam)
-        } else if (payload?.equipe || payload?.usuarios || payload?.users) {
-          const base = toTeam(payload?.equipe || {})
-          const members = base.membros?.length ? base.membros : (payload?.usuarios || payload?.users || [])
-          base.membros = members
-          if (!base.id && Array.isArray(members) && members[0]?.equipe_id) base.id = members[0].equipe_id
-          eq = [base]
-        } else if (Array.isArray(payload)) {
-          eq = [{ id: null, nome: 'Equipe', descricao: '', ativo: true, supervisor: null, departamento: '-', membros: payload }]
+        if (Array.isArray(equipesRaw) && equipesRaw.length) {
+          eq = equipesRaw.map(toTeam).filter((team) => team.id != null)
+        } else {
+          const uniqueTeams = Array.from(new Set(usuariosLista.map((u) => u.equipe_id).filter((id) => id != null)))
+          eq = uniqueTeams.map((teamId) => ({
+            id: teamId,
+            nome: `Equipe ${teamId}`,
+            descricao: '',
+            ativo: true,
+            supervisor_user_id: null,
+            departamento: '-',
+            membros: []
+          }))
         }
+
+        eq = eq.map((team) => {
+          const membros = membrosPorEquipe.get(team.id) || []
+          const supervisorById = team.supervisor_user_id != null ? usuariosById.get(team.supervisor_user_id) : null
+          const supervisorByRole = membros.find((member) => {
+            const role = String(member?.role || '').toLowerCase()
+            return role === 'supervisor' || role === 'administrador' || role === 'master'
+          }) || null
+          const supervisor = supervisorById || supervisorByRole || null
+          return {
+            ...team,
+            supervisor: supervisor ? { id: supervisor.id, nome: supervisor.nome } : null,
+            membros
+          }
+        })
 
         if (!eq.length) throw new Error('Resposta vazia da API')
         if (!aborted) {
+          setUsuariosBase(usuariosLista)
           setEquipes(eq)
           setSelectedId(eq[0]?.id ?? null)
           setSupervisores(
@@ -130,6 +196,7 @@ export default function Equipes() {
         console.error('Falha API Equipes:', e)
         if (!aborted) {
           setError(e)
+          setUsuariosBase([])
           setEquipes([])
           setSelectedId(null)
         }
@@ -139,7 +206,7 @@ export default function Equipes() {
     }
     load()
     return () => { aborted = true }
-  }, [user?.id])
+  }, [user?.id, user?.id_user])
 
   const isMasterRole = user?.role === 'Master'
   const isMasterTeam = (user?.equipe_nome || '').toLowerCase() === 'master'
@@ -169,6 +236,12 @@ export default function Equipes() {
   }, [baseEquipes, search])
 
   const selected = useMemo(() => filtered.find(e => e.id === selectedId) || null, [filtered, selectedId])
+  const availableExistingUsers = useMemo(() => {
+    const selectedTeamId = selected?.id ?? null
+    return (usuariosBase || [])
+      .filter((u) => u?.id != null && u.equipe_id !== selectedTeamId)
+      .sort((a, b) => String(a?.nome || '').localeCompare(String(b?.nome || '')))
+  }, [usuariosBase, selected?.id])
 
   useEffect(() => {
     // Garante seleção válida quando a lista visível muda (ex.: Supervisor)
@@ -220,17 +293,16 @@ export default function Equipes() {
         id_usuario: transferMember.id,
         equipe_id: newTeamNum,
       }
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/transfer-team', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/equipe`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
+      const apiPayload = await safeJson(response).catch(() => null)
+      if (!response.ok || apiPayload?.success === false) {
+        throw new Error(apiPayload?.message || `Erro ${response.status}`)
       }
-      try { console.log('transfer-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('transfer-team:', rawBody) }
+      console.log('alter/equipe:', apiPayload)
 
       // Atualiza lista local: remove do time atual e adiciona no novo
       setEquipes(prev => prev.map(e => {
@@ -244,69 +316,89 @@ export default function Equipes() {
         }
         return e
       }))
+      setUsuariosBase(prev => prev.map(u => (
+        u.id === transferMember.id ? { ...u, equipe_id: newTeamNum } : u
+      )))
       notify.success('Usuário transferido de equipe.')
       closeTransferMemberModal()
-      window.location.reload()
     } catch (err) {
       notify.error(`Erro ao transferir: ${err.message}`)
     }
   }
 
-async function handleSaveNomeEquipe() {
+  async function handleSaveNomeEquipe() {
     if (!selected) return
-    if (!user?.id) {
-      notify.error('Usuário inválido para alteração de equipe.')
+    const name = (editNome || '').trim()
+    if (!name) {
+      notify.warn('Informe o nome da equipe.')
       return
     }
-    const name = (editNome || '').trim()
-    if (!name) return
-    setEquipes(prev => prev.map(e => e.id === selected.id ? { ...e, nome: name } : e))
 
     try {
-      const payload = {
-        id_usuario: user.id,
-        equipe_id: selected.id,
-        nome: name,
-      }
-
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-team-name', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/equipe-dados`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          equipe_id: selected.id,
+          nome: name,
+          descricao: selected.descricao ?? null,
+          supervisor_user_id: selected.supervisor_user_id ?? null,
+          ativo: selected.ativo !== false
+        })
       })
 
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || `Erro ${response.status}`)
       }
 
-      let successMessage = 'Nome da equipe atualizado.'
-      if (rawBody) {
-        try {
-          const parsed = JSON.parse(rawBody)
-          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
-          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
-        } catch (_) {
-          if (rawBody.trim()) successMessage = rawBody.trim()
-        }
-      }
+      const result = payload?.data ?? {}
+      const nextName = result?.nome || name
+      const nextDescricao = result?.descricao ?? selected.descricao ?? ''
 
+      setEquipes(prev => prev.map((e) => (
+        e.id === selected.id
+          ? {
+              ...e,
+              nome: nextName,
+              descricao: nextDescricao,
+              supervisor_user_id: toNumberOrNull(result?.supervisor_user_id) ?? e.supervisor_user_id,
+              ativo: result?.ativo ?? e.ativo,
+            }
+          : e
+      )))
+      setEditNome(nextName)
+
+      const successMessage = payload?.mensagem ?? payload?.message ?? 'Nome da equipe atualizado.'
       notify.success(successMessage)
-      window.location.reload()
     } catch (error) {
       console.error('Erro ao atualizar equipe:', error)
       notify.error(`Erro ao atualizar equipe: ${error.message}`)
     }
   }
 
+  const removeMemberFromTeams = (teams, userId) => teams.map((team) => ({
+    ...team,
+    membros: (team.membros || []).filter((member) => member.id !== userId)
+  }))
+
+  const updateTeamSupervisorCache = (teams, removedIds) => teams.map((team) => {
+    if (!removedIds.includes(team.supervisor?.id) && !removedIds.includes(team.supervisor_user_id)) {
+      return team
+    }
+    return {
+      ...team,
+      supervisor: null,
+      supervisor_user_id: null,
+    }
+  })
+
   const handleOpenAddTeam = () => {
     if (!canCreateTeam) return
     setAddTeamNome('')
-    setAddTeamDepartamento('Equipe de operacoes Versatil')
-    setAddTeamSaldo('200')
+    setAddTeamDepartamento('')
     const firstSupervisorId = supervisores[0]?.id ?? ''
     setAddTeamSupervisorId(firstSupervisorId !== undefined ? String(firstSupervisorId) : '')
     setIsAddTeamOpen(true)
@@ -317,47 +409,68 @@ async function handleSaveNomeEquipe() {
     setAddTeamNome('')
     setAddTeamDepartamento('')
     setAddTeamSupervisorId('')
-    setAddTeamSaldo('200')
     setAddTeamSaving(false)
   }
 
   const openDeleteTeamModal = () => {
     if (!isMasterRole) return
     if (!selected) return
+    setDeleteTeamAction('desvincular')
     setIsDeleteTeamOpen(true)
   }
 
-  const closeDeleteTeamModal = () => setIsDeleteTeamOpen(false)
+  const closeDeleteTeamModal = () => {
+    setIsDeleteTeamOpen(false)
+    setDeleteTeamAction('desvincular')
+  }
 
   async function handleConfirmDeleteTeam() {
     if (!selected || !selected.id) { closeDeleteTeamModal(); return }
     const teamId = selected.id
     const teamName = selected.nome || 'Equipe'
+    const memberIds = (selected.membros || []).map((member) => Number(member.id)).filter((id) => !Number.isNaN(id))
     try {
       setIsDeletingTeam(true)
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/del-team', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/delete/equipe`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: teamId })
+        body: JSON.stringify({
+          equipe_id: teamId,
+          acao_membros: deleteTeamAction,
+        })
       })
 
-      if (!response.ok) {
-        let message = ''
-        try { message = (await response.text())?.trim() ?? '' } catch (_) { /* ignore */ }
-        throw new Error(message || `HTTP ${response.status}`)
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || `HTTP ${response.status}`)
       }
 
       setEquipes(prev => {
-        const next = (prev || []).filter(e => e.id !== teamId)
+        let next = (prev || []).filter(e => e.id !== teamId)
+        if (deleteTeamAction === 'excluir' && memberIds.length > 0) {
+          next = updateTeamSupervisorCache(next, memberIds)
+        }
         const nextId = next[0]?.id ?? null
         setSelectedId(nextId)
         return next
       })
-      notify.success(`Equipe ${teamName} excluida com sucesso.`)
+
+      if (deleteTeamAction === 'desvincular' && memberIds.length > 0) {
+        setUsuariosBase(prev => prev.map((usuario) => (
+          memberIds.includes(Number(usuario.id))
+            ? { ...usuario, equipe_id: null }
+            : usuario
+        )))
+      }
+
+      if (deleteTeamAction === 'excluir' && memberIds.length > 0) {
+        setUsuariosBase(prev => prev.filter((usuario) => !memberIds.includes(Number(usuario.id))))
+        setSupervisores(prev => prev.filter((usuario) => !memberIds.includes(Number(usuario.id))))
+      }
+
+      const successMessage = payload?.message || `Equipe ${teamName} excluida com sucesso.`
+      notify.success(successMessage)
       closeDeleteTeamModal()
-      setTimeout(() => {
-        try { window.location.reload() } catch (_) { /* ignore */ }
-      }, 1000)
     } catch (error) {
       notify.error(`Falha ao excluir equipe: ${error.message}`)
     } finally {
@@ -374,20 +487,9 @@ async function handleSaveNomeEquipe() {
     const nome = addTeamNome.trim()
     const departamento = addTeamDepartamento.trim()
     const supervisorId = addTeamSupervisorId ? Number(addTeamSupervisorId) : null
-    
-    const saldoNum = addTeamSaldo === '' ? NaN : Number(addTeamSaldo)
 
     if (!nome) {
       notify.warn('Informe o nome da equipe.')
-      return
-    }
-    if (!supervisorId) {
-      notify.warn('Selecione um supervisor.')
-      return
-    }
-    
-    if (Number.isNaN(saldoNum)) {
-      notify.warn('Informe um saldo numérico.')
       return
     }
 
@@ -396,41 +498,32 @@ async function handleSaveNomeEquipe() {
     try {
       const supervisor = supervisores.find((s) => Number(s.id) === supervisorId) || null
 
-      // Send new team data to n8n webhook
-      try {
-        const payload = {
-          id_usuario: supervisorId, // enviar o ID do supervisor selecionado
-          nome: nome,
-          departamento: departamento,
-          supervisor_id: supervisorId,
-          supervisor_nome: supervisor?.nome ?? null,
-          
-          saldo: saldoNum,
-        }
-        const resp = await fetch('https://n8n.apivieiracred.store/webhook/add-team', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        const bodyText = await resp.text()
-        if (!resp.ok) {
-          const message = (bodyText || '').trim() || `Erro ${resp.status}`
-          throw new Error(message)
-        }
-        try { console.log('add-team n8n:', JSON.parse(bodyText)) } catch (_) { if (bodyText.trim()) console.log('add-team n8n:', bodyText) }
-      } catch (apiErr) {
-        // Stop flow on API failure
-        throw apiErr
+      const resp = await fetch(`${API_BASE}/register/equipes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome,
+          descricao: departamento || null,
+          supervisor_user_id: supervisorId ?? null,
+          ativo: true,
+        }),
+      })
+
+      const payload = await safeJson(resp).catch(() => null)
+      if (!resp.ok || payload?.success === false) {
+        throw new Error(payload?.message || `Erro ${resp.status}`)
       }
-      const nextId = Math.max(0, ...equipes.map(e => e.id || 0)) + 1
+
+      const result = payload?.data ?? payload ?? {}
+      const nextId = result.id || Math.max(0, ...equipes.map(e => e.id || 0)) + 1
       const novaEquipe = {
         id: nextId,
-        nome,
-        descricao: departamento,
-        ativo: true,
-        
-          saldo: saldoNum,
-        departamento,
+        nome: result.nome || nome,
+        descricao: result.descricao ?? departamento,
+        ativo: result.ativo ?? true,
+        supervisor_user_id: toNumberOrNull(result.supervisor_user_id) ?? supervisorId ?? null,
+        supervisor,
+        departamento: result.descricao ?? departamento,
         membros: [],
       }
 
@@ -438,7 +531,6 @@ async function handleSaveNomeEquipe() {
       setSelectedId(nextId)
       notify.success(`Equipe "${nome}" criada com sucesso!`)
       handleCloseAddTeam()
-      window.location.reload()
     } catch (error) {
       console.error('Erro ao criar equipe:', error)
       notify.error(`Erro ao criar equipe: ${error.message}`)
@@ -462,8 +554,16 @@ async function handleSaveNomeEquipe() {
     }
   }
 
+  const handleSelectEquipe = (teamId) => {
+    setSelectedId(teamId)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleOpenAddUser = () => {
     if (!selected || !isMasterRole) return
+    const nextMode = availableExistingUsers.length > 0 ? 'existente' : 'novo'
+    setAddUserMode(nextMode)
+    setExistingUserId(nextMode === 'existente' ? String(availableExistingUsers[0]?.id ?? '') : '')
     setAddUserNome('')
     setAddUserLogin('')
     setAddUserSenha('')
@@ -473,6 +573,8 @@ async function handleSaveNomeEquipe() {
 
   const handleCloseAddUser = () => {
     setIsAddUserOpen(false)
+    setAddUserMode('existente')
+    setExistingUserId('')
     setAddUserNome('')
     setAddUserLogin('')
     setAddUserSenha('')
@@ -494,6 +596,75 @@ async function handleSaveNomeEquipe() {
       notify.error('Selecione uma equipe.')
       return
     }
+
+    const equipeId = selected.id
+    if (!equipeId) {
+      notify.error('Equipe inválida para adicionar Usuário')
+      return
+    }
+
+    if (addUserMode === 'existente') {
+      const targetUserId = existingUserId ? Number(existingUserId) : null
+      const existingUser = (usuariosBase || []).find((u) => Number(u.id) === targetUserId) || null
+
+      if (!targetUserId || !existingUser) {
+        notify.warn('Selecione um usuário existente.')
+        return
+      }
+
+      setAddUserSaving(true)
+
+      try {
+        const response = await fetch(`${API_BASE}/alter/equipe`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            id_usuario: targetUserId,
+            equipe_id: equipeId,
+          })
+        })
+
+        const payload = await safeJson(response).catch(() => null)
+        if (!response.ok || payload?.success === false) {
+          throw new Error(payload?.message || `Erro ${response.status}`)
+        }
+
+        const previousTeamId = toNumberOrNull(existingUser?.equipe_id)
+        const memberToInsert = { ...existingUser, equipe_id: equipeId }
+
+        setUsuariosBase(prev => prev.map((usuario) => (
+          Number(usuario.id) === targetUserId
+            ? { ...usuario, equipe_id: equipeId }
+            : usuario
+        )))
+
+        setEquipes(prev => prev.map((team) => {
+          if (previousTeamId != null && team.id === previousTeamId) {
+            return { ...team, membros: (team.membros || []).filter((member) => member.id !== targetUserId) }
+          }
+
+          if (team.id === equipeId) {
+            const membrosAtualizados = removeMemberFromTeams([team], targetUserId)[0]?.membros || []
+            return { ...team, membros: [...membrosAtualizados, memberToInsert] }
+          }
+
+          return team
+        }))
+
+        notify.success(payload?.message || 'Usuário vinculado à equipe com sucesso.')
+        handleCloseAddUser()
+      } catch (error) {
+        console.error('Erro ao vincular Usuário existente:', error)
+        notify.error(`Erro ao vincular Usuário: ${error.message}`)
+      } finally {
+        setAddUserSaving(false)
+      }
+
+      return
+    }
+
     const nome = addUserNome.trim()
     const login = addUserLogin.trim()
     const senha = addUserSenha.trim()
@@ -510,17 +681,11 @@ async function handleSaveNomeEquipe() {
     }
 
     const roleOut = optionToRole(tipoSel)
-    const equipeId = selected.id
-
-    if (!equipeId) {
-      notify.error('Equipe inválida para adicionar Usuário')
-      return
-    }
 
     setAddUserSaving(true)
 
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/add-user', {
+      const response = await fetch(`${API_BASE}/register/usuarios`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -536,39 +701,39 @@ async function handleSaveNomeEquipe() {
         })
       })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error((errorText || '').trim() || `Erro ${response.status}`)
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || `Erro ${response.status}`)
       }
 
-      let result = null
-      try {
-        result = await response.json()
-      } catch (_) {
-        result = null
-      }
+      const result = payload?.data ?? payload ?? {}
 
       const nextId = result?.id || result?.Id || Math.max(0, ...((selected.membros || []).map(m => m.id || 0))) + 1
       const novo = {
         id: nextId,
-        nome,
-        login,
-        role: roleOut,
-        ativo: true,
+        nome: result?.nome || nome,
+        login: result?.login || login,
+        role: result?.role || roleOut,
+        equipe_id: equipeId,
+        ativo: result?.ativo ?? true,
       }
 
+      setUsuariosBase(prev => [...prev, novo])
+      if (['master', 'administrador', 'supervisor'].includes(String(novo.role || '').toLowerCase())) {
+        setSupervisores(prev => [...prev, novo])
+      }
       setEquipes(prev => prev.map(e => {
         if (e.id !== selected.id) return e
         const membros = e.membros ? [...e.membros, novo] : [novo]
         return { ...e, membros }
       }))
       notify.success(`Usuário "${nome}" criado com sucesso!`)
-      notify.success(`Usuário "${nome}" criado com sucesso!`)
-      window.location.reload()
+      handleCloseAddUser()
     } catch (error) {
       console.error('Erro ao criar Usuário pela equipe:', error)
-      console.error('Erro ao criar Usuário pela equipe:', error)
       notify.error(`Erro ao criar Usuário: ${error.message}`)
+    } finally {
+      setAddUserSaving(false)
     }
   }
 
@@ -600,7 +765,7 @@ async function handleSaveNomeEquipe() {
                     title="Adicionar equipe"
                     aria-label="Adicionar equipe"
                     onClick={handleOpenAddTeam}
-                    disabled={!canCreateTeam || supervisores.length === 0}
+                    disabled={!canCreateTeam}
                   >
                     <Fi.FiPlus />
                   </button>
@@ -632,7 +797,7 @@ async function handleSaveNomeEquipe() {
                       key={e.id}
                       className={`list-group-item d-flex justify-content-between align-items-center ${selectedId === e.id ? 'active' : ''}`}
                       role="button"
-                      onClick={() => setSelectedId(e.id)}
+                      onClick={() => handleSelectEquipe(e.id)}
                     >
                       <div className="me-3">
                         <div className="fw-semibold">{e.nome}</div>
@@ -747,6 +912,15 @@ async function handleSaveNomeEquipe() {
             </div>
             <div className="modal-body">
               <div className="mb-3">Tem certeza que deseja excluir a equipe {selected?.nome}?</div>
+              {!!selected?.membros?.length && (
+                <div className="mb-3">
+                  <label className="form-label">O que fazer com os {selected.membros.length} membro(s)?</label>
+                  <select className="form-select" value={deleteTeamAction} onChange={(e) => setDeleteTeamAction(e.target.value)} disabled={isDeletingTeam}>
+                    <option value="desvincular">Deixar sem equipe</option>
+                    <option value="excluir">Apagar usuários junto</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={closeDeleteTeamModal}>Cancelar</button>
@@ -812,6 +986,33 @@ async function handleSaveNomeEquipe() {
             <form onSubmit={handleAddUserSubmit}>
               <div className="modal-body">
                 <div className="mb-3">
+                  <label className="form-label">Modo</label>
+                  <select className="form-select" value={addUserMode} onChange={(e) => setAddUserMode(e.target.value)} disabled={addUserSaving}>
+                    <option value="existente">Usuário existente</option>
+                    <option value="novo">Novo usuário</option>
+                  </select>
+                </div>
+                {addUserMode === 'existente' ? (
+                  <div className="mb-3">
+                    <label className="form-label">Usuário</label>
+                    <select className="form-select" value={existingUserId} onChange={(e) => setExistingUserId(e.target.value)} disabled={addUserSaving} required>
+                      <option value="">Selecione...</option>
+                      {availableExistingUsers.map((existingUser) => {
+                        const teamName = equipes.find((team) => team.id === existingUser.equipe_id)?.nome || 'Sem equipe'
+                        return (
+                          <option key={existingUser.id} value={existingUser.id}>
+                            {`${existingUser.nome} (${existingUser.login}) - ${teamName}`}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    {availableExistingUsers.length === 0 && (
+                      <div className="small opacity-75 mt-2">Nenhum usuário disponível para vincular.</div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                <div className="mb-3">
                   <label className="form-label">Nome Completo *</label>
                   <input
                     className="form-control"
@@ -856,6 +1057,8 @@ async function handleSaveNomeEquipe() {
                     required
                   />
                 </div>
+                  </>
+                )}
                 {isMasterRole && (
                   <div className="mb-3">
                     <label className="form-label">Equipe</label>
@@ -865,7 +1068,7 @@ async function handleSaveNomeEquipe() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={handleCloseAddUser} disabled={addUserSaving}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={addUserSaving || !addUserNome.trim() || !addUserLogin.trim() || !addUserSenha.trim()}>
+                <button type="submit" className="btn btn-primary" disabled={addUserSaving || (addUserMode === 'existente' ? !existingUserId : (!addUserNome.trim() || !addUserLogin.trim() || !addUserSenha.trim()))}>
                   {addUserSaving ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -897,24 +1100,20 @@ async function handleSaveNomeEquipe() {
             <input className="form-control" value={addTeamNome} onChange={(e) => setAddTeamNome(e.target.value)} disabled={addTeamSaving} placeholder="Nome da equipe" required />
           </div>
           <div className="col-12">
-            <label className="form-label">Supervisor *</label>
-            <select className="form-select" value={addTeamSupervisorId} onChange={(e) => setAddTeamSupervisorId(e.target.value)} disabled={addTeamSaving} required>
-              <option value="">Selecione...</option>
+            <label className="form-label">Supervisor</label>
+            <select className="form-select" value={addTeamSupervisorId} onChange={(e) => setAddTeamSupervisorId(e.target.value)} disabled={addTeamSaving}>
+              <option value="">Sem supervisor</option>
               {supervisores.map((sup) => (<option key={sup.id} value={sup.id}>{sup.nome}</option>))}
             </select>
           </div>
           <div className="col-12">
-            <label className="form-label">Departamento *</label>
-            <input className="form-control" value={addTeamDepartamento} onChange={(e) => setAddTeamDepartamento(e.target.value)} disabled={addTeamSaving} placeholder="Equipe de operações Versatil" required />
-          </div>
-          <div className="col-12">
-            <label className="form-label">Saldo *</label>
-            <input type="number" inputMode="numeric" pattern="\\d*" min="0" step="1" className="form-control" value={addTeamSaldo} onChange={(e) => setAddTeamSaldo((e.target.value || '').replace(/[^0-9]/g, ''))} disabled={addTeamSaving} placeholder="Ex: 200" required />
+            <label className="form-label">Descrição</label>
+            <input className="form-control" value={addTeamDepartamento} onChange={(e) => setAddTeamDepartamento(e.target.value)} disabled={addTeamSaving} placeholder="Equipe de operações" />
           </div>
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4">
           <button type="button" className="btn btn-ghost" onClick={handleCloseAddTeam} disabled={addTeamSaving}>Cancelar</button>
-          <button type="submit" className="btn btn-primary" disabled={addTeamSaving || !addTeamNome.trim() || !addTeamSupervisorId || !addTeamDepartamento.trim() || !String(addTeamSaldo || '').trim()}>
+          <button type="submit" className="btn btn-primary" disabled={addTeamSaving || !addTeamNome.trim()}>
             {addTeamSaving ? (
               <>
                 <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>

@@ -13,7 +13,6 @@ import {
   FiList,
   FiHome,
   FiPhone,
-  FiRefreshCw,
   FiSearch,
   FiUser,
   FiX,
@@ -22,10 +21,20 @@ import { FaWhatsapp } from 'react-icons/fa'
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { notify } from '../utils/notify.js'
-import { useAuth } from '../context/AuthContext.jsx'
 import '../styles/consulta-clientes.css'
 
-const API_URL = 'https://n8n.apivieiracred.store/webhook/api/consultacliente'
+const API_BASE = 'http://85.31.61.242:8011/api'
+const LOCAL_BANK_NAME_BY_CODE = {
+  '1': 'Banco do Brasil',
+  '104': 'Caixa Economica Federal',
+  '212': 'Banco Original',
+  '237': 'Banco Bradesco',
+  '260': 'Nubank',
+  '318': 'Banco BMG',
+  '341': 'Itau',
+  '623': 'Banco Pan',
+  '756': 'Sicoob',
+}
 const BANK_ICON_BY_CODE = {
   '1': { short: 'BB', bg: '#F9D441', color: '#111827' },
   '33': { short: 'SAN', bg: '#E41F26', color: '#FFFFFF' },
@@ -52,6 +61,7 @@ const CONTRATO_FONTES = [
   { value: 'v8', label: 'V8' },
   { value: 'presenca', label: 'Presença' },
   { value: 'handmais', label: 'Hand+' },
+  { value: 'prata', label: 'Prata' },
 ]
 const CONTRATO_FONTE_ICON_BY_VALUE = {
   portabilidade: '/neo-logo.svg',
@@ -59,6 +69,7 @@ const CONTRATO_FONTE_ICON_BY_VALUE = {
   v8: 'https://v8-white-label-logos.s3.us-east-1.amazonaws.com/v8-rebrand/v8-logo-auth0.svg',
   presenca: 'https://portal.presencabank.com.br/assets/images/presencabank/logo.svg',
   handmais: '/handplus-logo.svg',
+  prata: '/prata-digital-logo.svg',
 }
 const getInitialContratoFonte = () => 'portabilidade'
 
@@ -721,6 +732,7 @@ const resolveContratoFonteFromRow = (row) => {
 
   if (sourceToken.includes('qualibanking') || sourceToken.includes('in100')) return 'in100'
   if (sourceToken.includes('v8')) return 'v8'
+  if (sourceToken.includes('prata')) return 'prata'
   if (isPresencaRow(row)) return 'presenca'
   if (sourceToken.includes('hand')) return 'handmais'
   if (sourceToken.includes('macica') || sourceToken.includes('maci') || sourceToken.includes('portabilidade')) return 'portabilidade'
@@ -762,24 +774,37 @@ const unwrapRows = (payload, depth = 0) => {
 
 const normalizeRows = (payload) => unwrapRows(payload).map((row) => (row && typeof row === 'object' ? row : { value: row }))
 
-const parseResponseBody = async (response) => {
-  const raw = await response.text()
-  let payload = null
-  try {
-    payload = raw ? JSON.parse(raw) : {}
-  } catch {
-    payload = { raw }
-  }
+const buildConsultaUrl = (path, cpf) => {
+  const url = new URL(`${API_BASE}${path}`)
+  url.searchParams.set('cpf', cpf)
+  return url.toString()
+}
 
+const extractApiRows = (payload) => {
+  if (!payload) return []
+  if (Array.isArray(payload)) return payload
+  if (payload.success === false) return []
+  if (Array.isArray(payload.data)) return payload.data
+  return []
+}
+
+const fetchConsultaRows = async ({ path, cpf, sourceTag, sourceLabel }) => {
+  const response = await fetch(buildConsultaUrl(path, cpf), { method: 'GET' })
+  const payload = await response.json().catch(() => null)
   if (!response.ok) {
-    if (payload?.message) throw new Error(payload.message)
-    if (payload?.error) throw new Error(payload.error)
-    throw new Error(raw || `HTTP ${response.status}`)
+    const apiMessage = payload?.message || payload?.error || `Falha ao consultar ${sourceLabel}.`
+    const error = new Error(apiMessage)
+    error.status = response.status
+    throw error
   }
-  if (payload?.ok === false) {
-    throw new Error(payload?.message || payload?.error || 'Falha na API')
-  }
-  return payload
+  const rows = extractApiRows(payload)
+  if (!rows.length) return []
+  const normalized = normalizeRows(rows)
+  return normalized.map((row) => ({
+    ...(row && typeof row === 'object' ? row : { value: row }),
+    Tabela: sourceTag,
+    source: sourceTag,
+  }))
 }
 
 const getParamValue = (params, key) => params.get(key) || params.get(key.toUpperCase()) || params.get(key.toLowerCase()) || ''
@@ -798,12 +823,6 @@ const parseCpfFromUrl = (pathname, search) => {
 
   const pathParams = new URLSearchParams(tail.replace(/^\?/, ''))
   return getParamValue(pathParams, 'cpf')
-}
-
-const toIntegerOrNull = (value) => {
-  if (value === null || value === undefined || value === '') return null
-  const n = Number(value)
-  return Number.isInteger(n) ? n : null
 }
 
 const isClienteRow = (row) => (
@@ -994,7 +1013,6 @@ function BankNameWithIcon({ bankCode, bankName }) {
 }
 
 export default function ConsultaClientes() {
-  const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -1003,7 +1021,7 @@ export default function ConsultaClientes() {
   const [error, setError] = useState('')
   const [rows, setRows] = useState([])
   const [selectedBenefitKey, setSelectedBenefitKey] = useState('')
-  const [bankNameByCode, setBankNameByCode] = useState({})
+  const [bankNameByCode] = useState(() => ({ ...LOCAL_BANK_NAME_BY_CODE }))
   const [rawPayload, setRawPayload] = useState(null)
   const [isEnderecosOpen, setIsEnderecosOpen] = useState(false)
   const [isBancosOpen, setIsBancosOpen] = useState(true)
@@ -1020,54 +1038,8 @@ export default function ConsultaClientes() {
     Boolean(normalizeCpfForConsulta(parseCpfFromUrl(location.pathname, location.search)))
   )
 
-  const userContext = useMemo(() => {
-    const idUser = toIntegerOrNull(user?.id ?? user?.id_user ?? user?.idUser)
-    const equipeId = toIntegerOrNull(user?.equipe_id ?? user?.team_id ?? user?.id_equipe ?? user?.equipeId)
-    const isUserOne = idUser === 1
-    const hierarquia = String(user?.hierarquia ?? user?.role ?? user?.nivel_hierarquia ?? '').trim() || (isUserOne ? 'master' : '')
-    return {
-      idUser,
-      equipeId,
-      hierarquia,
-      ready: idUser !== null && (isUserOne || (equipeId !== null && hierarquia.length > 0)),
-    }
-  }, [user])
-
   const visibleRows = useMemo(() => (Array.isArray(rows) ? rows : []), [rows])
   const hasCpfInUrl = hideSearchByInitialUrlRef.current
-
-  useEffect(() => {
-    let active = true
-    const controller = new AbortController()
-
-    const loadBanks = async () => {
-      try {
-        const response = await fetch('https://brasilapi.com.br/api/banks/v1', {
-          signal: controller.signal,
-          headers: { Accept: 'application/json' },
-        })
-        if (!response.ok) return
-        const data = await response.json()
-        if (!Array.isArray(data) || !active) return
-
-        const next = {}
-        data.forEach((item) => {
-          const code = normalizeBankCode(item?.code)
-          if (!code) return
-          next[code] = item?.fullName || item?.name || next[code] || code
-        })
-        if (active) setBankNameByCode(next)
-      } catch {
-        // Silencioso: se a API de bancos falhar, exibimos apenas o codigo.
-      }
-    }
-
-    loadBanks()
-    return () => {
-      active = false
-      controller.abort()
-    }
-  }, [])
 
   const resolveBankName = useCallback((code, fallbackName = '') => {
     const normalizedCode = normalizeBankCode(code)
@@ -1282,6 +1254,7 @@ export default function ConsultaClientes() {
         v8: [],
         presenca: [],
         handmais: [],
+        prata: [],
       }
       allRows.forEach((row) => {
         const source = resolveContratoFonteFromRow(row)
@@ -1473,7 +1446,22 @@ export default function ConsultaClientes() {
           .map(mapContratoPadrao)
           .sort((a, b) => b.dataUpdateTs - a.dataUpdateTs),
         in100: sortByDataHoraRegistroDesc(
-          rowsByFonte.in100.filter((row) => hasValue(row?.numero_documento) || hasValue(row?.numero_beneficio) || hasValue(row?.status_api))
+          (() => {
+            const baseRows = rowsByFonte.in100.filter((row) => (
+              hasValue(row?.numero_documento) || hasValue(row?.numero_beneficio) || hasValue(row?.status_api)
+            ))
+            const seen = new Set()
+            return baseRows.filter((row) => {
+              const cpfKey = digitsOnly(firstFilled(row?.numero_documento, row?.cpf, row?.CPF, ''))
+              const nbKey = digitsOnly(firstFilled(row?.numero_beneficio, row?.Beneficio, row?.nb, ''))
+              const tsKey = firstFilled(row?.data_hora_registro, row?.data_consulta, row?.data_retorno_consulta, '')
+              const statusKey = firstFilled(row?.status_api, row?.status, '')
+              const key = [cpfKey, nbKey, tsKey, statusKey].join('|')
+              if (!key || seen.has(key)) return false
+              seen.add(key)
+              return true
+            })
+          })()
         ).map((row, index) => {
             const bancoCodigo = normalizeBankCode(row?.banco_desembolso)
             const conta = trimLeadingZeros(row?.conta_desembolso)
@@ -1547,6 +1535,16 @@ export default function ConsultaClientes() {
         }),
         presenca: buildPresencaContratos(rowsByFonte.presenca),
         handmais: buildHandMaisContratos(rowsByFonte.handmais),
+        prata: rowsByFonte.prata.map((row, index) => ({
+          key: `prata-${index}-${digitsOnly(firstFilled(row?.cpf, row?.CPF, row?.numero_documento)) || row?.id || 'item'}`,
+          cpfRaw: digitsOnly(firstFilled(row?.cpf, row?.CPF, row?.numero_documento)),
+          cpf: formatCpf(firstFilled(row?.cpf, row?.CPF, row?.numero_documento)),
+          nome: firstFilled(row?.nome, row?.NOME, '-'),
+          status: firstFilled(row?.status_consulta, row?.status, '-'),
+          margemDisponivel: formatMoney(firstFilled(row?.margem_disponivel, row?.margem_total_disponivel)),
+          createdAt: formatDateTime(firstFilled(row?.created_at, row?.createdAt, row?.updated_at)),
+          rowRaw: row,
+        })),
       }
 
       return {
@@ -1662,6 +1660,7 @@ export default function ConsultaClientes() {
     v8: profile?.contratosByFonte?.v8?.length ?? 0,
     presenca: profile?.contratosByFonte?.presenca?.length ?? 0,
     handmais: profile?.contratosByFonte?.handmais?.length ?? 0,
+    prata: profile?.contratosByFonte?.prata?.length ?? 0,
   }), [profile?.contratosByFonte])
   const modalidadesDisponiveis = useMemo(
     () => CONTRATO_FONTES
@@ -1810,21 +1809,49 @@ export default function ConsultaClientes() {
     setError('')
 
     try {
-      const url = new URL(API_URL)
-      url.searchParams.set('cpf', cpfDigits)
-      if (userContext.idUser !== null) url.searchParams.set('id_user', String(userContext.idUser))
-      if (userContext.equipeId !== null) url.searchParams.set('equipe_id', String(userContext.equipeId))
-      if (userContext.hierarquia) url.searchParams.set('hierarquia', userContext.hierarquia)
+      const offlineSource = { key: 'offline', path: '/consultas/offline', sourceTag: 'macica', sourceLabel: 'Maciça' }
+      const followUpSources = [
+        { key: 'in100', path: '/consultas/in100', sourceTag: 'qualibanking_in100', sourceLabel: 'IN100' },
+        { key: 'v8', path: '/consultas/v8', sourceTag: 'v8', sourceLabel: 'V8' },
+        { key: 'presenca', path: '/consultas/presenca', sourceTag: 'presenca', sourceLabel: 'Presença' },
+        { key: 'handmais', path: '/consultas/handmais', sourceTag: 'handmais', sourceLabel: 'Hand+' },
+        { key: 'prata', path: '/consultas/prata', sourceTag: 'prata', sourceLabel: 'Prata' },
+      ]
 
-      const response = await fetch(url.toString(), { method: 'GET', headers: { Accept: 'application/json' } })
-      const payload = await parseResponseBody(response)
-      const normalized = normalizeRows(payload)
+      const mergedRows = []
+      const rawByFonte = {}
+      const errors = []
+
+      try {
+        const offlineRows = await fetchConsultaRows({ ...offlineSource, cpf: cpfDigits })
+        rawByFonte[offlineSource.key] = offlineRows
+        mergedRows.push(...offlineRows)
+      } catch (err) {
+        errors.push(`${offlineSource.sourceLabel}: ${err?.message || 'Erro ao consultar.'}`)
+      }
 
       setSelectedBenefitKey('')
-      setRows(normalized)
-      setRawPayload(payload)
-      if (normalized.length === 0) notify.info('Nenhum dado encontrado para este CPF.')
+      setRows([...mergedRows])
+      setRawPayload({ cpf: cpfDigits, sources: { ...rawByFonte }, errors: [...errors] })
       if (syncUrl) navigate(`/consultas/clientes?cpf=${cpfDigits}`, { replace: true })
+
+      for (const source of followUpSources) {
+        try {
+          const rows = await fetchConsultaRows({ ...source, cpf: cpfDigits })
+          rawByFonte[source.key] = rows
+          if (rows.length > 0) {
+            mergedRows.push(...rows)
+            setRows([...mergedRows])
+          }
+        } catch (err) {
+          errors.push(`${source.sourceLabel}: ${err?.message || 'Erro ao consultar.'}`)
+        } finally {
+          setRawPayload({ cpf: cpfDigits, sources: { ...rawByFonte }, errors: [...errors] })
+        }
+      }
+
+      if (mergedRows.length === 0) notify.info('Nenhum dado encontrado para este CPF.')
+      if (errors.length > 0) notify.error(errors.join(' | '))
     } catch (e) {
       setRows([])
       setRawPayload(null)
@@ -1832,23 +1859,19 @@ export default function ConsultaClientes() {
     } finally {
       setLoading(false)
     }
-  }, [navigate, userContext])
+  }, [navigate])
 
   useEffect(() => {
     const urlCpf = normalizeCpfForConsulta(parseCpfFromUrl(location.pathname, location.search))
     if (!urlCpf) return
-    if (!userContext.ready) {
-      setError('Aguardando dados da sessão para consultar...')
-      return
-    }
 
-    const requestKey = `${urlCpf}|${userContext.idUser}|${userContext.equipeId}|${userContext.hierarquia}`
+    const requestKey = `${urlCpf}`
     if (lastUrlCpfRef.current === requestKey) return
 
     lastUrlCpfRef.current = requestKey
     setCpf(formatCpf(urlCpf))
     executeConsulta(urlCpf, { syncUrl: false })
-  }, [location.pathname, location.search, executeConsulta, userContext])
+  }, [location.pathname, location.search, executeConsulta])
 
   const handleSubmit = useCallback((event) => {
     event.preventDefault()
@@ -2204,8 +2227,11 @@ export default function ConsultaClientes() {
               <span className="d-none d-sm-inline">Voltar</span>
             </Link>
             <div>
-              <h2 className="fw-bold mb-1">Consulta Clientes</h2>
-              <div className="small opacity-75">Página para consultar clientes em todos os canais, bancos de dados, IN100 e bancos via API.</div>
+              <h2 className="fw-bold mb-1">Consulta Offiline</h2>
+              <div className="small opacity-75">
+                Página para consultar clientes em todos os canais, bancos de dados, IN100 e bancos via API.
+                Consulta offline com dados simulados para teste.
+              </div>
             </div>
           </div>
         )}
@@ -2222,7 +2248,6 @@ export default function ConsultaClientes() {
               </div>
               <div className="col-12 col-md-auto d-flex gap-2">
                 <button type="submit" className="btn btn-info btn-sm d-flex align-items-center gap-2" disabled={loading}><FiSearch size={14} /><span>{loading ? 'Consultando...' : 'Consultar'}</span></button>
-                <button type="button" className="btn btn-outline-light btn-sm d-flex align-items-center gap-2" onClick={() => executeConsulta(cpf, { syncUrl: false })} disabled={loading}><FiRefreshCw size={14} /><span>Atualizar</span></button>
               </div>
             </form>
             {error && <div className="small text-danger mt-2">{error}</div>}
@@ -2230,7 +2255,7 @@ export default function ConsultaClientes() {
         )}
 
         <section className="neo-card p-3 p-md-4 cc-results-wrap" style={panelStyle}>
-          <div className="small opacity-75 mb-3">{loading ? 'Consultando API...' : `${visibleRows.length} registro(s) encontrado(s)`}</div>
+          <div className="small opacity-75 mb-3">{loading ? 'Consultando...' : `${visibleRows.length} registro(s) encontrado(s)`}</div>
           {error && <div className="small text-danger mb-3">{error}</div>}
 
           {visibleRows.length === 0 ? (
@@ -2615,6 +2640,33 @@ export default function ConsultaClientes() {
                                       <FiList size={14} />
                                     </button>
                                   </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      ) : contratoFonte === 'prata' ? (
+                        <table className="table table-dark table-sm align-middle mb-0">
+                          <thead>
+                            <tr>
+                              <th>Nome</th>
+                              <th>CPF</th>
+                              <th>Status</th>
+                              <th>Margem Disponível</th>
+                              <th>Última atualização</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedContratoRows.length === 0 ? (
+                              <EmptyCell colSpan={5} text="Nenhum registro de Prata encontrado." />
+                            ) : (
+                              selectedContratoRows.map((item) => (
+                                <tr key={item.key}>
+                                  <td>{item.nome || '-'}</td>
+                                  <td>{item.cpf || '-'}</td>
+                                  <td>{item.status || '-'}</td>
+                                  <td>{item.margemDisponivel || '-'}</td>
+                                  <td>{item.createdAt || '-'}</td>
                                 </tr>
                               ))
                             )}

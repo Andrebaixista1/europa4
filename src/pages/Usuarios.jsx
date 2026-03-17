@@ -5,6 +5,65 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { notify } from '../utils/notify.js'
 import { Link } from 'react-router-dom'
 import * as Fi from 'react-icons/fi'
+
+const API_BASE = 'http://85.31.61.242:8011/api'
+const ROLE_BY_ID = {
+  1: 'Master',
+  2: 'Supervisor',
+  3: 'Operador',
+  4: 'Administrador'
+}
+
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
+
+const unwrapSqlJsonEnvelope = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) return raw
+  const first = raw[0]
+  if (!first || typeof first !== 'object') return raw
+  const key = Object.keys(first).find((item) => item.toUpperCase().startsWith('JSON_'))
+  if (!key || typeof first[key] !== 'string') return raw
+  try {
+    return JSON.parse(first[key])
+  } catch {
+    return raw
+  }
+}
+
+const normalizeApiCollection = (raw) => {
+  const data = unwrapSqlJsonEnvelope(raw)
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.data)) return data.data
+  if (Array.isArray(data?.rows)) return data.rows
+  if (Array.isArray(data?.items)) return data.items
+  return []
+}
+
+const safeJson = async (response) => {
+  const text = await response.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(text.trim() || `HTTP ${response.status}`)
+  }
+}
+
+const fetchCollection = async (path, idUser) => {
+  const url = new URL(`${API_BASE}/${path}`)
+  if (idUser !== null && idUser !== undefined && idUser !== '') {
+    url.searchParams.set('id_user', String(idUser))
+  }
+  const response = await fetch(url.toString(), { method: 'GET' })
+  if (!response.ok) {
+    throw new Error(`${path}: HTTP ${response.status}`)
+  }
+  const payload = await safeJson(response)
+  return normalizeApiCollection(payload)
+}
 export default function Usuarios() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
@@ -73,62 +132,55 @@ export default function Usuarios() {
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch('https://n8n.apivieiracred.store/webhook/user-team', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: user?.id }),
-        })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        const unwrap = (d) => {
-          if (Array.isArray(d) && d.length > 0 && d[0] && typeof d[0] === 'object') {
-            const key = Object.keys(d[0]).find(k => k.toUpperCase().startsWith('JSON_'))
-            if (key && typeof d[0][key] === 'string') {
-              try { return JSON.parse(d[0][key]) } catch (_) {}
-            }
-          }
-          return d
-        }
-        const payload = unwrap(data)
+        const idUser = user?.id_user ?? user?.id ?? null
+        const [usuariosRaw, equipesRaw] = await Promise.all([
+          fetchCollection('usuarios', idUser),
+          fetchCollection('equipes', idUser),
+        ])
+
         const mapUser = (u) => ({
-          id: u?.id ?? u?.user_id ?? null,
+          id: toNumberOrNull(u?.id ?? u?.user_id),
           nome: u?.nome ?? u?.name ?? 'Usuários',
           email: u?.email ?? '',
-          role: u?.role ?? u?.papel ?? 'Operador',
-          equipe_id: u?.equipe_id ?? u?.team_id ?? null,
+          role: (() => {
+            const directRole = String(u?.role ?? u?.papel ?? u?.perfil ?? '').trim()
+            if (directRole) return directRole
+            const roleNome = String(u?.role_nome ?? '').trim()
+            if (roleNome) return roleNome
+            const roleId = toNumberOrNull(u?.role_id)
+            return ROLE_BY_ID[roleId] ?? 'Operador'
+          })(),
+          equipe_id: toNumberOrNull(u?.equipe_id ?? u?.team_id),
           login: u?.login ?? u?.username ?? '',
           ativo: (u?.ativo ?? u?.active ?? true) ? true : false,
         })
-        let arr = []
-        if (Array.isArray(payload?.usuarios)) arr = payload.usuarios.map(mapUser)
-        else if (Array.isArray(payload?.users)) arr = payload.users.map(mapUser)
-        else if (Array.isArray(payload?.equipes)) arr = payload.equipes.flatMap(eq => (eq.membros || [])).map(mapUser)
-        else if (Array.isArray(payload)) arr = payload.map(mapUser)
+
+        const arr = (usuariosRaw || [])
+          .map(mapUser)
+          .filter((u) => u.id != null)
+
         if (!arr.length) throw new Error('Resposta vazia da API')
         if (!aborted) {
           setUsuarios(arr)
           setSelectedId(arr[0]?.id ?? null)
-          
-          // Processar equipes corretamente
-          if (Array.isArray(payload?.equipes)) {
-            const eq = payload.equipes.map(e => ({
-              id: e.id ?? e.equipe_id ?? null,
-              nome: e.nome ?? `Equipe ${e.id}`,
-              descricao: e.descricao || ''
+
+          if (Array.isArray(equipesRaw) && equipesRaw.length) {
+            const eq = equipesRaw.map(e => ({
+              id: toNumberOrNull(e?.id ?? e?.equipe_id),
+              nome: e?.nome ?? `Equipe ${e?.id ?? ''}`,
+              descricao: e?.descricao || ''
             })).filter(e => e.id != null)
-            
             setEquipesLista(eq)
           } else {
-            // Fallback: criar equipes baseado nos Usuários
             const uniq = Array.from(new Set(arr.map(u => u.equipe_id).filter(Boolean)))
             setEquipesLista(uniq.map(id => ({ id, nome: `Equipe ${id}` })))
           }
-          
+
           if (user?.role === 'Supervisor' && user?.equipe_id != null) {
             setFormEquipeId(user.equipe_id)
             setFormTipo('Operador')
           } else {
-            setFormEquipeId(payload?.equipes?.[0]?.id ?? arr[0]?.equipe_id ?? null)
+            setFormEquipeId(toNumberOrNull(equipesRaw?.[0]?.id ?? equipesRaw?.[0]?.equipe_id) ?? arr[0]?.equipe_id ?? null)
           }
         }
       } catch (e) {
@@ -140,7 +192,7 @@ export default function Usuarios() {
     }
     load()
     return () => { aborted = true }
-  }, [user?.id])
+  }, [user?.id, user?.id_user])
   const baseUsuarios = useMemo(() => {
     const isAdminRole = ['master', 'administrador'].includes((user?.role || '').toLowerCase())
     const isMasterTeam = (user?.equipe_nome || '').toLowerCase() === 'master'
@@ -249,7 +301,7 @@ export default function Usuarios() {
     if ((isSupervisor || isAdminRole) && user?.equipe_id) {
       setFormEquipeId(user.equipe_id)
     } else {
-      setFormEquipeId(equipesLista[0]?.id || null)
+      setFormEquipeId(null)
     }
     
     setIsAddOpen(true)
@@ -293,17 +345,16 @@ export default function Usuarios() {
         id_usuario: transferUser.id,
         equipe_id: newIdNum,
       }
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/transfer-team', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/equipe`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
+      const apiPayload = await safeJson(response).catch(() => null)
+      if (!response.ok || apiPayload?.success === false) {
+        throw new Error(apiPayload?.message || `Erro ${response.status}`)
       }
-      try { console.log('transfer-team:', JSON.parse(rawBody)) } catch (_) { if (rawBody.trim()) console.log('transfer-team:', rawBody) }
+      console.log('alter/equipe:', apiPayload)
       setUsuarios(prev => prev.map(u => (
         u.id === transferUser.id ? { ...u, equipe_id: newIdNum } : u
       )))
@@ -339,7 +390,10 @@ export default function Usuarios() {
     const senhaAtual = passwordCurrent.trim()
     const senha = passwordValue.trim()
     const confirmacao = passwordConfirm.trim()
-    if (!senhaAtual || !senha || !confirmacao) {
+    const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
+    const requesterId = normalizeId(user?.id ?? user?.id_user ?? null) ?? user?.id ?? user?.id_user ?? null
+    const isSelfPasswordChange = userId != null && requesterId != null && Number(userId) === Number(requesterId)
+    if ((!senhaAtual && isSelfPasswordChange) || !senha || !confirmacao) {
       notify.warn('Preencha todos os campos obrigatórios')
       return
     }
@@ -351,54 +405,36 @@ export default function Usuarios() {
       notify.warn('As senhas Não coincidem')
       return
     }
-    const userId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
     if (userId == null) {
       notify.error('Selecione um Usuário válido')
       return
     }
     setIsChangingPassword(true)
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-pass', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/passuser`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           id: userId,
+          requester_id: requesterId,
+          requester_role: user?.role ?? null,
+          requester_equipe_id: user?.equipe_id ?? user?.team_id ?? user?.equipeId ?? user?.teamId ?? null,
           senha_nova: senha,
           senha_atual: senhaAtual,
           confirmacao
         })
       })
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || `Erro ${response.status}`)
       }
-      const trimmedBody = (rawBody || '').trim()
-      const normalizedBody = trimmedBody.toLowerCase()
-      if (!trimmedBody || trimmedBody === '{}' || trimmedBody === '[]' || normalizedBody === 'null' || normalizedBody === 'undefined') {
-        const message = 'Senha não alterada: usuário não encontrado.'
-        console.warn(`API alter-pass retornou payload vazio para o Usuário ${userId}`, trimmedBody)
-        notify.error(message)
-        return
-      }
+
       let successMessage = 'Senha atualizada com sucesso.'
-      try {
-        const parsed = JSON.parse(trimmedBody)
-        console.log('Senha alterada via API:', parsed)
-        if (parsed == null || (Array.isArray(parsed) && parsed.length === 0) || (typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length === 0)) {
-          const message = 'Senha não alterada: usuário não encontrado.'
-          console.warn(`API alter-pass retornou objeto vazio para o Usuário ${userId}`, parsed)
-          notify.error(message)
-          return
-        }
-        const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
-        if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
-      } catch (_) {
-        console.log('Senha alterada via API (texto):', trimmedBody)
-        successMessage = trimmedBody
-      }
+      console.log('Senha alterada via API:', payload)
+      const apiMessage = payload?.mensagem ?? payload?.message ?? payload?.status
+      if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
       notify.success(successMessage)
       closePasswordModal()
     } catch (error) {
@@ -408,6 +444,11 @@ export default function Usuarios() {
       setIsChangingPassword(false)
     }
   }
+  const targetPasswordUserId = normalizeId(passwordUser?.id ?? null) ?? passwordUser?.id ?? null
+  const requesterPasswordUserId = normalizeId(user?.id ?? user?.id_user ?? null) ?? user?.id ?? user?.id_user ?? null
+  const passwordRequiresCurrent = targetPasswordUserId != null && requesterPasswordUserId != null
+    ? Number(targetPasswordUserId) === Number(requesterPasswordUserId)
+    : true
   const roleToOption = (role) => {
     switch ((role || '').toLowerCase()) {
       case 'master':
@@ -473,8 +514,8 @@ export default function Usuarios() {
     }
     setIsSavingEdit(true)
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-user', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/usuario`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
@@ -482,31 +523,33 @@ export default function Usuarios() {
           id: userId,
           nome: nome.toUpperCase(),
           login: login.toLowerCase(),
+          tipo: roleOption,
           role: roleOption,
           ativo: editStatusAtivo,
           status: editStatusAtivo ? 'Ativo' : 'Inativo'
         })
       })
-      const rawBody = await response.text()
+      const payload = await safeJson(response)
       if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
+        throw new Error(payload?.message || payload?.error || `Erro ${response.status}`)
       }
       let successMessage = 'Usuário atualizado com sucesso.'
-      if (rawBody) {
-        try {
-          const parsed = JSON.parse(rawBody)
-          console.log('Usuário alterado via API:', parsed)
-          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
-          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
-        } catch (_) {
-          console.log('Usuário alterado via API (texto):', rawBody)
-          if (rawBody.trim()) successMessage = rawBody.trim()
-        }
-      }
+      console.log('Usuário alterado via API:', payload)
+      const apiData = payload?.data ?? {}
+      const apiMessage = payload?.mensagem ?? payload?.message ?? apiData?.status
+      if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
       const nomeUpper = nome.toUpperCase()
       const loginLower = login.toLowerCase()
-      setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, nome: nomeUpper, login: loginLower, role: roleOption, ativo: editStatusAtivo } : u))
+      setUsuarios(prev => prev.map(u => u.id === userId ? {
+        ...u,
+        nome: apiData?.nome ?? nomeUpper,
+        login: apiData?.login ?? loginLower,
+        role: apiData?.role ?? roleOption,
+        role_nome: apiData?.role_nome ?? apiData?.role ?? roleOption,
+        role_slug: apiData?.role_slug ?? u.role_slug,
+        role_id: apiData?.role_id ?? u.role_id,
+        ativo: typeof apiData?.ativo === 'boolean' ? apiData.ativo : editStatusAtivo
+      } : u))
       setSelectedId(userId)
       notify.success(successMessage)
       closeEditModal()
@@ -520,7 +563,7 @@ export default function Usuarios() {
   async function handleAddSubmit(e) {
     if (!canAdd) return
     e.preventDefault()
-    console.log('✅ Iniciando handleAddSubmit...')
+    console.log('? Iniciando handleAddSubmit...')
     
     const nome = formNome.trim()
     const login = formLogin.trim()
@@ -543,17 +586,12 @@ export default function Usuarios() {
     
     console.log('Processamento:', { tipoSel, roleOut, equipeId, isSupervisor })
     
-    if (!equipeId) {
-      notify.warn('Selecione uma equipe')
-      return
-    }
     setIsSaving(true)
     
     try {
       console.log('Criando Usuário via API...', { nome, login, role: roleOut, equipe_id: equipeId })
-      
-      // Chamada para a API de adicionar Usuário
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/add-user', {
+
+      const response = await fetch(`${API_BASE}/register/usuarios`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -563,26 +601,28 @@ export default function Usuarios() {
           login: login.toLowerCase(),
           senha: senha,
           role: roleOut,
-          equipe_id: equipeId,
+          equipe_id: equipeId ?? null,
           ativo: true,
           criado_por: user?.id || 1
         })
       })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Erro ${response.status}: ${errorText}`)
+
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || `Erro ${response.status}`)
       }
-      const result = await response.json()
+
+      const result = payload?.data ?? payload ?? {}
       console.log('Usuário criado via API:', result)
-      // Criar objeto local para atualizar a lista
+
       const nextId = result.id || result.Id || Math.max(0, ...usuarios.map(u => u.id || 0)) + 1
       const novo = {
         id: nextId,
-        nome: nome.toUpperCase(),
-        login: login.toLowerCase(),
-        role: roleOut,
-        equipe_id: equipeId,
-        ativo: true,
+        nome: result.nome || nome.toUpperCase(),
+        login: result.login || login.toLowerCase(),
+        role: result.role || roleOut,
+        equipe_id: toNumberOrNull(result.equipe_id) ?? equipeId ?? null,
+        ativo: result.ativo ?? true,
         is_supervisor: roleOut === 'Supervisor'
       }
       
@@ -599,7 +639,7 @@ export default function Usuarios() {
       notify.success(`Usuário "${nome}" criado com sucesso!`)
       
     } catch (error) {
-      console.error('a Erro ao criar Usuário:', error)
+      console.error('Erro ao criar Usuário:', error)
       notify.error(`Erro ao criar Usuário: ${error.message}`)
     } finally {
       setIsSaving(false)
@@ -609,34 +649,34 @@ export default function Usuarios() {
     const targetUser = usuarios.find(u => u.id === targetId)
     if (!canDeleteUser(targetUser)) return
     if (targetId === user?.id) return
+
     setDeletingId(targetId)
     setPendingDelete(null)
+
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/delete-user', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/delete/usuario`, {
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ id: targetId })
       })
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
+
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        const message = payload?.message || payload?.mensagem || `Erro ${response.status}`
         throw new Error(message)
       }
-      if (rawBody) {
-        try {
-          console.log('Usuário removido via API:', JSON.parse(rawBody))
-        } catch (_) {
-          console.log('Usuário removido via API (texto):', rawBody)
-        }
-      }
+
+      console.log('Usuário removido via API:', payload)
+
       const removedUser = usuarios.find(u => u.id === targetId)
       setUsuarios(prev => {
         const next = prev.filter(u => u.id !== targetId)
         setSelectedId(current => (current === targetId ? next[0]?.id ?? null : current))
         return next
       })
+
       if (removedUser?.nome) {
         notify.success(`Usuário "${removedUser.nome}" excluído.`)
       } else {
@@ -664,8 +704,8 @@ export default function Usuarios() {
     const nextActive = !targetUser.ativo
     setTogglingId(targetId)
     try {
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-status', {
-        method: 'POST',
+      const response = await fetch(`${API_BASE}/alter/status-user`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
@@ -675,23 +715,14 @@ export default function Usuarios() {
           status: nextActive ? 'Ativo' : 'Inativo'
         })
       })
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
+      const payload = await safeJson(response).catch(() => null)
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || `Erro ${response.status}`)
       }
       let successMessage = nextActive ? 'Usuário ativado.' : 'Usuário desativado.'
-      if (rawBody) {
-        try {
-          const parsed = JSON.parse(rawBody)
-          console.log('Status alterado via API:', parsed)
-          const apiMessage = parsed?.mensagem ?? parsed?.message ?? parsed?.status
-          if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
-        } catch (_) {
-          console.log('Status alterado via API (texto):', rawBody)
-          if (rawBody.trim()) successMessage = rawBody.trim()
-        }
-      }
+      console.log('Status alterado via API:', payload)
+      const apiMessage = payload?.mensagem ?? payload?.message ?? payload?.status
+      if (typeof apiMessage === 'string' && apiMessage.trim()) successMessage = apiMessage.trim()
       setUsuarios(prev => prev.map(u => (
         u.id === targetId ? { ...u, ativo: nextActive } : u
       )))
@@ -869,7 +900,7 @@ export default function Usuarios() {
                   </div>
                 </>
               )}
-              {/* <div className="small mt-3 opacity-75">IntegraAAo com: https://n8n.apivieiracred.store/webhook/add-user</div> */}
+              {/* <div className="small mt-3 opacity-75">Integracao com: http://85.31.61.242:8011/api/add-user</div> */}
             </div>
           </div>
         </div>
@@ -955,16 +986,16 @@ export default function Usuarios() {
             <input type="password" className="form-control" value={formSenha} onChange={(e) => setFormSenha(e.target.value)} disabled={isSaving} placeholder="Minimo 4 caracteres" required />
           </div>
           <div className="col-12">
-            <label className="form-label">Equipe *</label>
-            <select className="form-select" value={formEquipeId ?? ''} onChange={(e) => setFormEquipeId(e.target.value ? parseInt(e.target.value, 10) : null)} disabled={(isSupervisor || isAdminRole) || isSaving} required>
-              <option value="" disabled>Selecione uma equipe...</option>
+            <label className="form-label">Equipe</label>
+            <select className="form-select" value={formEquipeId ?? ''} onChange={(e) => setFormEquipeId(e.target.value ? parseInt(e.target.value, 10) : null)} disabled={(isSupervisor || isAdminRole) || isSaving}>
+              <option value="">Sem equipe</option>
               {(equipesLista || []).map(eq => (<option key={eq.id} value={eq.id}>{eq.nome}</option>))}
             </select>
           </div>
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4">
           <button type="button" className="btn btn-ghost" onClick={() => setIsAddOpen(false)} disabled={isSaving}>Cancelar</button>
-          <button type="submit" className="btn btn-primary" disabled={isSaving || !formNome.trim() || !formLogin.trim() || !formSenha.trim() || !formEquipeId}>
+          <button type="submit" className="btn btn-primary" disabled={isSaving || !formNome.trim() || !formLogin.trim() || !formSenha.trim()}>
             {isSaving ? (
               <>
                 <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -984,7 +1015,7 @@ export default function Usuarios() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Editar usuario</h5>
+                <h5 className="modal-title">Editar usuário</h5>
                 <button type="button" className="btn-close" aria-label="Close" onClick={closeEditModal} disabled={isSavingEdit}></button>
               </div>
               <form onSubmit={handleEditSubmit}>
@@ -1037,7 +1068,7 @@ export default function Usuarios() {
                 <div className="modal-body">
                   <p className="small opacity-75 mb-3">Defina uma nova senha para <strong>{passwordUser.nome}</strong>.</p>
                   <div className="mb-3">
-                    <label className="form-label">Senha atual *</label>
+                    <label className="form-label">{passwordRequiresCurrent ? 'Senha atual *' : 'Senha atual'}</label>
                     <div className="input-group">
                       <input
                         type={showCurrentPassword ? 'text' : 'password'}
@@ -1045,15 +1076,17 @@ export default function Usuarios() {
                         value={passwordCurrent}
                         onChange={(e) => setPasswordCurrent(e.target.value)}
                         disabled={isChangingPassword}
-                        placeholder="Digite a senha atual"
+                        placeholder={passwordRequiresCurrent ? 'Digite a senha atual' : 'Opcional para reset por gestor'}
                         minLength={4}
-                        required
+                        required={passwordRequiresCurrent}
                       />
                       <button type="button" className="btn btn-outline-secondary" onClick={() => setShowCurrentPassword((prev) => !prev)} disabled={isChangingPassword} title={showCurrentPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-label={showCurrentPassword ? 'Ocultar senha' : 'Mostrar senha'}>
                         {showCurrentPassword ? <Fi.FiEyeOff /> : <Fi.FiEye />}
                       </button>
                     </div>
-                    <div className="form-text">Informe a senha utilizada no login.</div>
+                    <div className="form-text">
+                      {passwordRequiresCurrent ? 'Informe a senha utilizada no login.' : 'Para reset por gestor, a senha atual é opcional.'}
+                    </div>
                   </div>
                   <div className="mb-3">
                     <label className="form-label">Nova senha *</label>
@@ -1098,7 +1131,7 @@ export default function Usuarios() {
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={closePasswordModal} disabled={isChangingPassword}>Cancelar</button>
-                  <button type="submit" className="btn btn-primary" disabled={isChangingPassword || !passwordCurrent.trim() || !passwordValue.trim() || !passwordConfirm.trim()}>
+                  <button type="submit" className="btn btn-primary" disabled={isChangingPassword || (passwordRequiresCurrent && !passwordCurrent.trim()) || !passwordValue.trim() || !passwordConfirm.trim()}>
                     {isChangingPassword ? (
                       <>
                         <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -1124,7 +1157,7 @@ export default function Usuarios() {
               </div>
               <div className="modal-body">
                 <p>Tem certeza que deseja excluir <strong>{pendingDelete.nome}</strong>?</p>
-                <p className="mb-0 small opacity-75">Esta ação Não pode ser desfeita.</p>
+                <p className="mb-0 small opacity-75">Esta ação não pode ser desfeita.</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setPendingDelete(null)} disabled={deletingId != null}>Cancelar</button>
@@ -1146,3 +1179,4 @@ export default function Usuarios() {
     </div>
   )
 }
+
