@@ -105,6 +105,9 @@ function App() {
   return (
     <SidebarProvider>
       <div className="app-shell">
+        <div className="developer-ribbon" aria-label="Modo Desenvolvedor">
+          Modo Desenvolvedor
+        </div>
         {!hideSidebar && <SidebarNav />}
         <div className={`app-main ${hideSidebar ? '' : 'with-sidebar'}`}>
           <Routes>

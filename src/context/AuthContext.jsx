@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import users from '../data/users.json'
+﻿import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { normalizeRole, Roles } from '../utils/roles.js'
+import { AUTH_ENDPOINTS } from '../config/endpoints.js'
+import { fetchJson } from '../services/httpClient.js'
 
 const toNumberOrNull = (value) => {
   if (value === null || value === undefined || value === '') return null
@@ -103,14 +104,14 @@ export function AuthProvider({ children }) {
 
   const login = async (loginUser, password) => {
     try {
-      console.log('� Iniciando autenticação...');
-      console.log('📊 Dados enviados:', { login: loginUser, senha: password });
+      console.log('ðŸ” Iniciando autenticaÃ§Ã£o...');
+      console.log('ðŸ“Š Dados enviados:', { login: loginUser, senha: password });
       
       // PASSO 1: Autenticar no webhook
       const dataHoraLogin = formatDateTime7(new Date(), 'America/Sao_Paulo')
       const ultimoIp = await resolveClientIp()
 
-      const webhookResponse = await fetch('https://n8n.apivieiracred.store/webhook/login', {
+      const webhookResult = await fetchJson(AUTH_ENDPOINTS.login, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,52 +122,47 @@ export function AuthProvider({ children }) {
           data_hora_login: dataHoraLogin,
           ultimo_ip: ultimoIp
         })
-      });
-
-      console.log('📡 Status da resposta:', webhookResponse.status);
-      console.log('📡 Headers da resposta:', Object.fromEntries(webhookResponse.headers.entries()));
+      })
+      console.log('ðŸ“¡ Resposta COMPLETA do webhook:', JSON.stringify(webhookResult, null, 2));
+      console.log('ðŸ“¡ Tipo da resposta:', typeof webhookResult);
+      console.log('ðŸ“¡ Ã‰ array?', Array.isArray(webhookResult));
       
-      const webhookResult = await webhookResponse.json();
-      console.log('📡 Resposta COMPLETA do webhook:', JSON.stringify(webhookResult, null, 2));
-      console.log('📡 Tipo da resposta:', typeof webhookResult);
-      console.log('📡 É array?', Array.isArray(webhookResult));
-      
-      // PASSO 2: Verificar se a resposta tem dados de usuário
+      // PASSO 2: Verificar se a resposta tem dados de usuÃ¡rio
       if (!webhookResult) {
-        console.error('� Resposta do webhook está vazia ou null');
-        throw new Error('Erro na comunicação com o servidor');
+        console.error('âŒ Resposta do webhook estÃ¡ vazia ou null');
+        throw new Error('Erro na comunicaÃ§Ã£o com o servidor');
       }
       
-      console.log('� Verificando formato da resposta...');
+      console.log('ðŸ” Verificando formato da resposta...');
       
-      // Verificar se é um array vazio
+      // Verificar se Ã© um array vazio
       if (Array.isArray(webhookResult) && webhookResult.length === 0) {
-        console.error('� Array vazio - credenciais inválidas');
-        throw new Error('Credenciais inválidas');
+        console.error('âŒ Array vazio - credenciais invÃ¡lidas');
+        throw new Error('Credenciais invÃ¡lidas');
       }
       
-      // Verificar se é uma resposta de erro específica (quando vem como objeto)
+      // Verificar se Ã© uma resposta de erro especÃ­fica (quando vem como objeto)
       if (!Array.isArray(webhookResult) && (webhookResult.sucesso === 0 || webhookResult.sucesso === false)) {
-        console.error('� Login rejeitado pelo servidor:', webhookResult.mensagem);
-        throw new Error(webhookResult.mensagem || 'Credenciais inválidas');
+        console.error('âŒ Login rejeitado pelo servidor:', webhookResult.mensagem);
+        throw new Error(webhookResult.mensagem || 'Credenciais invÃ¡lidas');
       }
 
-      // PASSO 3: Processar dados do usuário - CORRIGIDO PARA ARRAY
+      // PASSO 3: Processar dados do usuÃ¡rio - CORRIGIDO PARA ARRAY
       let userData;
-      console.log('� Processando dados do usuário...');
+      console.log('ðŸ” Processando dados do usuÃ¡rio...');
       
       if (Array.isArray(webhookResult) && webhookResult.length > 0) {
-        // ✅ RESPOSTA COMO ARRAY - usar primeiro elemento
+        // âœ… RESPOSTA COMO ARRAY - usar primeiro elemento
         userData = webhookResult[0];
-        console.log('📊 Dados extraídos do array (posição 0):', userData);
+        console.log('ðŸ“Š Dados extraÃ­dos do array (posiÃ§Ã£o 0):', userData);
       } else if (webhookResult.id || webhookResult.Id) {
         // Se for objeto direto com ID, usar diretamente
         userData = webhookResult;
-        console.log('📊 Usando objeto direto:', userData);
+        console.log('ðŸ“Š Usando objeto direto:', userData);
       } else {
-        console.error('� Formato de resposta inválido');
-        console.error('� Resposta recebida:', webhookResult);
-        throw new Error('Formato de resposta inválido');
+        console.error('âŒ Formato de resposta invÃ¡lido');
+        console.error('âŒ Resposta recebida:', webhookResult);
+        throw new Error('Formato de resposta invÃ¡lido');
       }
       
       // Verificar se tem dados essenciais - CAMPOS CORRETOS
@@ -176,7 +172,7 @@ export function AuthProvider({ children }) {
       const userRole = userData.role || userData.Role;
       const userSucesso = userData.sucesso ?? userData.Sucesso;
       
-      console.log('� Dados extraídos:');
+      console.log('ðŸ” Dados extraÃ­dos:');
       console.log('  - ID:', userId);
       console.log('  - Nome:', userName);
       console.log('  - Login:', userLogin);
@@ -184,26 +180,26 @@ export function AuthProvider({ children }) {
       console.log('  - Sucesso:', userSucesso);
       
       if (!userId || !userName || !userLogin) {
-        console.error('� Dados de usuário incompletos');
-        console.error('� userId:', userId);
-        console.error('� userName:', userName);
-        console.error('� userLogin:', userLogin);
-        throw new Error('Dados de usuário incompletos');
+        console.error('âŒ Dados de usuÃ¡rio incompletos');
+        console.error('âŒ userId:', userId);
+        console.error('âŒ userName:', userName);
+        console.error('âŒ userLogin:', userLogin);
+        throw new Error('Dados de usuÃ¡rio incompletos');
       }
 
       // Bloquear login quando o servidor indicar falha
       const statusContaRaw = (userData.status_conta ?? userData.StatusConta ?? '').toString().toUpperCase();
       const sucessoValor = userSucesso === undefined || userSucesso === null ? undefined : Number(userSucesso);
       const possuiFlagSucesso = sucessoValor !== undefined && !Number.isNaN(sucessoValor);
-      const autenticadoComSucesso = possuiFlagSucesso ? (sucessoValor === 1) : true; // se não vier flag, assume true
+      const autenticadoComSucesso = possuiFlagSucesso ? (sucessoValor === 1) : true; // se nÃ£o vier flag, assume true
 
       if (!autenticadoComSucesso || ['INVALID', 'BLOQUEADO', 'LOCKED'].includes(statusContaRaw)) {
-        const msgSrv = userData.mensagem || userData.Mensagem || 'Credenciais inválidas';
-        console.error('� Autenticação rejeitada:', { sucesso: userSucesso, status_conta: statusContaRaw, mensagem: msgSrv });
+        const msgSrv = userData.mensagem || userData.Mensagem || 'Credenciais invÃ¡lidas';
+        console.error('âŒ AutenticaÃ§Ã£o rejeitada:', { sucesso: userSucesso, status_conta: statusContaRaw, mensagem: msgSrv });
         throw new Error(msgSrv);
       }
 
-      // PASSO 4: Criar objeto do usuário - MAPEAMENTO CORRETO
+      // PASSO 4: Criar objeto do usuÃ¡rio - MAPEAMENTO CORRETO
       const normalizedUserId = toNumberOrNull(userId) ?? userId
       const rawEquipeId = userData.equipe_id ?? userData.EquipeId ?? userData.equipeId ?? null
       const normalizedEquipeId = toNumberOrNull(rawEquipeId)
@@ -221,7 +217,7 @@ export function AuthProvider({ children }) {
         email: userData.email || userData.Email || `${userLogin}@novaeuropa.com`,
         role: normalizedRole,
         level: userData.nivel_hierarquia || userData.NivelHierarquia || 3,
-        levelDescription: userData.DescricaoNivel || `Acesso ${userData.role || 'básico'}`,
+        levelDescription: userData.DescricaoNivel || `Acesso ${userData.role || 'bÃ¡sico'}`,
         lastLogin: userData.data_ultimo_login || userData.DataUltimoLogin,
         blocked: userData.conta_bloqueada || userData.ContaBloqueada || false,
         loginAttempts: userData.tentativas_login || userData.TentativasLogin || 0,
@@ -237,18 +233,12 @@ export function AuthProvider({ children }) {
       setUser(payload);
       localStorage.setItem('ne_auth_user', JSON.stringify(payload));
       
-      console.log('✅ Criando payload do usuário...');
-      console.log('📊 Payload final:', payload);
-      
-      setUser(payload);
-      localStorage.setItem('ne_auth_user', JSON.stringify(payload));
-      
-      console.log('✅ Login realizado com sucesso! Usuário salvo:', payload);
+      console.log('âœ… Login realizado com sucesso! UsuÃ¡rio salvo:', payload);
       return payload;
       
     } catch (error) {
-      console.error('� Erro no login:', error);
-      throw new Error(error.message || 'Erro na autenticação');
+      console.error('âŒ Erro no login:', error);
+      throw new Error(error.message || 'Erro na autenticaÃ§Ã£o');
     }
   }
 
@@ -266,3 +256,4 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }
+

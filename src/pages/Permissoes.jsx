@@ -21,6 +21,8 @@ import {
 import TopNav from '../components/TopNav.jsx'
 import Footer from '../components/Footer.jsx'
 import { notify } from '../utils/notify.js'
+import { PERMISSIONS_ENDPOINTS } from '../config/endpoints.js'
+import { fetchJson, fetchText, safeParseJson } from '../services/httpClient.js'
 
 const SCOPE_OPTIONS = [
   { key: 'setor', label: 'Equipe', icon: FiShield }
@@ -109,14 +111,7 @@ const API_CATALOG = [
   { key: 'api_admin_perms', label: '/api/permissoes/*' }
 ]
 
-const PERMISSIONS_API_ENDPOINTS = {
-  equipes: 'https://n8n.apivieiracred.store/webhook/api/getequipes',
-  usuarios: 'https://n8n.apivieiracred.store/webhook/api/getusuarios',
-  paginasCatalogo: 'https://n8n.apivieiracred.store/webhook/api/getpagcat',
-  regrasPaginas: 'https://n8n.apivieiracred.store/webhook/api/getregraspag',
-  regras: 'https://n8n.apivieiracred.store/webhook/api/getregras',
-  addEquipe: 'https://n8n.apivieiracred.store/webhook/api/addequipes2'
-}
+const PERMISSIONS_API_ENDPOINTS = PERMISSIONS_ENDPOINTS
 
 const PERMISSION_GROUPS = [
   { key: 'visao_geral', label: 'Visão Geral', pages: ['dashboard'] },
@@ -261,14 +256,6 @@ const toBool = (value) => {
   if (typeof value === 'number') return value === 1
   const token = normalizeToken(value)
   return ['1', 'true', 'sim', 'yes', 'on'].includes(token)
-}
-
-const parseJsonSafe = (value) => {
-  try {
-    return JSON.parse(value)
-  } catch (_) {
-    return null
-  }
 }
 
 const pageKeyAliases = PAGE_CATALOG.reduce((acc, item) => {
@@ -861,11 +848,7 @@ export default function Permissoes() {
     setApiLoadError('')
       try {
         const fetchPayload = async (url) => {
-          const response = await fetch(url, { method: 'GET' })
-          if (!response.ok) throw new Error(`HTTP ${response.status} em ${url}`)
-          const rawText = await response.text()
-          if (!rawText?.trim()) return []
-          const json = parseJsonSafe(rawText)
+          const json = await fetchJson(url, { method: 'GET' })
           if (!json) return []
           const unwrapped = unwrapPermissionsPayload(json)
           return unwrapped
@@ -1270,16 +1253,11 @@ export default function Permissoes() {
 
     setIsSaving(true)
     try {
-      const response = await fetch(PERMISSIONS_API_ENDPOINTS.addEquipe, {
+      await fetchText(PERMISSIONS_API_ENDPOINTS.addEquipe, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-
-      const responseText = await response.text()
-      if (!response.ok) {
-        throw new Error(responseText || `HTTP ${response.status}`)
-      }
 
       notify.success('Equipe salva com sucesso.')
       await loadPermissionsFromApi()

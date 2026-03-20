@@ -7,6 +7,8 @@ import { notify } from '../utils/notify.js'
 import { FiStar, FiKey, FiEye, FiEyeOff, FiTrash2, FiActivity } from 'react-icons/fi'
 import { useSidebar } from '../context/SidebarContext.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
+import { AUTH_ENDPOINTS } from '../config/endpoints.js'
+import { fetchText } from '../services/httpClient.js'
 
 export default function TopNav() {
   const { user, logout, isAuthenticated } = useAuth()
@@ -144,7 +146,7 @@ export default function TopNav() {
 
     try {
       setChangingPassword(true)
-      const response = await fetch('https://n8n.apivieiracred.store/webhook/alter-pass', {
+      const rawBody = await fetchText(AUTH_ENDPOINTS.alterPass, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -156,12 +158,6 @@ export default function TopNav() {
           confirmacao
         })
       })
-
-      const rawBody = await response.text()
-      if (!response.ok) {
-        const message = (rawBody || '').trim() || `Erro ${response.status}`
-        throw new Error(message)
-      }
 
       let successMessage = 'Senha atualizada com sucesso.'
       if (rawBody) {
