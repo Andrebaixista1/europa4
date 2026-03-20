@@ -9,8 +9,9 @@ const normalizePath = (path = '') => {
 export const n8nWebhookUrl = (path = '') => `${N8N_BASE}${normalizePath(path)}`
 
 export const AUTH_ENDPOINTS = Object.freeze({
-  login: n8nWebhookUrl('/login'),
+  login: n8nWebhookUrl('/login45'),
   alterPass: n8nWebhookUrl('/alter-pass'),
+  reset: n8nWebhookUrl('/api/reset'),
 })
 
 export const PERMISSIONS_ENDPOINTS = Object.freeze({
@@ -21,4 +22,3 @@ export const PERMISSIONS_ENDPOINTS = Object.freeze({
   regras: n8nWebhookUrl('/api/getregras'),
   addEquipe: n8nWebhookUrl('/api/addequipes2'),
 })
-

@@ -26,17 +26,8 @@ const formatDateTime7 = (date, timeZone = 'America/Sao_Paulo') => {
 }
 
 const resolveClientIp = async () => {
-  try {
-    const response = await fetch('https://api.ipify.org?format=json')
-    if (!response.ok) throw new Error('ipify error')
-    const data = await response.json()
-    const ip = data?.ip || ''
-    if (ip) localStorage.setItem('ne_last_ip', ip)
-    return ip || '0.0.0.0'
-  } catch (error) {
-    const cached = localStorage.getItem('ne_last_ip')
-    return cached || '0.0.0.0'
-  }
+  const cached = localStorage.getItem('ne_last_ip')
+  return cached || '0.0.0.0'
 }
 const normalizePermissionsList = (value) => {
   if (!value) return []

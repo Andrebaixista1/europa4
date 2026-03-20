@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useLoading } from '../context/LoadingContext.jsx'
 import { defaultRouteFor } from '../utils/roles.js'
 import { notify } from '../utils/notify.js'
+import { AUTH_ENDPOINTS } from '../config/endpoints.js'
+import { fetchText } from '../services/httpClient.js'
 
 
 export default function Login() {
@@ -18,6 +20,10 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [remember, setRemember] = useState(false)
+  const [recoverOpen, setRecoverOpen] = useState(false)
+  const [recoverLogin, setRecoverLogin] = useState('')
+  const [recoverWhatsapp, setRecoverWhatsapp] = useState('')
+  const [recovering, setRecovering] = useState(false)
   const loader = useLoading()
 
   const handleSubmit = async (e) => {
@@ -57,6 +63,51 @@ export default function Login() {
     } catch {}
   }, [])
 
+  const openRecoverModal = () => {
+    setRecoverLogin(login || '')
+    setRecoverWhatsapp('')
+    setRecoverOpen(true)
+  }
+
+  const closeRecoverModal = () => {
+    if (recovering) return
+    setRecoverOpen(false)
+  }
+
+  const handleRecoverPassword = async (e) => {
+    e.preventDefault()
+    const normalizedLogin = String(recoverLogin || '').trim()
+    const normalizedPhone = String(recoverWhatsapp || '').replace(/\D/g, '')
+
+    if (!normalizedLogin || !normalizedPhone) {
+      notify.warn('Informe o login e o WhatsApp para recuperar a senha.')
+      return
+    }
+
+    setRecovering(true)
+    try {
+      await fetchText(AUTH_ENDPOINTS.reset, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          login: normalizedLogin,
+          username: normalizedLogin,
+          usuario: normalizedLogin,
+          telefone: normalizedPhone,
+          phone: normalizedPhone,
+          whatsapp: normalizedPhone,
+        }),
+      })
+
+      setRecoverOpen(false)
+      notify.success('Solicitação enviada. Em instantes você receberá a nova senha no WhatsApp cadastrado.')
+    } catch (err) {
+      notify.error(err?.message || 'Não foi possível solicitar a recuperação de senha.')
+    } finally {
+      setRecovering(false)
+    }
+  }
+
   return (
     <div className="bg-deep text-light min-vh-100 d-flex flex-column">
       <TopNav />
@@ -84,10 +135,81 @@ export default function Login() {
               <button type="submit" className="btn btn-primary w-100" disabled={loading}>
                 {loading ? 'Entrando...' : 'Entrar'}
               </button>
+              <button
+                type="button"
+                className="btn btn-link w-100 mt-2 text-decoration-none"
+                onClick={openRecoverModal}
+                disabled={loading}
+              >
+                Recuperar senha
+              </button>
             </form>
           </div>
         </div>
       </div>
+
+      {recoverOpen && (
+        <>
+          <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-dialog-centered" role="document">
+              <div className="modal-content neo-card border-0">
+                <div className="modal-header border-0 pb-0">
+                  <h5 className="modal-title">Recuperar senha</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={closeRecoverModal}
+                    aria-label="Fechar"
+                    disabled={recovering}
+                  />
+                </div>
+                <form onSubmit={handleRecoverPassword}>
+                  <div className="modal-body pt-2">
+                    <p className="text-muted mb-3">
+                      Informe seu login e WhatsApp. Vamos enviar uma nova senha para acesso.
+                    </p>
+                    <div className="mb-3">
+                      <label className="form-label">Login</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={recoverLogin}
+                        onChange={(e) => setRecoverLogin(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label">WhatsApp</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Ex: 11980733602"
+                        value={recoverWhatsapp}
+                        onChange={(e) => setRecoverWhatsapp(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="modal-footer border-0 pt-0">
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      onClick={closeRecoverModal}
+                      disabled={recovering}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={recovering}>
+                      {recovering ? 'Enviando...' : 'Enviar recuperação'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop fade show" onClick={closeRecoverModal} />
+        </>
+      )}
     </div>
   )
 }

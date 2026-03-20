@@ -11,6 +11,9 @@ import { LoadingProvider } from './context/LoadingContext.jsx'
 import GlobalLoader from './components/GlobalLoader.jsx'
 import RouteChangeLoader from './components/RouteChangeLoader.jsx'
 import Toasts from './components/Toasts.jsx'
+import { installFetchPolicy } from './services/fetchPolicy.js'
+
+installFetchPolicy()
 
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
