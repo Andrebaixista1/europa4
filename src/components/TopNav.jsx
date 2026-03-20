@@ -261,6 +261,9 @@ export default function TopNav() {
 
         </div>
       </nav>
+      <div className="developer-banner" role="status" aria-live="polite">
+        <div className="container">Modo Desenvolvedor</div>
+      </div>
       {/* Modal de Novidades */}
       <NovidadesModal
         isOpen={isNovidadesModalOpen}

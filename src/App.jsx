@@ -6,70 +6,24 @@ import OperationPanel from './pages/OperationPanel.jsx'
 import ConsultaIN100 from './pages/ConsultaIN100.jsx'
 import ConsultaClientes from './pages/ConsultaClientes.jsx'
 import ClienteArgus from './pages/ClienteArgus.jsx'
-import Equipes from './pages/Equipes.jsx'
 import Usuarios from './pages/Usuarios.jsx'
 import AdminControlePlanejamento from './pages/AdminControlePlanejamento.jsx'
 import Recargas from './pages/Recargas.jsx'
 import Relatorios from './pages/Relatorios.jsx'
 import Backups from './pages/Backups.jsx'
-import Permissoes from './pages/Permissoes.jsx'
 import GeradorSites from './pages/GeradorSites.jsx'
 import GeradorSitesV3 from './pages/GeradorSitesV3.jsx'
 import StatusWhatsapp from './pages/StatusWhatsapp.jsx'
 import FilaMilvus from './pages/FilaMilvus.jsx'
 import Status from './pages/Status.jsx'
-import HistoricoConsultas from './pages/HistoricoConsultas.jsx'
-import ConsultasV8 from './pages/ConsultasV8.jsx'
-import ConsultaPrata from './pages/ConsultaPrata.jsx'
-import ConsultasHandMais from './pages/ConsultasHandMais.jsx'
-import ConsultaPresenca from './pages/ConsultaPresenca.jsx'
 import UsuariosZapresponder from './pages/UsuariosZapresponder.jsx'
 import UsuariosBmControles from './pages/UsuariosBmControles.jsx'
 import CampanhasZap from './pages/CampanhasZap.jsx'
-import AdminUsuariosCadastro from './pages/AdminUsuariosCadastro.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import SidebarNav from './components/SidebarNav.jsx'
 import { SidebarProvider } from './context/SidebarContext.jsx'
 import { useAuth } from './context/AuthContext.jsx'
-import {
-  canAccessConsultaClientes,
-  canAccessConsultaPresenca,
-  canAccessConsultasHandMais,
-  canAccessConsultasPrata,
-  canAccessConsultasV8
-} from './utils/access.js'
-
-function ConsultasV8Route() {
-  const { user } = useAuth()
-  if (!canAccessConsultasV8(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultasV8 />
-}
-
-function ConsultaPresencaRoute() {
-  const { user } = useAuth()
-  if (!canAccessConsultaPresenca(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultaPresenca />
-}
-
-function ConsultasHandMaisRoute() {
-  const { user } = useAuth()
-  if (!canAccessConsultasHandMais(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultasHandMais />
-}
-
-function ConsultaPrataRoute() {
-  const { user } = useAuth()
-  if (!canAccessConsultasPrata(user)) {
-    return <Navigate to="/dashboard" replace />
-  }
-  return <ConsultaPrata />
-}
+import { canAccessConsultaClientes, canAccessDashboard, canAccessUsuarios } from './utils/access.js'
 
 function ConsultaClientesRoute() {
   const { user } = useAuth()
@@ -79,22 +33,20 @@ function ConsultaClientesRoute() {
   return <ConsultaClientes />
 }
 
-function PermissoesRoute() {
+function DashboardRoute() {
   const { user } = useAuth()
-  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
-  if (loggedUserId !== 1) {
-    return <Navigate to="/dashboard" replace />
+  if (!canAccessDashboard(user)) {
+    return <Navigate to="/login" replace />
   }
-  return <Permissoes />
+  return <Dashboard />
 }
 
-function UsuariosCadastroRoute() {
+function UsuariosRoute() {
   const { user } = useAuth()
-  const loggedUserId = Number(user?.id_user ?? user?.idUser ?? user?.id)
-  if (loggedUserId !== 1) {
+  if (!canAccessUsuarios(user)) {
     return <Navigate to="/dashboard" replace />
   }
-  return <AdminUsuariosCadastro />
+  return <Usuarios />
 }
 
 function App() {
@@ -105,22 +57,19 @@ function App() {
   return (
     <SidebarProvider>
       <div className="app-shell">
-        <div className="developer-ribbon" aria-label="Modo Desenvolvedor">
-          Modo Desenvolvedor
-        </div>
         {!hideSidebar && <SidebarNav />}
         <div className={`app-main ${hideSidebar ? '' : 'with-sidebar'}`}>
           <Routes>
           <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
           <Route path="/login" element={<Login />} />
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <DashboardRoute />
+            </ProtectedRoute>
+          }
+        />
         {/* <Route
         path="/status/whatsapp"
         element={
@@ -163,22 +112,6 @@ function App() {
           }
         />
         <Route
-          path="/admin/permissoes"
-          element={
-            <ProtectedRoute>
-              <PermissoesRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/usuarios-cadastro"
-          element={
-            <ProtectedRoute>
-              <UsuariosCadastroRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/admin/gerador-sites"
           element={
             <ProtectedRoute roles={['Master', 'Administrador']}>
@@ -214,15 +147,7 @@ function App() {
           path="/usuarios"
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor']}>
-              <Usuarios />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/equipes"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor']}>
-              <Equipes />
+              <UsuariosRoute />
             </ProtectedRoute>
           }
         />
@@ -271,46 +196,6 @@ function App() {
           element={
             <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
               <ClienteArgus />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/historico"
-          element={
-            <ProtectedRoute roles={['Master', 'Administrador', 'Supervisor', 'Operador']}>
-              <HistoricoConsultas />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/v8"
-          element={
-            <ProtectedRoute>
-              <ConsultasV8Route />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/prata"
-          element={
-            <ProtectedRoute>
-              <ConsultaPrataRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/presenca"
-          element={
-            <ProtectedRoute>
-              <ConsultaPresencaRoute />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/consultas/handmais"
-          element={
-            <ProtectedRoute>
-              <ConsultasHandMaisRoute />
             </ProtectedRoute>
           }
         />
